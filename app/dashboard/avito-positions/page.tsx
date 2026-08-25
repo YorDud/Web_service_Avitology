@@ -176,21 +176,7 @@ export default async function AvitoPositionsPage() {
               </div>
             </div>
 
-            <div className="soft-green-card p-8">
-              <h2 className="mb-4 text-3xl font-extrabold">
-                Что будет в первой версии расширения
-              </h2>
-
-              <ul className="space-y-3 text-[16px] leading-8 text-gray-700">
-                <li>• Таблица с данными прямо на странице Авито</li>
-                <li>• Колонка “Пометить в выдаче”</li>
-                <li>• Отображение аккаунта продавца</li>
-                <li>• Определение позиции объявления в выдаче</li>
-                <li>• Вывод рейтинга продавца</li>
-                <li>• Вывод количества отзывов</li>
-                <li>• Подсветка выбранных объявлений зеленым контуром</li>
-              </ul>
-            </div>
+            
           </div>
 
           <div className="space-y-6">
@@ -226,31 +212,15 @@ export default async function AvitoPositionsPage() {
               </div>
 
               <div className="space-y-4 text-gray-600">
+                
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  Free — только просмотр сервиса без доступа к инструменту
+                  Basic — доступ к услугам сервиса и скачиванию расширения
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  Basic — доступ к услуге и скачиванию расширения
-                </div>
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  Admin — полный доступ плюс админ-панель
-                </div>
+                
               </div>
             </div>
 
-            <div className="white-card p-8">
-              <div className="mb-4 text-2xl font-extrabold">
-                Следующий шаг
-              </div>
-              <p className="mb-6 text-gray-600 leading-8">
-                Следом мы создадим страницу установки расширения и подготовим
-                API, чтобы само расширение могло понимать, авторизован ли
-                пользователь и какой у него уровень подписки.
-              </p>
-              <Link href="/extension" className="btn-primary">
-                Перейти к установке расширения
-              </Link>
-            </div>
+            
           </div>
         </div>
       </div>

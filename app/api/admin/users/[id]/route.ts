@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
+import { parseDateTimeLocal } from "@/lib/dates";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -36,13 +37,8 @@ export async function PATCH(req: Request, { params }: Params) {
     const isActive = Boolean(body.isActive);
     const notes = body.notes ? String(body.notes) : null;
 
-    const subscriptionPaidAt = body.subscriptionPaidAt
-      ? new Date(body.subscriptionPaidAt)
-      : null;
-
-    const subscriptionEndsAt = body.subscriptionEndsAt
-      ? new Date(body.subscriptionEndsAt)
-      : null;
+    const subscriptionPaidAt = parseDateTimeLocal(body.subscriptionPaidAt);
+	const subscriptionEndsAt = parseDateTimeLocal(body.subscriptionEndsAt);
 
     if (!email || !name) {
       return NextResponse.json(

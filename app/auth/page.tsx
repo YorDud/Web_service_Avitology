@@ -127,7 +127,7 @@ export default function AuthPage() {
               </h1>
 
               <p className="max-w-xl text-base leading-8 text-white/90">
-                Создайте аккаунт, получите уровень free и в дальнейшем
+                Создайте аккаунт, получите начальный уровень free и в дальнейшем
                 активируйте подписку Basic для доступа к основным возможностям
                 сервиса и браузерному расширению.
               </p>
@@ -144,14 +144,7 @@ export default function AuthPage() {
               <div className="rounded-2xl border border-white/20 bg-white/10 p-4">
                 <div className="font-bold">Basic</div>
                 <div className="text-sm text-white/80">
-                  Доступ к парсингу мест в поиске Авито
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/20 bg-white/10 p-4">
-                <div className="font-bold">Admin</div>
-                <div className="text-sm text-white/80">
-                  Управление пользователями и услугами через админ-панель
+                  Доступ к масштабным услугам и функциям по подписке Basic
                 </div>
               </div>
             </div>

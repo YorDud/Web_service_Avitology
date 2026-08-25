@@ -1,6 +1,20 @@
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/session";
 
-function Header() {
+async function Header() {
+  const sessionUser = await getSessionUser();
+
+  const user = sessionUser
+    ? await prisma.user.findUnique({
+        where: { id: sessionUser.id },
+        select: {
+          name: true,
+          publicId: true,
+          subscriptionLevel: true,
+        },
+      })
+    : null;
   return (
     <header className="nav-blur">
       <div className="container-main flex items-center justify-between py-4">
@@ -33,16 +47,37 @@ function Header() {
           <a href="#extension" className="text-sm font-semibold text-gray-600 hover:text-black">
             Расширение
           </a>
+		  <Link href="/support" className="text-sm font-semibold text-gray-600 hover:text-black">
+		  Поддержка
+		  </Link>
         </nav>
 
         <div className="flex items-center gap-3">
-          <Link href="/pricing" className="btn-primary">
-            Купить подписку
-          </Link>
-          <Link href="/auth" className="btn-secondary">
-            Войти
-          </Link>
-        </div>
+  <Link href="/pricing" className="btn-primary">
+    Купить подписку
+  </Link>
+
+  {user ? (
+    <Link
+      href="/dashboard"
+      className="rounded-2xl border border-gray-200 bg-white px-4 py-2 shadow-sm transition hover:border-green-300 hover:shadow-md"
+    >
+      <div className="text-sm font-bold text-gray-900">{user.name}</div>
+      <div className="text-xs text-gray-500">ID: {user.publicId}</div>
+      <div className="text-xs font-medium text-green-600">
+        {user.subscriptionLevel === "admin"
+          ? "Администратор"
+          : user.subscriptionLevel === "basic"
+          ? "Подписка Basic"
+          : "Бесплатный доступ"}
+      </div>
+    </Link>
+  ) : (
+    <Link href="/auth" className="btn-secondary">
+      Войти
+    </Link>
+  )}
+</div>
       </div>
     </header>
   );
@@ -83,21 +118,21 @@ function Hero() {
 
           <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="hero-stat">
-              <div className="text-3xl font-extrabold">1 сервис</div>
+              <div className="text-3xl font-extrabold">№ 1</div>
               <div className="mt-2 text-sm text-gray-500">
-                уже в разработке — парсинг мест в поиске Авито
+                по быстродействию и качеству парсинга Авито
               </div>
             </div>
             <div className="hero-stat">
-              <div className="text-3xl font-extrabold">3 роли</div>
+              <div className="text-3xl font-extrabold">Гибкость</div>
               <div className="mt-2 text-sm text-gray-500">
-                free, basic и admin для управления доступом
+                максимально обширный спектр услуг для развития
               </div>
             </div>
             <div className="hero-stat">
               <div className="text-3xl font-extrabold">100%</div>
               <div className="mt-2 text-sm text-gray-500">
-                задел на добавление новых услуг и возможностей
+                гарантия поддержки всех сервисов Авитологии
               </div>
             </div>
           </div>
@@ -164,16 +199,15 @@ function AboutSection() {
             Авито эффективнее
           </h2>
           <p className="section-text mb-4">
-            Мы строим не просто один инструмент, а платформу с понятной
+            Не просто один инструмент, а платформа с понятной
             подписочной моделью, личным кабинетом, доступами по ролям и
-            расширяемой архитектурой. Сегодня основная функция — аналитика мест
-            в поиске Авито, а дальше в сервис можно будет добавлять новые модули,
-            автоматизацию и дополнительные платные услуги.
+            расширяемой архитектурой. Сегодня самая быстрорастущая платформа 
+			по своему ассортименту и качеству услуг среди конкурентов.
           </p>
           <p className="section-text">
-            Важно, чтобы пользователю было удобно: красивый интерфейс, быстрая
-            регистрация, работа через сайт и расширение, простое управление
-            подпиской и доступ ко всем будущим возможностям из одного кабинета.
+            Удобный интерфейс, моментальная регистрация и простое управление подпиской 
+			— всё для комфортной работы. Доступ к сервису через сайт и расширение, 
+			все возможности — в одном личном кабинете..
           </p>
         </div>
 
@@ -186,31 +220,29 @@ function AboutSection() {
             <div>
               <div className="mb-1 text-lg font-bold">Одна учетная запись</div>
               <div className="card-text">
-                Сайт, личный кабинет и расширение используют единый доступ.
+                Сервис построен на гибкой архитектуре, которая масштабируется под растущие задачи. 
+				Единый аккаунт даёт доступ ко всем интерфейсам: веб‑версии, личному кабинету и расширению.
               </div>
             </div>
 
             <div>
               <div className="mb-1 text-lg font-bold">Простая подписка</div>
               <div className="card-text">
-                Бесплатный уровень free и платный basic с возможностью
-                дальнейшего роста.
+                Стартовые тарифы — Free и Basic, с возможностью дальнейшего расширения возможностей.
               </div>
             </div>
 
             <div>
               <div className="mb-1 text-lg font-bold">Готовность к расширению</div>
               <div className="card-text">
-                Архитектура заранее проектируется так, чтобы без переделки
-                добавлять новые услуги.
+                Гибкая архитектура адаптируется под ваши потребности.
               </div>
             </div>
 
             <div>
-              <div className="mb-1 text-lg font-bold">Управление через админку</div>
+              <div className="mb-1 text-lg font-bold">Отзывчивая техническая поддержка</div>
               <div className="card-text">
-                Все пользователи, подписки и статусы будут редактироваться из
-                панели администратора.
+                При возникновении вопросов поможет отзывчивая техническая поддержка.
               </div>
             </div>
           </div>
@@ -240,7 +272,7 @@ function FeaturesSection() {
     {
       icon: "💳",
       title: "Подписочная модель",
-      text: "Гибкие уровни доступа: free, basic и admin, с заделом на новые тарифы и функции.",
+      text: "Гибкие уровни доступа: free и basic с постоянно обновляющимся списком функций.",
     },
     {
       icon: "📊",
@@ -249,8 +281,8 @@ function FeaturesSection() {
     },
     {
       icon: "⚙️",
-      title: "Задел на будущее",
-      text: "Платформа строится как основа для добавления новых услуг и сервисов без переделки ядра.",
+      title: "Техническая поддержка",
+      text: "Отзывчивая техническая поддержка, которая всегда на связи с пользователями.",
     },
   ];
 
@@ -264,9 +296,10 @@ function FeaturesSection() {
             продаж на Авито
           </h2>
           <p className="section-text">
-            Мы берем за основу понятный, продающий и современный подход к
-            оформлению сервиса: яркий первый экран, акцент на пользе, доверии,
-            удобстве и подписочной модели.
+            В основу создания сервиса лег современный подход, ориентированный на пользователя: 
+			первый экран выполнен ярко и лаконично, ключевые преимущества (польза, удобство, надёжность) 
+			вынесены на первый план. Сервис работает по подписочной модели, что обеспечивает 
+			предсказуемость и гибкость использования.
           </p>
         </div>
 
@@ -294,7 +327,7 @@ function HowItWorksSection() {
     {
       num: "02",
       title: "Покупка подписки Basic",
-      text: "После тестовой оплаты открывается доступ к инструменту “Места в поиске Авито”.",
+      text: "После тестовой оплаты открывается доступ к инструментам сервиса.",
     },
     {
       num: "03",
@@ -304,7 +337,7 @@ function HowItWorksSection() {
     {
       num: "04",
       title: "Работа прямо в выдаче Авито",
-      text: "Расширение показывает таблицу, позиции, рейтинг, отзывы и помогает подсветить объявления.",
+      text: "Расширение показывает таблицу, позиции, рейтинг, отзывы и помогает работать с объявлениями, не отвлекаясь на сторонние раздражители.",
     },
   ];
 
@@ -344,8 +377,7 @@ function PricingSection() {
             Понятный тариф для доступа к основной услуге
           </h2>
           <p className="section-text">
-            Пока на старте достаточно одного платного тарифа. Позже можно будет
-            добавить новые уровни, лимиты и отдельные услуги.
+            
           </p>
         </div>
 
@@ -381,7 +413,7 @@ function PricingSection() {
               <li>• Доступ к услуге “Места в поиске Авито”</li>
               <li>• Доступ к скачиванию расширения</li>
               <li>• Работа через сайт и расширение</li>
-              <li>• Возможность дальнейшего расширения набора услуг</li>
+              <li>• Возможность первыми получать расширение набора услуг</li>
             </ul>
 
             <Link href="/pricing" className="btn-secondary">
@@ -407,15 +439,15 @@ function ExtensionSection() {
               Расширение Avitology будет работать прямо на страницах Авито
             </h2>
             <p className="section-text mb-4">
-              После авторизации пользователь сможет открыть поиск Авито, нажать
-              “Найти” и получить встроенную панель с таблицей данных по
+              После авторизации пользователь сможет открыть поиск Авито и 
+			  получить полноценную встроенную панель с таблицей данных по
               объявлениям. В ней будут доступны отметки в выдаче, аккаунты,
-              позиции, рейтинг продавца и отзывы.
+              позиции, рейтинг продавца и отзывы и остальные расширенные функции.
             </p>
             <p className="section-text mb-8">
-              Мы оформим расширение в фирменных цветах Avitology — белый фон,
-              акцентный зеленый цвет и аккуратные современные блоки, чтобы оно
-              выглядело профессионально и понятно.
+              Интерфейс расширения Avitology разработан по современным стандартам UI/UX 
+			  — он интуитивно понятен и приятен в использовании: все нужные функции под рукой, 
+			  а взаимодействие выстроено так, чтобы экономить ваше время.
             </p>
 
             <div className="flex flex-col gap-4 sm:flex-row">
@@ -429,40 +461,40 @@ function ExtensionSection() {
           </div>
 
           <div className="soft-green-card p-6">
-            <div className="mb-4 text-lg font-extrabold">
-              Что будет в первой версии расширения
-            </div>
+  <div className="mb-4 text-lg font-extrabold">
+    Возможности расширения
+  </div>
 
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-green-100 bg-white p-4">
-                <div className="font-bold">Авторизация через аккаунт сайта</div>
-                <div className="card-text mt-1">
-                  Доступ к функциям зависит от уровня подписки пользователя.
-                </div>
-              </div>
+  <div className="space-y-4">
+    <div className="rounded-2xl border border-green-100 bg-white p-4">
+      <div className="font-bold">Авторизация через аккаунт сайта</div>
+      <div className="card-text mt-1">
+        Все функции доступны сразу после входа — права определяются вашим уровнем подписки.
+      </div>
+    </div>
 
-              <div className="rounded-2xl border border-green-100 bg-white p-4">
-                <div className="font-bold">Таблица на странице выдачи</div>
-                <div className="card-text mt-1">
-                  Показ данных по объявлениям в красивом компактном интерфейсе.
-                </div>
-              </div>
+    <div className="rounded-2xl border border-green-100 bg-white p-4">
+      <div className="font-bold">Таблица на странице выдачи</div>
+      <div className="card-text mt-1">
+        Данные по объявлениям уже отображаются в удобном компактном интерфейсе — всё наглядно и под рукой.
+      </div>
+    </div>
 
-              <div className="rounded-2xl border border-green-100 bg-white p-4">
-                <div className="font-bold">Подсветка объявлений</div>
-                <div className="card-text mt-1">
-                  При отметке строки карточка объявления выделяется зеленой
-                  рамкой в выдаче.
-                </div>
-              </div>
+    <div className="rounded-2xl border border-green-100 bg-white p-4">
+      <div className="font-bold">Подсветка объявлений</div>
+      <div className="card-text mt-1">
+        При отметке строки карточка объявления мгновенно выделяется зелёной рамкой — легко держать в фокусе важные предложения.
+      </div>
+    </div>
 
-              <div className="rounded-2xl border border-green-100 bg-white p-4">
-                <div className="font-bold">Подготовка к будущим сервисам</div>
-                <div className="card-text mt-1">
-                  Структура расширения позволит добавлять новые модули позже.
-                </div>
-              </div>
-            </div>
+    <div className="rounded-2xl border border-green-100 bg-white p-4">
+      <div className="font-bold">Гибкая архитектура сервиса</div>
+      <div className="card-text mt-1">
+        Расширение построено на масштабируемой структуре — это не прототип, а полноценный многофункциональный инструмент, готовый к развитию.
+      </div>
+    </div>
+  </div>
+
           </div>
         </div>
       </div>
@@ -479,6 +511,7 @@ function Footer() {
           <a href="#about">О сервисе</a>
           <a href="#pricing">Подписка</a>
           <a href="#extension">Расширение</a>
+		  <Link href="/support">Поддержка</Link>
         </div>
       </div>
     </footer>

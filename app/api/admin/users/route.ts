@@ -13,18 +13,22 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const q = String(searchParams.get("q") || "").trim();
 
-    const users = await prisma.user.findMany({
-      where: q
-        ? {
-            OR: [
-              { email: { contains: q } },
-              { name: { contains: q } },
-              { notes: { contains: q } },
-            ],
-          }
-        : undefined,
-      orderBy: { id: "asc" },
-    });
+    const publicIdQuery = Number(q);
+const isPublicIdSearch = q !== "" && !Number.isNaN(publicIdQuery);
+
+const users = await prisma.user.findMany({
+  where: q
+    ? {
+        OR: [
+          { email: { contains: q } },
+          { name: { contains: q } },
+          { notes: { contains: q } },
+          ...(isPublicIdSearch ? [{ publicId: publicIdQuery }] : []),
+        ],
+      }
+    : undefined,
+  orderBy: { id: "asc" },
+});
 
     return NextResponse.json({ users });
   } catch (error) {

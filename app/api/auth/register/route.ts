@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSessionToken, hashPassword } from "@/lib/auth";
+import { generateUniquePublicId } from "@/lib/public-id";
 import { SESSION_COOKIE_NAME } from "@/lib/session";
 
 export async function POST(req: Request) {
@@ -45,17 +46,20 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await hashPassword(password);
+	
+	const publicId = await generateUniquePublicId();
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        passwordHash,
-        subscriptionLevel: "free",
-        subscriptionPrice: 0,
-        isActive: true,
-      },
-    });
+const user = await prisma.user.create({
+  data: {
+    publicId,
+    email,
+    name,
+    passwordHash,
+    subscriptionLevel: "free",
+    subscriptionPrice: 0,
+    isActive: true,
+  },
+});
 
     const token = createSessionToken({
       id: user.id,

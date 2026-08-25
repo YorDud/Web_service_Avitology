@@ -36,15 +36,17 @@ export async function getSessionUser() {
     });
 
     return {
-      id: updatedUser.id,
-      email: updatedUser.email,
-      name: updatedUser.name,
-      subscriptionLevel: updatedUser.subscriptionLevel,
-    };
+  id: updatedUser.id,
+  publicId: updatedUser.publicId,
+  email: updatedUser.email,
+  name: updatedUser.name,
+  subscriptionLevel: updatedUser.subscriptionLevel,
+};
   }
 
   return {
     id: user.id,
+	publicId: user.publicId,
     email: user.email,
     name: user.name,
     subscriptionLevel: user.subscriptionLevel,

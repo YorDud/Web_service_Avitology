@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { hashPassword } from "@/lib/auth";
+import { generateUniquePublicId } from "@/lib/public-id";
 
 export async function POST(req: Request) {
   try {
@@ -46,18 +47,20 @@ export async function POST(req: Request) {
       );
     }
 
-    const passwordHash = await hashPassword(password);
+   const passwordHash = await hashPassword(password);
+const publicId = await generateUniquePublicId();
 
-    const createdUser = await prisma.user.create({
-      data: {
-        email,
-        name,
-        passwordHash,
-        subscriptionLevel,
-        subscriptionPrice: subscriptionLevel === "basic" ? 299 : 0,
-        isActive: true,
-      },
-    });
+const createdUser = await prisma.user.create({
+  data: {
+    publicId,
+    email,
+    name,
+    passwordHash,
+    subscriptionLevel,
+    subscriptionPrice: subscriptionLevel === "basic" ? 299 : 0,
+    isActive: true,
+  },
+});
 
     return NextResponse.json({
       success: true,

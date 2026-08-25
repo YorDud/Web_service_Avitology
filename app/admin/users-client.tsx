@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { formatForDateTimeLocal } from "@/lib/dates";
 
 type UserItem = {
   id: number;
+  publicId: number | null;
   email: string;
   name: string;
   subscriptionLevel: "free" | "basic" | "admin";
@@ -23,38 +25,6 @@ type Props = {
   adminName: string;
 };
 
-function formatInputDateTime(value: string | null) {
-  if (!value) return "";
-  return new Date(value).toISOString().slice(0, 16);
-}
-
-function stringifyDateForSearch(value: string | null) {
-  if (!value) return "";
-
-  const d = new Date(value);
-
-  if (Number.isNaN(d.getTime())) return String(value).toLowerCase();
-
-  const yyyy = String(d.getFullYear());
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-
-  return [
-    d.toISOString().toLowerCase(),
-    d.toLocaleString("ru-RU").toLowerCase(),
-    `${dd}.${mm}.${yyyy}`,
-    `${dd}.${mm}.${yyyy} ${hh}:${min}`,
-    `${dd}-${mm}-${yyyy}`,
-    `${yyyy}-${mm}-${dd}`,
-    dd,
-    mm,
-    yyyy,
-    hh,
-    min,
-  ].join(" ");
-}
 
 export default function AdminUsersClient({
   users: initialUsers,
@@ -76,47 +46,44 @@ export default function AdminUsersClient({
   const [createSubscriptionLevel, setCreateSubscriptionLevel] = useState<
     "free" | "basic" | "admin"
   >("free");
+  
+  
+  function getSearchText(user: UserItem) {
+  return [
+    user.id,
+    user.publicId,
+    user.name,
+    user.email,
+    user.subscriptionLevel,
+    user.subscriptionPrice,
+    user.subscriptionPaidAt,
+    user.subscriptionEndsAt,
+    user.createdAt,
+    user.updatedAt,
+    user.lastLoginAt,
+    user.isActive ? "активен да true" : "неактивен нет false",
+    user.notes,
+  ]
+    .filter((value) => value !== null && value !== undefined)
+    .join(" ")
+    .toLowerCase();
+}
 
-    const filteredUsers = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  const filteredUsers = useMemo(() => {
+  const q = search.trim().toLowerCase();
 
-    if (!q) return users;
+  if (!q) return users;
 
-    return users.filter((user) => {
-      const haystack = [
-        String(user.id),
-        user.name,
-        user.email,
-        user.subscriptionLevel,
-        String(user.subscriptionPrice),
-        user.isActive ? "да" : "нет",
-        user.isActive ? "active" : "inactive",
-        user.notes || "",
-        stringifyDateForSearch(user.subscriptionPaidAt),
-        stringifyDateForSearch(user.subscriptionEndsAt),
-        stringifyDateForSearch(user.createdAt),
-        stringifyDateForSearch(user.updatedAt),
-        stringifyDateForSearch(user.lastLoginAt),
-      ]
-        .join(" ")
-        .toLowerCase();
+  const searchParts = q.split(/\s+/).filter(Boolean);
 
-      return haystack.includes(q);
-    });
-  }, [users, search]);
+  return users.filter((user) => {
+    const searchableText = getSearchText(user);
 
-    async function refreshUsers() {
-    try {
-      const res = await fetch("/api/admin/users");
-      const data = await res.json();
+    return searchParts.every((part) => searchableText.includes(part));
+  });
+}, [users, search]);
 
-      if (res.ok) {
-        setUsers(data.users || []);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }
+  
 
   async function saveUser() {
     if (!selectedUser) return;
@@ -269,29 +236,14 @@ export default function AdminUsersClient({
               </div>
               <input
   value={search}
-  onChange={(e) => setSearch(e.target.value)}
-  placeholder="ID, почта, имя, дата, подписка, заметка..."
+  onChange={(e) => {
+    const value = e.target.value;
+    setSearch(value);
+  }}
+  placeholder="ID, Public ID, почта, имя, подписка..."
   className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
 />
             </div>
-			
-			<div className="mt-3 flex gap-3">
-  <button
-    type="button"
-    onClick={() => setSearch("")}
-    className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition hover:border-green-300 hover:text-green-700"
-  >
-    Сбросить
-  </button>
-
-  <button
-    type="button"
-    onClick={refreshUsers}
-    className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 transition hover:border-green-300 hover:text-green-700"
-  >
-    Обновить список
-  </button>
-</div>
 
             <div className="mt-8">
               <div className="mb-3 text-sm font-bold text-gray-700">
@@ -301,28 +253,31 @@ export default function AdminUsersClient({
               <div className="max-h-[420px] space-y-3 overflow-auto pr-1">
                 {filteredUsers.map((user) => (
                   <button
-                    key={user.id}
-                    onClick={() => {
-                      setSelectedUser(user);
-                      setError("");
-                      setMessage("");
-                    }}
-                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
-                      selectedUser?.id === user.id
-                        ? "border-green-300 bg-green-50"
-                        : "border-gray-200 bg-white hover:border-green-200"
-                    }`}
-                  >
-                    <div className="font-bold">
-                      {user.name} — ID {user.id}
-                    </div>
-                    <div className="mt-1 text-sm text-gray-500">
-                      {user.email}
-                    </div>
-                    <div className="mt-2 text-xs font-bold uppercase text-green-700">
-                      {user.subscriptionLevel}
-                    </div>
-                  </button>
+  key={user.id}
+  onClick={() => {
+    setSelectedUser(user);
+    setError("");
+    setMessage("");
+  }}
+  className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+    selectedUser?.id === user.id
+      ? "border-green-300 bg-green-50"
+      : "border-gray-200 bg-white hover:border-green-200"
+  }`}
+>
+  <div className="font-bold">
+    {user.name} — ID {user.id}
+  </div>
+  <div className="mt-1 text-sm text-gray-500">
+    Public ID: {user.publicId ?? "—"}
+  </div>
+  <div className="mt-1 text-sm text-gray-500">
+    {user.email}
+  </div>
+  <div className="mt-2 text-xs font-bold uppercase text-green-700">
+    {user.subscriptionLevel}
+  </div>
+</button>
                 ))}
               </div>
             </div>
@@ -335,177 +290,184 @@ export default function AdminUsersClient({
               </div>
 
               {!selectedUser ? (
-                <div className="text-gray-500">Выберите пользователя слева.</div>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-bold text-gray-700">
-                      ID
-                    </label>
-                    <input
-                      value={selectedUser.id}
-                      disabled
-                      className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4"
-                    />
-                  </div>
+  <div className="text-gray-500">Выберите пользователя слева.</div>
+) : (
+  <div className="grid gap-4 md:grid-cols-2">
+    <div>
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        ID
+      </label>
+      <input
+        value={selectedUser.id}
+        disabled
+        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4"
+      />
+    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-bold text-gray-700">
-                      Имя
-                    </label>
-                    <input
-                      value={selectedUser.name}
-                      onChange={(e) =>
-                        setSelectedUser({
-                          ...selectedUser,
-                          name: e.target.value,
-                        })
-                      }
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-                    />
-                  </div>
+    <div>
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        Public ID
+      </label>
+      <input
+        value={selectedUser.publicId ?? ""}
+        disabled
+        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4"
+      />
+    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-bold text-gray-700">
-                      Почта
-                    </label>
-                    <input
-                      value={selectedUser.email}
-                      onChange={(e) =>
-                        setSelectedUser({
-                          ...selectedUser,
-                          email: e.target.value,
-                        })
-                      }
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-                    />
-                  </div>
+    <div>
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        Имя
+      </label>
+      <input
+        value={selectedUser.name}
+        onChange={(e) =>
+          setSelectedUser({
+            ...selectedUser,
+            name: e.target.value,
+          })
+        }
+        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+      />
+    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-bold text-gray-700">
-                      Подписка
-                    </label>
-                    <select
-                      value={selectedUser.subscriptionLevel}
-                      onChange={(e) =>
-                        setSelectedUser({
-                          ...selectedUser,
-                          subscriptionLevel: e.target.value as
-                            | "free"
-                            | "basic"
-                            | "admin",
-                        })
-                      }
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-                    >
-                      <option value="free">free</option>
-                      <option value="basic">basic</option>
-                      <option value="admin">admin</option>
-                    </select>
-                  </div>
+    <div>
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        Почта
+      </label>
+      <input
+        value={selectedUser.email}
+        onChange={(e) =>
+          setSelectedUser({
+            ...selectedUser,
+            email: e.target.value,
+          })
+        }
+        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+      />
+    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-bold text-gray-700">
-                      Стоимость подписки
-                    </label>
-                    <input
-                      type="number"
-                      value={selectedUser.subscriptionPrice}
-                      onChange={(e) =>
-                        setSelectedUser({
-                          ...selectedUser,
-                          subscriptionPrice: Number(e.target.value),
-                        })
-                      }
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-                    />
-                  </div>
+    <div>
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        Подписка
+      </label>
+      <select
+        value={selectedUser.subscriptionLevel}
+        onChange={(e) =>
+          setSelectedUser({
+            ...selectedUser,
+            subscriptionLevel: e.target.value as
+              | "free"
+              | "basic"
+              | "admin",
+          })
+        }
+        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+      >
+        <option value="free">free</option>
+        <option value="basic">basic</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-bold text-gray-700">
-                      Активен
-                    </label>
-                    <select
-                      value={selectedUser.isActive ? "true" : "false"}
-                      onChange={(e) =>
-                        setSelectedUser({
-                          ...selectedUser,
-                          isActive: e.target.value === "true",
-                        })
-                      }
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-                    >
-                      <option value="true">Да</option>
-                      <option value="false">Нет</option>
-                    </select>
-                  </div>
+    <div>
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        Стоимость подписки
+      </label>
+      <input
+        type="number"
+        value={selectedUser.subscriptionPrice}
+        onChange={(e) =>
+          setSelectedUser({
+            ...selectedUser,
+            subscriptionPrice: Number(e.target.value),
+          })
+        }
+        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+      />
+    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-bold text-gray-700">
-                      Дата оплаты
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={formatInputDateTime(selectedUser.subscriptionPaidAt)}
-                      onChange={(e) =>
-                        setSelectedUser({
-                          ...selectedUser,
-                          subscriptionPaidAt: e.target.value
-                            ? new Date(e.target.value).toISOString()
-                            : null,
-                        })
-                      }
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-                    />
-                  </div>
+    <div>
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        Активен
+      </label>
+      <select
+        value={selectedUser.isActive ? "true" : "false"}
+        onChange={(e) =>
+          setSelectedUser({
+            ...selectedUser,
+            isActive: e.target.value === "true",
+          })
+        }
+        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+      >
+        <option value="true">Да</option>
+        <option value="false">Нет</option>
+      </select>
+    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-bold text-gray-700">
-                      Дата окончания
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={formatInputDateTime(selectedUser.subscriptionEndsAt)}
-                      onChange={(e) =>
-                        setSelectedUser({
-                          ...selectedUser,
-                          subscriptionEndsAt: e.target.value
-                            ? new Date(e.target.value).toISOString()
-                            : null,
-                        })
-                      }
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-                    />
-                  </div>
+    <div>
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        Дата оплаты
+      </label>
+      <input
+  type="datetime-local"
+  value={formatForDateTimeLocal(selectedUser.subscriptionPaidAt)}
+  onChange={(e) =>
+    setSelectedUser({
+      ...selectedUser,
+      subscriptionPaidAt: e.target.value || null,
+    })
+  }
+  className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+/>
+    </div>
 
-                  <div className="md:col-span-2">
-                    <label className="mb-2 block text-sm font-bold text-gray-700">
-                      Заметка
-                    </label>
-                    <textarea
-                      value={selectedUser.notes || ""}
-                      onChange={(e) =>
-                        setSelectedUser({
-                          ...selectedUser,
-                          notes: e.target.value,
-                        })
-                      }
-                      rows={4}
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-                    />
-                  </div>
+    <div>
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        Дата окончания
+      </label>
+      <input
+  type="datetime-local"
+  value={formatForDateTimeLocal(selectedUser.subscriptionEndsAt)}
+  onChange={(e) =>
+    setSelectedUser({
+      ...selectedUser,
+      subscriptionEndsAt: e.target.value || null,
+    })
+  }
+  className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+/>
+    </div>
 
-                  <div className="md:col-span-2 flex flex-wrap gap-4">
-                    <button
-                      onClick={saveUser}
-                      disabled={loading}
-                      className="btn-primary"
-                    >
-                      {loading ? "Сохранение..." : "Сохранить изменения"}
-                    </button>
-                  </div>
-                </div>
-              )}
+    <div className="md:col-span-2">
+      <label className="mb-2 block text-sm font-bold text-gray-700">
+        Заметка
+      </label>
+      <textarea
+        value={selectedUser.notes || ""}
+        onChange={(e) =>
+          setSelectedUser({
+            ...selectedUser,
+            notes: e.target.value,
+          })
+        }
+        rows={4}
+        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+      />
+    </div>
+
+    <div className="md:col-span-2 flex flex-wrap gap-4">
+      <button
+        onClick={saveUser}
+        disabled={loading}
+        className="btn-primary"
+      >
+        {loading ? "Сохранение..." : "Сохранить изменения"}
+      </button>
+    </div>
+  </div>
+)}
             </div>
 
             <div className="soft-green-card p-8">

@@ -15,6 +15,7 @@ enum SubscriptionLevel {
 
 model User {
   id                   Int               @id @default(autoincrement())
+  publicId             Int?              @unique
   email                String            @unique
   name                 String
   passwordHash         String

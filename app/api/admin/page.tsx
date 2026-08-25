@@ -19,8 +19,34 @@ export default async function AdminPage() {
   }
 
   const users = await prisma.user.findMany({
-    orderBy: { id: "asc" },
-  });
+  orderBy: { id: "asc" },
+  select: {
+    id: true,
+    publicId: true,
+    email: true,
+    name: true,
+    subscriptionLevel: true,
+    subscriptionPrice: true,
+    subscriptionPaidAt: true,
+    subscriptionEndsAt: true,
+    createdAt: true,
+    updatedAt: true,
+    lastLoginAt: true,
+    isActive: true,
+    notes: true,
+  },
+});
+
+console.log("ADMIN USERS SAMPLE:", users.slice(0, 3));
+
+console.log(
+  "ADMIN USERS:",
+  users.map((u) => ({
+    id: u.id,
+    publicId: u.publicId,
+    email: u.email,
+  }))
+);
 
   return <AdminUsersClient users={users} adminName={admin.name} />;
 }

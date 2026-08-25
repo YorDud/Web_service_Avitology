@@ -2,14 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-
-function formatDate(date: Date | null) {
-  if (!date) return "—";
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(date));
-}
+import { formatRuDateTime } from "@/lib/dates";
 
 export default async function DashboardPage() {
   const sessionUser = await getSessionUser();
@@ -47,11 +40,11 @@ export default async function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link href="/" className="btn-secondary">
+            <Link href="/" className="btn-primary">
               На главную
             </Link>
             <form action="/api/auth/logout" method="POST">
-              <button className="btn-primary">Выйти</button>
+              <button className="btn-secondary">Выйти</button>
             </form>
           </div>
         </div>
@@ -119,14 +112,14 @@ export default async function DashboardPage() {
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="text-sm text-gray-500">Дата оплаты</div>
                   <div className="mt-1 text-xl font-bold">
-                    {formatDate(user.subscriptionPaidAt)}
+                    {formatRuDateTime(user.subscriptionPaidAt)}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="text-sm text-gray-500">Дата окончания</div>
                   <div className="mt-1 text-xl font-bold">
-                    {formatDate(user.subscriptionEndsAt)}
+                    {formatRuDateTime(user.subscriptionEndsAt)}
                   </div>
                 </div>
               </div>

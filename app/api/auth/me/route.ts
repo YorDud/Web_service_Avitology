@@ -13,17 +13,18 @@ export async function GET() {
     const user = await prisma.user.findUnique({
       where: { id: sessionUser.id },
       select: {
-        id: true,
-        email: true,
-        name: true,
-        subscriptionLevel: true,
-        subscriptionPrice: true,
-        subscriptionPaidAt: true,
-        subscriptionEndsAt: true,
-        createdAt: true,
-        lastLoginAt: true,
-        isActive: true,
-      },
+  id: true,
+  publicId: true,
+  email: true,
+  name: true,
+  subscriptionLevel: true,
+  subscriptionPrice: true,
+  subscriptionPaidAt: true,
+  subscriptionEndsAt: true,
+  createdAt: true,
+  lastLoginAt: true,
+  isActive: true,
+},
     });
 
     return NextResponse.json({ user });
