@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Avitology</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup">
+    <div class="popup-header">
+      <img src="http://localhost:3000/logo.png" alt="Avitology" class="logo" />
+      <div>
+        <div class="brand-title">Авитология</div>
+        <div class="brand-subtitle">Avitology Extension</div>
+      </div>
+    </div>
+
+    <div id="statusCard" class="status-card">
+      <div class="status-title">Проверка доступа...</div>
+      <div class="status-text">Подождите, идет запрос к сайту Avitology</div>
+    </div>
+
+    <div class="actions">
+      <button id="openSiteBtn" class="btn btn-secondary">
+        Открыть сайт
+      </button>
+      <button id="refreshBtn" class="btn btn-primary">
+        Обновить статус
+      </button>
+    </div>
+
+    <div class="hint">
+      Для работы расширения нужно быть авторизованным на сайте Avitology
+      и иметь подписку Basic.
+    </div>
+	<div class="info-note">
+  После оплаты подписки доступ к расширению обычно появляется автоматически быстро, но в отдельных случаях обновление может занять до 15 минут.
+</div>
+  </div>
+
+  <script src="ext-api.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

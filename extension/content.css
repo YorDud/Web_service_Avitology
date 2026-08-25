@@ -1,0 +1,384 @@
+#avitology-panel {
+  position: fixed;
+  top: 90px;
+  right: 20px;
+  width: 420px;
+  max-height: 75vh;
+  overflow: auto;
+  z-index: 999999;
+  background: #ffffff;
+  border: 1px solid #d9f3e4;
+  border-radius: 24px;
+  box-shadow: 0 20px 50px rgba(16, 24, 40, 0.15);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.avitology-panel-header {
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid #edf2f7;
+  background: linear-gradient(180deg, #f7fff9 0%, #ffffff 100%);
+}
+
+.avitology-panel-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #101828;
+}
+
+.avitology-panel-subtitle {
+  font-size: 13px;
+  color: #667085;
+  margin-top: 4px;
+}
+
+.avitology-panel-content {
+  padding: 16px 18px 18px;
+}
+
+.avitology-status {
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.avitology-status.success {
+  background: #ecfff3;
+  border: 1px solid #c9f4d8;
+  color: #067a33;
+}
+
+.avitology-status.warning {
+  background: #fff8e8;
+  border: 1px solid #f7df9a;
+  color: #8a6512;
+}
+
+.avitology-status.error {
+  background: #fff1f1;
+  border: 1px solid #f3cccc;
+  color: #b42318;
+}
+
+.avitology-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.avitology-btn {
+  border: none;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.avitology-btn.primary {
+  background: linear-gradient(180deg, #10d95c 0%, #03bd48 100%);
+  color: white;
+  box-shadow: 0 10px 20px rgba(3, 189, 72, 0.2);
+}
+
+.avitology-btn.secondary {
+  background: white;
+  color: #101828;
+  border: 1px solid #dce5ea;
+}
+
+.avitology-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.avitology-table th,
+.avitology-table td {
+  text-align: left;
+  padding: 10px 8px;
+  font-size: 13px;
+  border-bottom: 1px solid #f0f2f5;
+  vertical-align: top;
+}
+
+.avitology-table th {
+  color: #667085;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.avitology-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.avitology-highlighted {
+  outline: 3px solid #03bd48 !important;
+  outline-offset: 2px !important;
+  border-radius: 12px !important;
+}
+
+#avitology-inline-container {
+  width: 100%;
+  margin: 16px 0 24px;
+  box-sizing: border-box;
+}
+
+.avitology-inline-box {
+  background: #ffffff;
+  border: 1px solid #d9f3e4;
+  border-radius: 24px;
+  box-shadow: 0 20px 50px rgba(16, 24, 40, 0.08);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.avitology-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.avitology-inline-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #101828;
+}
+
+.avitology-inline-subtitle {
+  font-size: 13px;
+  color: #667085;
+  margin-top: 4px;
+}
+
+.avitology-inline-summary {
+  border-radius: 14px;
+  background: #f7fff9;
+  border: 1px solid #d9f3e4;
+  color: #067647;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.avitology-inline-table-scroll {
+  overflow-x: auto;
+}
+
+#avitology-toggle-btn:hover {
+  opacity: 0.95;
+}
+
+#avitology-inline-container {
+  width: 100%;
+  margin: 16px 0 24px;
+  box-sizing: border-box;
+}
+
+.avitology-inline-box {
+  background: #ffffff;
+  border: 1px solid #d9f3e4;
+  border-radius: 24px;
+  box-shadow: 0 20px 50px rgba(16, 24, 40, 0.08);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.avitology-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.avitology-inline-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #101828;
+}
+
+.avitology-inline-subtitle {
+  font-size: 13px;
+  color: #667085;
+  margin-top: 4px;
+}
+
+.avitology-inline-summary {
+  border-radius: 14px;
+  background: #f7fff9;
+  border: 1px solid #d9f3e4;
+  color: #067647;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.avitology-inline-table-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 320px;
+}
+
+.avitology-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.avitology-table thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+#avitology-toggle-btn:hover {
+  opacity: 0.95;
+}
+
+.avitology-open-link {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #ecfff3;
+  border: 1px solid #c9f4d8;
+  color: #067647;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.avitology-open-link:hover {
+  opacity: 0.92;
+}
+
+.avitology-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.avitology-tab {
+  border: 1px solid #dce5ea;
+  background: #fff;
+  color: #101828;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.avitology-tab.active {
+  background: linear-gradient(180deg, #10d95c 0%, #03bd48 100%);
+  color: #fff;
+  border-color: #03bd48;
+  box-shadow: 0 10px 20px rgba(3, 189, 72, 0.18);
+}
+
+.avitology-tab:hover {
+  opacity: 0.95;
+}
+
+.avitology-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.avitology-toolbar-input,
+.avitology-toolbar-select {
+  border: 1px solid #dce5ea;
+  background: #fff;
+  color: #101828;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.avitology-toolbar-input {
+  min-width: 220px;
+  flex: 1 1 220px;
+}
+
+.avitology-toolbar-select {
+  min-width: 170px;
+}
+
+.avitology-toolbar-btn {
+  border: 1px solid #03bd48;
+  background: linear-gradient(180deg, #10d95c 0%, #03bd48 100%);
+  color: #fff;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.avitology-toolbar-btn.secondary {
+  border: 1px solid #dce5ea;
+  background: #fff;
+  color: #101828;
+}
+
+.avitology-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #dce5ea;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  color: #101828;
+}
+
+.avitology-toolbar-btn:hover,
+.avitology-toolbar-input:hover,
+.avitology-toolbar-select:hover,
+.avitology-checkbox-label:hover {
+  opacity: 0.96;
+}
+
+.avitology-table tbody tr:hover {
+  background: #f8fdf9;
+}
+
+.avitology-extra-wrap {
+  margin-bottom: 14px;
+}
+
+.avitology-extra-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dce5ea;
+  background: #fff;
+  color: #101828;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.avitology-extra-toggle:hover {
+  opacity: 0.96;
+}
+
+.avitology-extra-panel {
+  margin-top: 12px;
+}

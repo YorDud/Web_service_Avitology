@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Avitology",
+  "version": "1.0.0",
+  "description": "Инструменты аналитики и подсветки объявлений на Авито",
+  "permissions": [
+    "storage",
+    "tabs",
+	"alarms",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://www.avito.ru/*",
+    "https://avito.ru/*"
+  ],
+  "action": {
+    "default_title": "Avitology",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.avito.ru/*",
+        "https://avito.ru/*"
+      ],
+      "js": ["ext-api.js", "vendor/xlsx.full.min.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

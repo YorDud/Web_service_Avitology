@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionLevel {
+  free
+  basic
+  admin
+}
+
+model User {
+  id                   Int               @id @default(autoincrement())
+  email                String            @unique
+  name                 String
+  passwordHash         String
+  subscriptionLevel    SubscriptionLevel @default(free)
+  subscriptionPrice    Int               @default(0)
+  subscriptionPaidAt   DateTime?
+  subscriptionEndsAt   DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  lastLoginAt          DateTime?
+  isActive             Boolean           @default(true)
+  notes                String?
+}
