@@ -19,9 +19,44 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
-  const users = await prisma.user.findMany({
+  const dbUsers = await prisma.user.findMany({
     orderBy: { id: "asc" },
+    select: {
+      id: true,
+      publicId: true,
+      email: true,
+      name: true,
+      subscriptionLevel: true,
+      subscriptionPrice: true,
+      subscriptionPaidAt: true,
+      subscriptionEndsAt: true,
+      createdAt: true,
+      updatedAt: true,
+      lastLoginAt: true,
+      isActive: true,
+      notes: true,
+    },
   });
+
+  const users = dbUsers.map((user) => ({
+    id: user.id,
+    publicId: user.publicId,
+    email: user.email,
+    name: user.name,
+    subscriptionLevel: user.subscriptionLevel,
+    subscriptionPrice: user.subscriptionPrice,
+    subscriptionPaidAt: user.subscriptionPaidAt
+      ? user.subscriptionPaidAt.toISOString()
+      : null,
+    subscriptionEndsAt: user.subscriptionEndsAt
+      ? user.subscriptionEndsAt.toISOString()
+      : null,
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+    lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+    isActive: user.isActive,
+    notes: user.notes,
+  }));
 
   const serviceSettings = await getServiceSettings();
 

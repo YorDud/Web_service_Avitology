@@ -18,35 +18,44 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
-  const users = await prisma.user.findMany({
-  orderBy: { id: "asc" },
-  select: {
-    id: true,
-    publicId: true,
-    email: true,
-    name: true,
-    subscriptionLevel: true,
-    subscriptionPrice: true,
-    subscriptionPaidAt: true,
-    subscriptionEndsAt: true,
-    createdAt: true,
-    updatedAt: true,
-    lastLoginAt: true,
-    isActive: true,
-    notes: true,
-  },
-});
+  const dbUsers = await prisma.user.findMany({
+    orderBy: { id: "asc" },
+    select: {
+      id: true,
+      publicId: true,
+      email: true,
+      name: true,
+      subscriptionLevel: true,
+      subscriptionPrice: true,
+      subscriptionPaidAt: true,
+      subscriptionEndsAt: true,
+      createdAt: true,
+      updatedAt: true,
+      lastLoginAt: true,
+      isActive: true,
+      notes: true,
+    },
+  });
 
-console.log("ADMIN USERS SAMPLE:", users.slice(0, 3));
+  const users = dbUsers.map((user) => ({
+    ...user,
+    subscriptionPaidAt: user.subscriptionPaidAt?.toISOString() ?? null,
+    subscriptionEndsAt: user.subscriptionEndsAt?.toISOString() ?? null,
+    createdAt: user.createdAt?.toISOString() ?? null,
+    updatedAt: user.updatedAt?.toISOString() ?? null,
+    lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+  }));
 
-console.log(
-  "ADMIN USERS:",
-  users.map((u) => ({
-    id: u.id,
-    publicId: u.publicId,
-    email: u.email,
-  }))
-);
+  console.log("ADMIN USERS SAMPLE:", users.slice(0, 3));
+
+  console.log(
+    "ADMIN USERS:",
+    users.map((u) => ({
+      id: u.id,
+      publicId: u.publicId,
+      email: u.email,
+    }))
+  );
 
   return <AdminUsersClient users={users} adminName={admin.name} />;
 }
