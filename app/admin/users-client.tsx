@@ -20,15 +20,21 @@ type UserItem = {
   notes: string | null;
 };
 
+type ServiceSettings = {
+  id: number;
+  isYookassaEnabled: boolean;
+};
+
 type Props = {
   users: UserItem[];
   adminName: string;
+  initialServiceSettings: ServiceSettings;
 };
-
 
 export default function AdminUsersClient({
   users: initialUsers,
   adminName,
+  initialServiceSettings,
 }: Props) {
   const [users, setUsers] = useState<UserItem[]>(initialUsers);
   const [search, setSearch] = useState("");
@@ -46,44 +52,77 @@ export default function AdminUsersClient({
   const [createSubscriptionLevel, setCreateSubscriptionLevel] = useState<
     "free" | "basic" | "admin"
   >("free");
-  
-  
+
+  const [serviceSettingsOpen, setServiceSettingsOpen] = useState(false);
+  const [serviceSettings, setServiceSettings] = useState(initialServiceSettings);
+  const [serviceSettingsLoading, setServiceSettingsLoading] = useState(false);
+
   function getSearchText(user: UserItem) {
-  return [
-    user.id,
-    user.publicId,
-    user.name,
-    user.email,
-    user.subscriptionLevel,
-    user.subscriptionPrice,
-    user.subscriptionPaidAt,
-    user.subscriptionEndsAt,
-    user.createdAt,
-    user.updatedAt,
-    user.lastLoginAt,
-    user.isActive ? "активен да true" : "неактивен нет false",
-    user.notes,
-  ]
-    .filter((value) => value !== null && value !== undefined)
-    .join(" ")
-    .toLowerCase();
-}
+    return [
+      user.id,
+      user.publicId,
+      user.name,
+      user.email,
+      user.subscriptionLevel,
+      user.subscriptionPrice,
+      user.subscriptionPaidAt,
+      user.subscriptionEndsAt,
+      user.createdAt,
+      user.updatedAt,
+      user.lastLoginAt,
+      user.isActive ? "активен да true" : "неактивен нет false",
+      user.notes,
+    ]
+      .filter((value) => value !== null && value !== undefined)
+      .join(" ")
+      .toLowerCase();
+  }
 
   const filteredUsers = useMemo(() => {
-  const q = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase();
 
-  if (!q) return users;
+    if (!q) return users;
 
-  const searchParts = q.split(/\s+/).filter(Boolean);
+    const searchParts = q.split(/\s+/).filter(Boolean);
 
-  return users.filter((user) => {
-    const searchableText = getSearchText(user);
+    return users.filter((user) => {
+      const searchableText = getSearchText(user);
+      return searchParts.every((part) => searchableText.includes(part));
+    });
+  }, [users, search]);
 
-    return searchParts.every((part) => searchableText.includes(part));
-  });
-}, [users, search]);
+  async function saveServiceSettings() {
+    setServiceSettingsLoading(true);
+    setError("");
+    setMessage("");
 
-  
+    try {
+      const res = await fetch("/api/admin/service-settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          isYookassaEnabled: serviceSettings.isYookassaEnabled,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Ошибка сохранения настроек");
+        return;
+      }
+
+      setServiceSettings(data.settings);
+      setMessage("Настройки сервиса сохранены");
+    } catch (e) {
+      console.error(e);
+      setError("Ошибка сети");
+    } finally {
+      setServiceSettingsLoading(false);
+    }
+  }
 
   async function saveUser() {
     if (!selectedUser) return;
@@ -114,7 +153,6 @@ export default function AdminUsersClient({
 
       if (!res.ok) {
         setError(data.error || "Ошибка сохранения");
-        setLoading(false);
         return;
       }
 
@@ -156,7 +194,6 @@ export default function AdminUsersClient({
 
       if (!res.ok) {
         setError(data.error || "Ошибка создания пользователя");
-        setLoading(false);
         return;
       }
 
@@ -235,14 +272,11 @@ export default function AdminUsersClient({
                 Поиск по пользователям
               </div>
               <input
-  value={search}
-  onChange={(e) => {
-    const value = e.target.value;
-    setSearch(value);
-  }}
-  placeholder="ID, Public ID, почта, имя, подписка..."
-  className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-/>
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ID, Public ID, почта, имя, подписка..."
+                className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+              />
             </div>
 
             <div className="mt-8">
@@ -253,31 +287,32 @@ export default function AdminUsersClient({
               <div className="max-h-[420px] space-y-3 overflow-auto pr-1">
                 {filteredUsers.map((user) => (
                   <button
-  key={user.id}
-  onClick={() => {
-    setSelectedUser(user);
-    setError("");
-    setMessage("");
-  }}
-  className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
-    selectedUser?.id === user.id
-      ? "border-green-300 bg-green-50"
-      : "border-gray-200 bg-white hover:border-green-200"
-  }`}
->
-  <div className="font-bold">
-    {user.name} — ID {user.id}
-  </div>
-  <div className="mt-1 text-sm text-gray-500">
-    Public ID: {user.publicId ?? "—"}
-  </div>
-  <div className="mt-1 text-sm text-gray-500">
-    {user.email}
-  </div>
-  <div className="mt-2 text-xs font-bold uppercase text-green-700">
-    {user.subscriptionLevel}
-  </div>
-</button>
+                    key={user.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedUser(user);
+                      setError("");
+                      setMessage("");
+                    }}
+                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                      selectedUser?.id === user.id
+                        ? "border-green-300 bg-green-50"
+                        : "border-gray-200 bg-white hover:border-green-200"
+                    }`}
+                  >
+                    <div className="font-bold">
+                      {user.name} — ID {user.id}
+                    </div>
+                    <div className="mt-1 text-sm text-gray-500">
+                      Public ID: {user.publicId ?? "—"}
+                    </div>
+                    <div className="mt-1 text-sm text-gray-500">
+                      {user.email}
+                    </div>
+                    <div className="mt-2 text-xs font-bold uppercase text-green-700">
+                      {user.subscriptionLevel}
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -285,189 +320,257 @@ export default function AdminUsersClient({
 
           <section className="space-y-6">
             <div className="white-card p-8">
+              <button
+                type="button"
+                onClick={() => setServiceSettingsOpen((prev) => !prev)}
+                className="flex w-full items-center justify-between text-left"
+              >
+                <div>
+                  <div className="text-2xl font-extrabold">
+                    Настройки сервиса
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">
+                    Управление режимом оплаты и системными параметрами
+                  </div>
+                </div>
+
+                <div className="text-2xl text-gray-500">
+                  {serviceSettingsOpen ? "↑" : "↓"}
+                </div>
+              </button>
+
+              {serviceSettingsOpen && (
+                <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-6">
+                  <label className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={serviceSettings.isYookassaEnabled}
+                      onChange={(e) =>
+                        setServiceSettings({
+                          ...serviceSettings,
+                          isYookassaEnabled: e.target.checked,
+                        })
+                      }
+                      className="mt-1 h-5 w-5 rounded border-gray-300"
+                    />
+
+                    <div>
+                      <div className="font-bold text-gray-900">
+                        Включить оплату через ЮKassa
+                      </div>
+                      <div className="mt-1 text-sm text-gray-500">
+                        Если настройка включена, новые оплаты будут
+                        переводиться в сценарий ЮKassa. Если выключена,
+                        используется текущая тестовая активация подписки.
+                      </div>
+                    </div>
+                  </label>
+
+                  <div className="mt-6 flex flex-wrap gap-4">
+                    <button
+                      type="button"
+                      onClick={saveServiceSettings}
+                      disabled={serviceSettingsLoading}
+                      className="btn-primary"
+                    >
+                      {serviceSettingsLoading
+                        ? "Сохранение..."
+                        : "Сохранить настройки"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="white-card p-8">
               <div className="mb-6 text-2xl font-extrabold">
                 Редактирование пользователя
               </div>
 
               {!selectedUser ? (
-  <div className="text-gray-500">Выберите пользователя слева.</div>
-) : (
-  <div className="grid gap-4 md:grid-cols-2">
-    <div>
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        ID
-      </label>
-      <input
-        value={selectedUser.id}
-        disabled
-        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4"
-      />
-    </div>
+                <div className="text-gray-500">Выберите пользователя слева.</div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      ID
+                    </label>
+                    <input
+                      value={selectedUser.id}
+                      disabled
+                      className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4"
+                    />
+                  </div>
 
-    <div>
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        Public ID
-      </label>
-      <input
-        value={selectedUser.publicId ?? ""}
-        disabled
-        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4"
-      />
-    </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Public ID
+                    </label>
+                    <input
+                      value={selectedUser.publicId ?? ""}
+                      disabled
+                      className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4"
+                    />
+                  </div>
 
-    <div>
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        Имя
-      </label>
-      <input
-        value={selectedUser.name}
-        onChange={(e) =>
-          setSelectedUser({
-            ...selectedUser,
-            name: e.target.value,
-          })
-        }
-        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-      />
-    </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Имя
+                    </label>
+                    <input
+                      value={selectedUser.name}
+                      onChange={(e) =>
+                        setSelectedUser({
+                          ...selectedUser,
+                          name: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    />
+                  </div>
 
-    <div>
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        Почта
-      </label>
-      <input
-        value={selectedUser.email}
-        onChange={(e) =>
-          setSelectedUser({
-            ...selectedUser,
-            email: e.target.value,
-          })
-        }
-        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-      />
-    </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Почта
+                    </label>
+                    <input
+                      value={selectedUser.email}
+                      onChange={(e) =>
+                        setSelectedUser({
+                          ...selectedUser,
+                          email: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    />
+                  </div>
 
-    <div>
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        Подписка
-      </label>
-      <select
-        value={selectedUser.subscriptionLevel}
-        onChange={(e) =>
-          setSelectedUser({
-            ...selectedUser,
-            subscriptionLevel: e.target.value as
-              | "free"
-              | "basic"
-              | "admin",
-          })
-        }
-        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-      >
-        <option value="free">free</option>
-        <option value="basic">basic</option>
-        <option value="admin">admin</option>
-      </select>
-    </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Подписка
+                    </label>
+                    <select
+                      value={selectedUser.subscriptionLevel}
+                      onChange={(e) =>
+                        setSelectedUser({
+                          ...selectedUser,
+                          subscriptionLevel: e.target.value as
+                            | "free"
+                            | "basic"
+                            | "admin",
+                        })
+                      }
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    >
+                      <option value="free">free</option>
+                      <option value="basic">basic</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  </div>
 
-    <div>
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        Стоимость подписки
-      </label>
-      <input
-        type="number"
-        value={selectedUser.subscriptionPrice}
-        onChange={(e) =>
-          setSelectedUser({
-            ...selectedUser,
-            subscriptionPrice: Number(e.target.value),
-          })
-        }
-        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-      />
-    </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Стоимость подписки
+                    </label>
+                    <input
+                      type="number"
+                      value={selectedUser.subscriptionPrice}
+                      onChange={(e) =>
+                        setSelectedUser({
+                          ...selectedUser,
+                          subscriptionPrice: Number(e.target.value),
+                        })
+                      }
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    />
+                  </div>
 
-    <div>
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        Активен
-      </label>
-      <select
-        value={selectedUser.isActive ? "true" : "false"}
-        onChange={(e) =>
-          setSelectedUser({
-            ...selectedUser,
-            isActive: e.target.value === "true",
-          })
-        }
-        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-      >
-        <option value="true">Да</option>
-        <option value="false">Нет</option>
-      </select>
-    </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Активен
+                    </label>
+                    <select
+                      value={selectedUser.isActive ? "true" : "false"}
+                      onChange={(e) =>
+                        setSelectedUser({
+                          ...selectedUser,
+                          isActive: e.target.value === "true",
+                        })
+                      }
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    >
+                      <option value="true">Да</option>
+                      <option value="false">Нет</option>
+                    </select>
+                  </div>
 
-    <div>
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        Дата оплаты
-      </label>
-      <input
-  type="datetime-local"
-  value={formatForDateTimeLocal(selectedUser.subscriptionPaidAt)}
-  onChange={(e) =>
-    setSelectedUser({
-      ...selectedUser,
-      subscriptionPaidAt: e.target.value || null,
-    })
-  }
-  className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-/>
-    </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Дата оплаты
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={formatForDateTimeLocal(
+                        selectedUser.subscriptionPaidAt
+                      )}
+                      onChange={(e) =>
+                        setSelectedUser({
+                          ...selectedUser,
+                          subscriptionPaidAt: e.target.value || null,
+                        })
+                      }
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    />
+                  </div>
 
-    <div>
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        Дата окончания
-      </label>
-      <input
-  type="datetime-local"
-  value={formatForDateTimeLocal(selectedUser.subscriptionEndsAt)}
-  onChange={(e) =>
-    setSelectedUser({
-      ...selectedUser,
-      subscriptionEndsAt: e.target.value || null,
-    })
-  }
-  className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-/>
-    </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Дата окончания
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={formatForDateTimeLocal(
+                        selectedUser.subscriptionEndsAt
+                      )}
+                      onChange={(e) =>
+                        setSelectedUser({
+                          ...selectedUser,
+                          subscriptionEndsAt: e.target.value || null,
+                        })
+                      }
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    />
+                  </div>
 
-    <div className="md:col-span-2">
-      <label className="mb-2 block text-sm font-bold text-gray-700">
-        Заметка
-      </label>
-      <textarea
-        value={selectedUser.notes || ""}
-        onChange={(e) =>
-          setSelectedUser({
-            ...selectedUser,
-            notes: e.target.value,
-          })
-        }
-        rows={4}
-        className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
-      />
-    </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Заметка
+                    </label>
+                    <textarea
+                      value={selectedUser.notes || ""}
+                      onChange={(e) =>
+                        setSelectedUser({
+                          ...selectedUser,
+                          notes: e.target.value,
+                        })
+                      }
+                      rows={4}
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    />
+                  </div>
 
-    <div className="md:col-span-2 flex flex-wrap gap-4">
-      <button
-        onClick={saveUser}
-        disabled={loading}
-        className="btn-primary"
-      >
-        {loading ? "Сохранение..." : "Сохранить изменения"}
-      </button>
-    </div>
-  </div>
-)}
+                  <div className="md:col-span-2 flex flex-wrap gap-4">
+                    <button
+                      type="button"
+                      onClick={saveUser}
+                      disabled={loading}
+                      className="btn-primary"
+                    >
+                      {loading ? "Сохранение..." : "Сохранить изменения"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="soft-green-card p-8">
@@ -534,6 +637,7 @@ export default function AdminUsersClient({
 
                 <div className="md:col-span-2">
                   <button
+                    type="button"
                     onClick={createUser}
                     disabled={loading}
                     className="btn-primary"

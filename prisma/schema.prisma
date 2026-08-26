@@ -13,6 +13,18 @@ enum SubscriptionLevel {
   admin
 }
 
+enum PaymentProvider {
+  test
+  yookassa
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  canceled
+  failed
+}
+
 model User {
   id                   Int               @id @default(autoincrement())
   publicId             Int?              @unique
@@ -28,4 +40,39 @@ model User {
   lastLoginAt          DateTime?
   isActive             Boolean           @default(true)
   notes                String?
+
+  payments             Payment[]
+}
+
+model ServiceSettings {
+  id                Int      @id @default(1)
+  isYookassaEnabled Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Payment {
+  id                Int             @id @default(autoincrement())
+  userId            Int
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider          PaymentProvider @default(test)
+  status            PaymentStatus   @default(pending)
+
+  amount            Int
+  currency          String          @default("RUB")
+  description       String?
+
+  externalPaymentId String?         @unique
+  confirmationUrl   String?
+
+  paidAt            DateTime?
+  expiresAt         DateTime?
+  metadata          String?
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }

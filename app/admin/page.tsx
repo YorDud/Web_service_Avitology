@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
+import { getServiceSettings } from "@/lib/service-settings";
 import AdminUsersClient from "./users-client";
 
 export default async function AdminPage() {
@@ -22,5 +23,16 @@ export default async function AdminPage() {
     orderBy: { id: "asc" },
   });
 
-  return <AdminUsersClient users={users} adminName={admin.name} />;
+  const serviceSettings = await getServiceSettings();
+
+  return (
+    <AdminUsersClient
+      users={users}
+      adminName={admin.name}
+      initialServiceSettings={{
+        id: serviceSettings.id,
+        isYookassaEnabled: serviceSettings.isYookassaEnabled,
+      }}
+    />
+  );
 }

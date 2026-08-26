@@ -2,6 +2,32 @@ const statusCard = document.getElementById("statusCard");
 const refreshBtn = document.getElementById("refreshBtn");
 const openSiteBtn = document.getElementById("openSiteBtn");
 
+const SITE_URL = "https://avitology.site";
+const DEV_SITE_URL = "http://localhost:3000";
+
+async function getSiteUrl() {
+  try {
+    const result = await globalThis.extApi?.storage?.local.get([
+      "avitologySiteUrl",
+    ]);
+
+    const customUrl = result?.avitologySiteUrl;
+
+    if (customUrl && typeof customUrl === "string") {
+      return customUrl.replace(/\/$/, "");
+    }
+  } catch (error) {
+    console.error("Failed to read custom site url:", error);
+  }
+
+  return SITE_URL;
+}
+
+async function getAccessUrl() {
+  const siteUrl = await getSiteUrl();
+  return `${siteUrl}/api/extension/access`;
+}
+
 async function saveAccessState(data) {
   if (!globalThis.extApi) return;
 
@@ -10,90 +36,141 @@ async function saveAccessState(data) {
       authenticated: !!data.authenticated,
       access: !!data.access,
       subscriptionLevel: data.subscriptionLevel || null,
-      updatedAt: Date.now()
-    }
+      updatedAt: Date.now(),
+    },
   });
 }
 
-async function loadStatus() {
+function renderStatus(data) {
+  if (!statusCard) return;
+
+  if (!data || !data.authenticated) {
+    statusCard.innerHTML = `
+      <div class="status-title">Требуется вход</div>
+      <div class="status-text">
+        Войдите в аккаунт Avitology на сайте, чтобы использовать расширение.
+      </div>
+    `;
+    return;
+  }
+
+  if (data.access) {
+    statusCard.innerHTML = `
+      <div class="status-title">Доступ открыт</div>
+      <div class="status-text">
+        Ваш уровень доступа: <strong>${data.subscriptionLevel || "basic"}</strong>.
+        Расширение готово к работе.
+      </div>
+    `;
+    return;
+  }
+
   statusCard.innerHTML = `
-    <div class="status-title">Проверка доступа...</div>
-    <div class="status-text">Подождите, идет запрос к сайту Avitology</div>
+    <div class="status-title">Доступ ограничен</div>
+    <div class="status-text">
+      Для использования расширения требуется активный доступ к сервису.
+    </div>
   `;
+}
 
+async function loadSavedState() {
   try {
-    const response = await fetch("http://localhost:3000/api/extension/access", {
-      credentials: "include"
-    });
+    const result = await globalThis.extApi?.storage?.local.get([
+      "avitologyAccessState",
+    ]);
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      await saveAccessState({
-        authenticated: false,
-        access: false,
-        subscriptionLevel: null
-      });
-
-      statusCard.innerHTML = `
-        <div class="status-title">Ошибка подключения</div>
-        <div class="status-text">Не удалось получить ответ от сайта Avitology</div>
-      `;
-      return;
-    }
-
-    await saveAccessState(data);
-
-    if (!data.authenticated) {
-      statusCard.innerHTML = `
-        <div class="status-title">Требуется вход</div>
-        <div class="status-text">
-          Вы не авторизованы на сайте Avitology. Войдите в аккаунт в браузере.
-        </div>
-      `;
-      return;
-    }
-
-    if (!data.access) {
-      statusCard.innerHTML = `
-        <div class="status-title">Нет доступа</div>
-        <div class="status-text">
-          У вас нет активной подписки Basic. Текущий уровень: ${data.subscriptionLevel || "free"}.
-        </div>
-      `;
-      return;
-    }
-
-    statusCard.innerHTML = `
-      <div class="status-title">Доступ разрешен</div>
-      <div class="status-text">
-        Расширение может работать на страницах Авито. Уровень доступа: ${data.subscriptionLevel}.
-      </div>
-    `;
+    return result?.avitologyAccessState || null;
   } catch (error) {
-    console.error(error);
-
-    await saveAccessState({
-      authenticated: false,
-      access: false,
-      subscriptionLevel: null
-    });
-
-    statusCard.innerHTML = `
-      <div class="status-title">Ошибка сети</div>
-      <div class="status-text">
-        Проверьте, что сайт Avitology запущен на http://localhost:3000
-      </div>
-    `;
+    console.error("Failed to load saved state:", error);
+    return null;
   }
 }
 
-refreshBtn.addEventListener("click", loadStatus);
+async function checkAccess() {
+  try {
+    const accessUrl = await getAccessUrl();
 
-openSiteBtn.addEventListener("click", () => {
-  if (globalThis.extApi?.tabs) {
-  globalThis.extApi.tabs.create({ url: "http://localhost:3000" });
+    const response = await fetch(accessUrl, {
+      credentials: "include",
+    });
+
+    let data = null;
+
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok || !data) {
+      renderStatus({
+        authenticated: false,
+        access: false,
+        subscriptionLevel: null,
+      });
+
+      await saveAccessState({
+        authenticated: false,
+        access: false,
+        subscriptionLevel: null,
+      });
+
+      return;
+    }
+
+    renderStatus(data);
+    await saveAccessState(data);
+  } catch (error) {
+    console.error("Popup access check failed:", error);
+
+    try {
+      const response = await fetch(`${DEV_SITE_URL}/api/extension/access`, {
+        credentials: "include",
+      });
+
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok || !data) {
+        const savedState = await loadSavedState();
+        renderStatus(savedState);
+        return;
+      }
+
+      renderStatus(data);
+      await saveAccessState(data);
+    } catch (devError) {
+      console.error("Popup dev fallback failed:", devError);
+      const savedState = await loadSavedState();
+      renderStatus(savedState);
+    }
+  }
 }
-});
 
-loadStatus();
+if (refreshBtn) {
+  refreshBtn.addEventListener("click", () => {
+    checkAccess();
+  });
+}
+
+if (openSiteBtn) {
+  openSiteBtn.addEventListener("click", async () => {
+    const siteUrl = await getSiteUrl();
+
+    if (globalThis.extApi?.raw?.tabs?.create) {
+      globalThis.extApi.raw.tabs.create({
+        url: `${siteUrl}/extension`,
+      });
+      return;
+    }
+
+    window.open(`${siteUrl}/extension`, "_blank");
+  });
+}
+
+checkAccess();

@@ -2,45 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-
-function formatDate(date: Date | null) {
-  if (!date) return "—";
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(date));
-}
-
-async function buyBasicAction() {
-  "use server";
-
-  const sessionUser = await getSessionUser();
-
-  if (!sessionUser) {
-    redirect("/auth");
-  }
-
-  const now = new Date();
-  const endDate = new Date();
-  endDate.setDate(endDate.getDate() + 30);
-
-  if (sessionUser.subscriptionLevel !== "admin") {
-    await prisma.user.update({
-      where: { id: sessionUser.id },
-      data: {
-        subscriptionLevel: "basic",
-        subscriptionPrice: 299,
-        subscriptionPaidAt: now,
-        subscriptionEndsAt: endDate,
-      },
-    });
-  }
-
-  redirect("/dashboard");
-}
+import { formatRuDateTime } from "@/lib/dates";
+import { getServiceSettings } from "@/lib/service-settings";
+import { activateBasicSubscription } from "@/lib/payments/activate-basic-subscription";
 
 export default async function PricingPage() {
   const sessionUser = await getSessionUser();
+  const serviceSettings = await getServiceSettings();
 
   let user = null;
 
@@ -48,6 +16,57 @@ export default async function PricingPage() {
     user = await prisma.user.findUnique({
       where: { id: sessionUser.id },
     });
+  }
+
+  async function buyBasicAction() {
+    "use server";
+
+    const currentSessionUser = await getSessionUser();
+
+    if (!currentSessionUser) {
+      redirect("/auth");
+    }
+
+    const settings = await getServiceSettings();
+
+    if (settings.isYookassaEnabled) {
+      const payment = await prisma.payment.create({
+        data: {
+          userId: currentSessionUser.id,
+          provider: "yookassa",
+          status: "pending",
+          amount: 299,
+          currency: "RUB",
+          description: "Оплата подписки Basic через ЮKassa",
+          metadata: JSON.stringify({
+            source: "pricing-page",
+            mode: "yookassa",
+          }),
+        },
+      });
+
+      redirect(`/payment/pending?paymentId=${payment.id}`);
+    }
+
+    const updatedUser = await activateBasicSubscription(currentSessionUser.id);
+
+    await prisma.payment.create({
+      data: {
+        userId: currentSessionUser.id,
+        provider: "test",
+        status: "succeeded",
+        amount: updatedUser.subscriptionLevel === "admin" ? 0 : 299,
+        currency: "RUB",
+        description: "Тестовая активация подписки Basic",
+        paidAt: new Date(),
+        metadata: JSON.stringify({
+          source: "pricing-page",
+          mode: "test",
+        }),
+      },
+    });
+
+    redirect("/dashboard");
   }
 
   return (
@@ -73,10 +92,21 @@ export default async function PricingPage() {
             Подписка Basic для доступа к сервисам Avitology
           </h1>
           <p className="text-lg leading-8 text-gray-500">
-            Пока мы используем тестовую оплату без подключения ЮKassa. После
-            нажатия кнопки подписка Basic активируется на 30 дней и открывает
-            доступ к основной услуге сервиса.
+            Подписка Basic открывает доступ к основному инструменту сервиса,
+            личному кабинету и работе с расширением Avitology.
           </p>
+        </div>
+
+        <div className="mb-8 rounded-2xl border border-gray-200 bg-gray-50 p-5">
+          <div className="text-sm text-gray-500">Текущий режим оплаты</div>
+          <div className="mt-1 text-xl font-bold">
+            {serviceSettings.isYookassaEnabled ? "ЮKassa" : "Тестовый режим"}
+          </div>
+          <div className="mt-2 text-sm text-gray-500">
+            {serviceSettings.isYookassaEnabled
+              ? "При оформлении будет создан платеж в режиме ожидания подтверждения."
+              : "Сейчас используется тестовая активация подписки без внешнего платежного шлюза."}
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
@@ -96,7 +126,7 @@ export default async function PricingPage() {
               <li>• Доступ к скачиванию расширения</li>
               <li>• Доступ к личному кабинету и основной услуге</li>
               <li>• Срок действия подписки — 30 дней</li>
-              <li>• В будущем здесь будет интеграция с ЮKassa</li>
+              <li>• Подготовлен переход на оплату через ЮKassa</li>
             </ul>
 
             {!sessionUser ? (
@@ -111,7 +141,9 @@ export default async function PricingPage() {
             ) : (
               <form action={buyBasicAction} className="flex flex-col gap-4 sm:flex-row">
                 <button type="submit" className="btn-secondary">
-                  Оплатить тестово
+                  {serviceSettings.isYookassaEnabled
+                    ? "Перейти к оплате"
+                    : "Активировать подписку"}
                 </button>
                 <Link href="/dashboard" className="btn-secondary">
                   В кабинет
@@ -119,8 +151,6 @@ export default async function PricingPage() {
               </form>
             )}
           </div>
-		  
-		  
 
           <div className="white-card p-8">
             <div className="mb-5 text-2xl font-extrabold">
@@ -168,14 +198,14 @@ export default async function PricingPage() {
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="text-sm text-gray-500">Дата оплаты</div>
                   <div className="mt-1 text-xl font-bold">
-                    {formatDate(user.subscriptionPaidAt)}
+                    {formatRuDateTime(user.subscriptionPaidAt)}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="text-sm text-gray-500">Дата окончания</div>
                   <div className="mt-1 text-xl font-bold">
-                    {formatDate(user.subscriptionEndsAt)}
+                    {formatRuDateTime(user.subscriptionEndsAt)}
                   </div>
                 </div>
 
@@ -187,24 +217,25 @@ export default async function PricingPage() {
 
                 {user.subscriptionLevel === "admin" && (
                   <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-green-700">
-                    Уровень admin уже имеет полный доступ ко всем функциям.
+                    У пользователя с полным доступом все функции уже активны.
                   </div>
                 )}
 
                 {user.subscriptionLevel === "free" && (
                   <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-700">
-                    Сейчас у вас бесплатный уровень. Для доступа к услуге
-                    необходимо активировать Basic.
+                    Сейчас у вас базовый уровень доступа. Для использования
+                    основной услуги необходимо подключить подписку Basic.
                   </div>
                 )}
               </div>
             )}
           </div>
-		  <p className="subscription-note">
-		  
-		  После оплаты подписки доступ к расширению активируется автоматически. В некоторых случаях обновление доступа может занять до 15 минут.
-		  </p>
-		  
+
+          <p className="subscription-note">
+            После подтверждения оплаты доступ к расширению активируется
+            автоматически. В некоторых случаях обновление доступа может занять
+            до 15 минут.
+          </p>
         </div>
       </div>
     </main>

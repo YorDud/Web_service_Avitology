@@ -2,6 +2,12 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
+const EXTENSION_LINKS = {
+  chrome: "https://chromewebstore.google.com/detail/test-extension-id",
+  yandex: "https://chromewebstore.google.com/detail/test-extension-id",
+  edge: "https://chromewebstore.google.com/detail/test-extension-id",
+};
+
 export default async function ExtensionPage() {
   const sessionUser = await getSessionUser();
 
@@ -34,14 +40,14 @@ export default async function ExtensionPage() {
         </div>
 
         <div className="mb-10 max-w-4xl">
-          <div className="badge-green mb-5">Установка расширения</div>
+          <div className="badge-green mb-5">Расширение для браузера</div>
           <h1 className="mb-5 text-5xl font-extrabold leading-tight">
-            Расширение Avitology для работы с поиском Авито
+            Установите расширение Avitology для работы с поиском Авито
           </h1>
           <p className="text-lg leading-8 text-gray-500">
-            Это расширение будет авторизовываться через ваш аккаунт Avitology,
-            проверять подписку и помогать анализировать места в поиске Авито
-            прямо на странице поиска.
+            Расширение Avitology подключается к вашему аккаунту сервиса,
+            проверяет действующий уровень доступа и помогает работать с
+            результатами поиска Авито непосредственно в интерфейсе браузера.
           </p>
         </div>
 
@@ -49,7 +55,51 @@ export default async function ExtensionPage() {
           <div className="space-y-6">
             <div className="white-card p-8">
               <h2 className="mb-5 text-3xl font-extrabold">
-                Как установить расширение локально
+                Доступные браузеры
+              </h2>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <a
+                  href={EXTENSION_LINKS.chrome}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-green-300 hover:bg-white"
+                >
+                  <div className="mb-2 text-lg font-bold">Google Chrome</div>
+                  <div className="text-sm text-gray-600">
+                    Установка расширения через Chrome Web Store
+                  </div>
+                </a>
+
+                <a
+                  href={EXTENSION_LINKS.yandex}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-green-300 hover:bg-white"
+                >
+                  <div className="mb-2 text-lg font-bold">Yandex Browser</div>
+                  <div className="text-sm text-gray-600">
+                    Установка через страницу расширения в Chrome Web Store
+                  </div>
+                </a>
+
+                <a
+                  href={EXTENSION_LINKS.edge}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-green-300 hover:bg-white"
+                >
+                  <div className="mb-2 text-lg font-bold">Microsoft Edge</div>
+                  <div className="text-sm text-gray-600">
+                    Установка через подготовленную страницу расширения
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            <div className="white-card p-8">
+              <h2 className="mb-5 text-3xl font-extrabold">
+                Как установить расширение
               </h2>
 
               <div className="space-y-4">
@@ -58,11 +108,11 @@ export default async function ExtensionPage() {
                     ШАГ 1
                   </div>
                   <div className="text-lg font-bold">
-                    Скачайте папку расширения Avitology
+                    Перейдите на страницу расширения
                   </div>
                   <div className="mt-1 text-gray-600">
-                    На следующем этапе мы создадим реальные файлы расширения и
-                    кнопку скачивания.
+                    Выберите ваш браузер и откройте страницу установки
+                    расширения Avitology.
                   </div>
                 </div>
 
@@ -71,10 +121,11 @@ export default async function ExtensionPage() {
                     ШАГ 2
                   </div>
                   <div className="text-lg font-bold">
-                    Откройте страницу расширений Chrome
+                    Установите расширение в браузер
                   </div>
                   <div className="mt-1 text-gray-600">
-                    Перейдите в браузере по адресу chrome://extensions/
+                    Подтвердите установку расширения стандартным способом через
+                    интерфейс браузера.
                   </div>
                 </div>
 
@@ -83,11 +134,11 @@ export default async function ExtensionPage() {
                     ШАГ 3
                   </div>
                   <div className="text-lg font-bold">
-                    Включите режим разработчика
+                    Авторизуйтесь на сайте Avitology
                   </div>
                   <div className="mt-1 text-gray-600">
-                    После этого появится кнопка “Загрузить распакованное
-                    расширение”.
+                    Используйте тот же аккаунт, что и для доступа к сервису и
+                    подписке.
                   </div>
                 </div>
 
@@ -96,22 +147,11 @@ export default async function ExtensionPage() {
                     ШАГ 4
                   </div>
                   <div className="text-lg font-bold">
-                    Выберите папку расширения Avitology
+                    Откройте страницу поиска Авито
                   </div>
                   <div className="mt-1 text-gray-600">
-                    После загрузки значок расширения появится в браузере.
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                  <div className="mb-2 text-sm font-extrabold text-green-600">
-                    ШАГ 5
-                  </div>
-                  <div className="text-lg font-bold">
-                    Авторизуйтесь в расширении
-                  </div>
-                  <div className="mt-1 text-gray-600">
-                    Используйте те же почту и пароль, что и на сайте Avitology.
+                    После проверки доступа расширение сможет работать на
+                    страницах поиска и отображать рабочие инструменты.
                   </div>
                 </div>
               </div>
@@ -119,37 +159,62 @@ export default async function ExtensionPage() {
 
             <div className="soft-green-card p-8">
               <h2 className="mb-5 text-3xl font-extrabold">
-                Что будет уметь расширение
+                Возможности расширения
               </h2>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <div className="font-bold">Авторизация</div>
+                  <div className="font-bold">Авторизация через аккаунт</div>
                   <div className="mt-1 text-gray-600">
-                    Вход через существующий аккаунт Avitology.
+                    Расширение использует текущий аккаунт Avitology и работает
+                    в связке с личным кабинетом.
                   </div>
                 </div>
 
                 <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <div className="font-bold">Проверка подписки</div>
+                  <div className="font-bold">Проверка уровня доступа</div>
                   <div className="mt-1 text-gray-600">
-                    Доступ к функциям только для Basic и Admin.
+                    Функции расширения доступны для пользователей с активным
+                    доступом к сервису.
                   </div>
                 </div>
 
                 <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <div className="font-bold">Панель на странице Авито</div>
+                  <div className="font-bold">Работа в выдаче Авито</div>
                   <div className="mt-1 text-gray-600">
-                    Таблица с данными по найденным объявлениям.
+                    Инструменты сервиса отображаются непосредственно на страницах
+                    поиска.
                   </div>
                 </div>
 
                 <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <div className="font-bold">Подсветка объявлений</div>
+                  <div className="font-bold">Наглядная работа с объявлениями</div>
                   <div className="mt-1 text-gray-600">
-                    Отметка объявлений прямо в выдаче зеленым контуром.
+                    Расширение помогает быстрее ориентироваться в результатах
+                    поиска и работать с данными в удобном формате.
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="white-card p-8">
+              <h2 className="mb-5 text-3xl font-extrabold">
+                Важная информация
+              </h2>
+
+              <div className="space-y-4 text-gray-600 leading-8">
+                <p>
+                  Для полноценной работы расширения требуется авторизация на
+                  сайте Avitology.
+                </p>
+                <p>
+                  Доступ к функциональности зависит от уровня вашей подписки.
+                </p>
+                <p>
+                  После активации подписки обновление доступа в расширении
+                  обычно происходит автоматически. В отдельных случаях это может
+                  занять до 15 минут.
+                </p>
               </div>
             </div>
           </div>
@@ -163,10 +228,11 @@ export default async function ExtensionPage() {
               {!user ? (
                 <>
                   <div className="mb-3 text-3xl font-extrabold">
-                    Вы не авторизованы
+                    Требуется вход в аккаунт
                   </div>
                   <p className="mb-6 text-white/90">
-                    Чтобы использовать расширение, сначала войдите в аккаунт.
+                    Чтобы использовать расширение, сначала войдите в аккаунт
+                    Avitology.
                   </p>
                   <Link href="/auth" className="btn-secondary">
                     Войти в аккаунт
@@ -182,34 +248,61 @@ export default async function ExtensionPage() {
                     <span className="font-extrabold uppercase">
                       {user.subscriptionLevel}
                     </span>
-                    . После создания файлов расширения здесь появится кнопка
-                    скачивания.
+                    . Вы можете перейти на страницу установки расширения для
+                    вашего браузера.
                   </p>
 
                   <div className="space-y-4">
-                    <button className="btn-secondary" disabled>
-                      Скачать расширение (будет на следующем этапе)
-                    </button>
-                    <Link href="/dashboard/avito-positions" className="btn-secondary">
-                      Назад к услуге
+                    <a
+                      href={EXTENSION_LINKS.chrome}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary inline-flex"
+                    >
+                      Установить для Chrome
+                    </a>
+
+                    <a
+                      href={EXTENSION_LINKS.yandex}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary inline-flex"
+                    >
+                      Установить для Yandex Browser
+                    </a>
+
+                    <a
+                      href={EXTENSION_LINKS.edge}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary inline-flex"
+                    >
+                      Установить для Edge
+                    </a>
+
+                    <Link
+                      href="/dashboard/avito-positions"
+                      className="btn-secondary"
+                    >
+                      Перейти к услуге
                     </Link>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="mb-3 text-3xl font-extrabold">
-                    Нужна подписка Basic
+                    Требуется подписка Basic
                   </div>
                   <p className="mb-6 text-white/90">
                     Сейчас у вас уровень{" "}
                     <span className="font-extrabold uppercase">
                       {user.subscriptionLevel}
                     </span>
-                    . Для доступа к расширению нужно активировать Basic.
+                    . Для доступа к расширению необходимо подключить подписку.
                   </p>
                   <div className="space-y-4">
                     <Link href="/pricing" className="btn-secondary">
-                      Купить подписку
+                      Перейти к подписке
                     </Link>
                     <Link href="/dashboard" className="btn-secondary">
                       В личный кабинет
@@ -221,13 +314,15 @@ export default async function ExtensionPage() {
 
             <div className="white-card p-8">
               <div className="mb-4 text-2xl font-extrabold">
-                Подготовка к интеграции
+                Поддержка
               </div>
-              <p className="text-gray-600 leading-8">
-                На следующем этапе мы создадим API для расширения и саму
-                структуру браузерного расширения, чтобы оно могло проходить
-                авторизацию через Avitology и работать с доступом по подписке.
+              <p className="mb-6 text-gray-600 leading-8">
+                Если возникли вопросы по установке, авторизации или работе
+                расширения, обратитесь в техническую поддержку.
               </p>
+              <Link href="/support" className="btn-primary">
+                Связаться с поддержкой
+              </Link>
             </div>
           </div>
         </div>
