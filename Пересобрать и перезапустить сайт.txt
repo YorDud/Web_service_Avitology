@@ -1,0 +1,9 @@
+cd /opt/avitology
+pm2 delete avitology
+rm -rf .next
+npm run build
+set -a
+source .env
+set +a
+pm2 start npm --name avitology -- start
+pm2 save

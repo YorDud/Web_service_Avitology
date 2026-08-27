@@ -1,0 +1,15 @@
+import type { MetadataRoute } from "next";
+
+export default function robots(): MetadataRoute.Robots {
+  return {
+    rules: [
+      {
+        userAgent: "*",
+        allow: "/",
+        disallow: ["/dashboard", "/admin", "/api", "/payment"],
+      },
+    ],
+    sitemap: "https://avitology.site/sitemap.xml",
+    host: "https://avitology.site",
+  };
+}
