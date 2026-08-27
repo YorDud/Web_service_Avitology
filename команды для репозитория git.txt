@@ -5,7 +5,23 @@ git push origin main
 
 
 
+на сервер с репозитория
+cd /opt/avitology
+git status
+git branch
+git pull origin main
+
+
 
 
 Запуск Web 
-npm run dev
+cd /opt/avitology
+pm2 delete avitology
+rm -rf .next
+npm install
+npm run build
+set -a
+source .env
+set +a
+pm2 start npm --name avitology -- start
+pm2 save
