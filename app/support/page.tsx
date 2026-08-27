@@ -3,7 +3,7 @@ import Link from "next/link";
 const supportLinks = {
   telegram: "https://t.me/your_support_username",
   max: "https://max.ru/u/f9LHodD0cOLQhj1ORGcTK_PXXtBYr2fb_KRkNVZaHCCClz_o8ETjP4uQIPM",
-  email: "mailto:support@avitology.ru",
+  email: "mailto:avitology.help@yandex.ru",
 };
 
 export default function SupportPage() {
