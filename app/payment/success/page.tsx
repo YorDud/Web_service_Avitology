@@ -9,8 +9,9 @@ export default function PaymentSuccessPage() {
             <div className="mb-4 text-5xl">✅</div>
             <h1 className="section-title mb-4">Оплата успешно подтверждена</h1>
             <p className="section-text mb-8">
-              Подписка активирована. Вы можете продолжить работу в личном
-              кабинете.
+              Если webhook уже обработан, подписка активирована автоматически.
+              Если активация произошла с небольшой задержкой, обновите кабинет
+              через несколько секунд.
             </p>
 
             <div className="flex flex-col justify-center gap-4 sm:flex-row">

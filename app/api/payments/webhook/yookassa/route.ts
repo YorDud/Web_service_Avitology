@@ -93,21 +93,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    if (status === "waiting_for_capture" || status === "pending") {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: "pending",
-          metadata: JSON.stringify({
-            webhookEvent: event,
-            yookassaStatus: status,
-            paid: body.object.paid ?? false,
-          }),
-        },
-      });
-
-      return NextResponse.json({ ok: true });
-    }
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: "pending",
+        metadata: JSON.stringify({
+          webhookEvent: event,
+          yookassaStatus: status ?? "pending",
+          paid: body.object.paid ?? false,
+        }),
+      },
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

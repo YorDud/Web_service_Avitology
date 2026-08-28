@@ -31,6 +31,53 @@ pm2 save
 
 
 
+cd /opt/avitology
+
+mkdir -p /opt/avitology_backup_manual
+cp prisma/dev.db /opt/avitology_backup_manual/dev.db.backup 2>/dev/null || true
+cp .env /opt/avitology_backup_manual/.env.backup 2>/dev/null || true
+
+pm2 delete avitology || true
+
+git fetch --all --prune
+git checkout main
+git reset --hard origin/main
+git clean -fd
+
+cp /opt/avitology_backup_manual/dev.db.backup /opt/avitology/prisma/dev.db 2>/dev/null || true
+cp /opt/avitology_backup_manual/.env.backup /opt/avitology/.env 2>/dev/null || true
+
+mkdir -p /opt/avitology/types
+cat > /opt/avitology/types/yookassa.d.ts <<'EOF'
+declare module "yookassa";
+EOF
+
+npm install
+
+set -a
+source .env
+set +a
+
+npm run build
+
+pm2 start npm --name avitology -- start
+pm2 save
+pm2 status
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 npm run dev 
@@ -40,7 +87,7 @@ npm run dev
 Жёстко сбросить репозиторий к удалённой ветке main
 Вот это и есть главный шаг.
 
-bash
+
 git fetch origin
 git reset --hard origin/main
 git clean -fd

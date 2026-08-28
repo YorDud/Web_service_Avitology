@@ -9,8 +9,8 @@ export default function PaymentErrorPage() {
             <div className="mb-4 text-5xl">⚠️</div>
             <h1 className="section-title mb-4">Не удалось завершить оплату</h1>
             <p className="section-text mb-8">
-              Возникла ошибка при обработке платежа. Попробуйте повторить
-              попытку позже или обратитесь в поддержку.
+              Возникла ошибка при обработке платежа или платёж был отменён.
+              Попробуйте повторить попытку позже или обратитесь в поддержку.
             </p>
 
             <div className="flex flex-col justify-center gap-4 sm:flex-row">

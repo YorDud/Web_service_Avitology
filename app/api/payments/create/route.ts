@@ -72,60 +72,83 @@ export async function POST() {
       },
     });
 
-    const yookassaPayment = await createYookassaPayment({
-      amount: payment.amount,
-      description: payment.description || "Оплата подписки Basic через ЮKassa",
-      paymentId: payment.id,
-      userId: user.id,
-      userEmail: user.email,
-    });
+    try {
+      const yookassaPayment = await createYookassaPayment({
+        amount: payment.amount,
+        description: payment.description || "Оплата подписки Basic через ЮKassa",
+        paymentId: payment.id,
+        userId: user.id,
+        userEmail: user.email,
+      });
 
-    console.log(
-      "YOOKASSA CREATE PAYMENT RESPONSE:",
-      JSON.stringify(yookassaPayment, null, 2)
-    );
+      console.log(
+        "YOOKASSA CREATE PAYMENT RESPONSE:",
+        JSON.stringify(yookassaPayment, null, 2)
+      );
 
-    const confirmationUrl =
-      (yookassaPayment as any)?.confirmation?.confirmation_url ?? null;
+      const externalPaymentId = (yookassaPayment as any)?.id ?? null;
+      const confirmationUrl =
+        (yookassaPayment as any)?.confirmation?.confirmation_url ?? null;
+      const expiresAtRaw = (yookassaPayment as any)?.expires_at ?? null;
+      const yookassaStatus = (yookassaPayment as any)?.status ?? null;
 
-    console.log("YOOKASSA CONFIRMATION URL:", confirmationUrl);
+      console.log("YOOKASSA CONFIRMATION URL:", confirmationUrl);
 
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        externalPaymentId: (yookassaPayment as any)?.id ?? null,
-        confirmationUrl,
-        expiresAt: (yookassaPayment as any)?.expires_at
-          ? new Date((yookassaPayment as any).expires_at)
-          : null,
-        metadata: JSON.stringify({
-          source: "web-pricing",
-          mode: "yookassa",
-          yookassaStatus: (yookassaPayment as any)?.status ?? null,
-          rawConfirmationType:
-            (yookassaPayment as any)?.confirmation?.type ?? null,
-        }),
-      },
-    });
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          externalPaymentId,
+          confirmationUrl,
+          expiresAt: expiresAtRaw ? new Date(expiresAtRaw) : null,
+          metadata: JSON.stringify({
+            source: "web-pricing",
+            mode: "yookassa",
+            yookassaStatus,
+          }),
+        },
+      });
 
-    if (!confirmationUrl) {
-      console.error("YOOKASSA ERROR: confirmation_url is missing");
+      if (!confirmationUrl) {
+        console.error("YOOKASSA ERROR: confirmation_url is missing");
+
+        return NextResponse.json(
+          {
+            error: "ЮKassa не вернула ссылку для перехода на оплату",
+            paymentId: payment.id,
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        provider: "yookassa",
+        paymentId: payment.id,
+        redirectUrl: confirmationUrl,
+      });
+    } catch (providerError) {
+      console.error("YOOKASSA CREATE ERROR:", providerError);
+
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "failed",
+          metadata: JSON.stringify({
+            source: "web-pricing",
+            mode: "yookassa",
+            providerError:
+              providerError instanceof Error
+                ? providerError.message
+                : "unknown error",
+          }),
+        },
+      });
 
       return NextResponse.json(
-        {
-          error: "ЮKassa не вернула ссылку для перехода на оплату",
-          paymentId: payment.id,
-        },
+        { error: "Не удалось создать платёж через ЮKassa" },
         { status: 500 }
       );
     }
-
-    return NextResponse.json({
-      success: true,
-      provider: "yookassa",
-      paymentId: payment.id,
-      redirectUrl: confirmationUrl,
-    });
   } catch (error) {
     console.error("CREATE PAYMENT ERROR:", error);
 

@@ -25,6 +25,8 @@ export async function createYookassaPayment(params: {
   userId: number;
   userEmail: string;
 }) {
+  const idempotenceKey = `payment-${params.paymentId}-${Date.now()}`;
+
   const payment = await yookassa.createPayment(
     {
       amount: {
@@ -34,7 +36,7 @@ export async function createYookassaPayment(params: {
       capture: true,
       confirmation: {
         type: "redirect",
-        return_url: returnUrl,
+        return_url: `${returnUrl}?paymentId=${params.paymentId}`,
       },
       description: params.description,
       metadata: {
@@ -43,8 +45,12 @@ export async function createYookassaPayment(params: {
         email: params.userEmail,
       },
     },
-    `${params.paymentId}-${Date.now()}`
+    idempotenceKey
   );
 
   return payment;
+}
+
+export async function getYookassaPayment(paymentId: string) {
+  return await yookassa.getPayment(paymentId);
 }
