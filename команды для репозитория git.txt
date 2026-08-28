@@ -34,3 +34,17 @@ pm2 save
 
 
 npm run dev 
+
+
+
+Жёстко сбросить репозиторий к удалённой ветке main
+Вот это и есть главный шаг.
+
+bash
+git fetch origin
+git reset --hard origin/main
+git clean -fd
+Что это делает:
+git fetch origin — забирает всё свежее с GitHub
+git reset --hard origin/main — делает проект точной копией GitHub-ветки
+git clean -fd — удаляет все неотслеживаемые файлы и папки

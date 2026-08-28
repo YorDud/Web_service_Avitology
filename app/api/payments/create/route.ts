@@ -28,6 +28,7 @@ export async function POST() {
     }
 
     const paymentMode = await getPaymentMode();
+    console.log("PAYMENT MODE:", paymentMode);
 
     if (paymentMode === "test") {
       const updatedUser = await activateBasicSubscription(user.id);
@@ -80,36 +81,50 @@ export async function POST() {
     });
 
     console.log(
-  "YOOKASSA CREATE PAYMENT RESPONSE:",
-  JSON.stringify(yookassaPayment, null, 2)
-);
+      "YOOKASSA CREATE PAYMENT RESPONSE:",
+      JSON.stringify(yookassaPayment, null, 2)
+    );
 
-const confirmationUrl =
-  (yookassaPayment as any)?.confirmation?.confirmation_url ?? null;
+    const confirmationUrl =
+      (yookassaPayment as any)?.confirmation?.confirmation_url ?? null;
 
-console.log("YOOKASSA CONFIRMATION URL:", confirmationUrl);
+    console.log("YOOKASSA CONFIRMATION URL:", confirmationUrl);
 
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
-        externalPaymentId: yookassaPayment.id,
+        externalPaymentId: (yookassaPayment as any)?.id ?? null,
         confirmationUrl,
-        expiresAt: yookassaPayment.expires_at
-          ? new Date(yookassaPayment.expires_at)
+        expiresAt: (yookassaPayment as any)?.expires_at
+          ? new Date((yookassaPayment as any).expires_at)
           : null,
         metadata: JSON.stringify({
           source: "web-pricing",
           mode: "yookassa",
-          yookassaStatus: yookassaPayment.status,
+          yookassaStatus: (yookassaPayment as any)?.status ?? null,
+          rawConfirmationType:
+            (yookassaPayment as any)?.confirmation?.type ?? null,
         }),
       },
     });
+
+    if (!confirmationUrl) {
+      console.error("YOOKASSA ERROR: confirmation_url is missing");
+
+      return NextResponse.json(
+        {
+          error: "ЮKassa не вернула ссылку для перехода на оплату",
+          paymentId: payment.id,
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
       provider: "yookassa",
       paymentId: payment.id,
-      redirectUrl: confirmationUrl || `/payment/pending?paymentId=${payment.id}`,
+      redirectUrl: confirmationUrl,
     });
   } catch (error) {
     console.error("CREATE PAYMENT ERROR:", error);

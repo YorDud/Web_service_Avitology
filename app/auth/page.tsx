@@ -174,36 +174,38 @@ export default function AuthPage() {
               </Link>
 
               <div className="inline-flex w-full rounded-2xl border border-gray-200 bg-gray-50 p-1 sm:w-auto">
-                <button
-                  onClick={() => {
-                    setMode("login");
-                    setError("");
-                    setSuccess("");
-                  }}
-                  className={`flex-1 whitespace-nowrap rounded-xl px-3 py-3 text-sm font-bold transition sm:px-5 ${
-                    mode === "login"
-                      ? "bg-white text-black shadow-sm"
-                      : "text-gray-500"
-                  }`}
-                >
-                  Вход
-                </button>
+  <button
+    type="button"
+    onClick={() => {
+      setMode("login");
+      setError("");
+      setSuccess("");
+    }}
+    className={`min-h-[48px] min-w-[132px] flex-1 rounded-xl px-4 py-3 text-center text-sm font-bold whitespace-nowrap transition sm:flex-none ${
+      mode === "login"
+        ? "bg-white text-black shadow-sm"
+        : "text-gray-500"
+    }`}
+  >
+    Вход
+  </button>
 
-                <button
-                  onClick={() => {
-                    setMode("register");
-                    setError("");
-                    setSuccess("");
-                  }}
-                  className={`flex-1 whitespace-nowrap rounded-xl px-3 py-3 text-sm font-bold transition sm:px-5 ${
-                    mode === "register"
-                      ? "bg-white text-black shadow-sm"
-                      : "text-gray-500"
-                  }`}
-                >
-                  Регистрация
-                </button>
-              </div>
+  <button
+    type="button"
+    onClick={() => {
+      setMode("register");
+      setError("");
+      setSuccess("");
+    }}
+    className={`min-h-[48px] min-w-[132px] flex-1 rounded-xl px-4 py-3 text-center text-sm font-bold whitespace-nowrap transition sm:flex-none ${
+      mode === "register"
+        ? "bg-white text-black shadow-sm"
+        : "text-gray-500"
+    }`}
+  >
+    Регистрация
+  </button>
+</div>
             </div>
 
             <div className="mb-6">
