@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { formatRuDateTime } from "@/lib/dates";
 import { getServiceSettings } from "@/lib/service-settings";
-import { activateBasicSubscription } from "@/lib/payments/activate-basic-subscription";
+import BuyBasicButton from "./buy-basic-button";
 
 export default async function PricingPage() {
   const sessionUser = await getSessionUser();
@@ -16,57 +15,6 @@ export default async function PricingPage() {
     user = await prisma.user.findUnique({
       where: { id: sessionUser.id },
     });
-  }
-
-  async function buyBasicAction() {
-    "use server";
-
-    const currentSessionUser = await getSessionUser();
-
-    if (!currentSessionUser) {
-      redirect("/auth");
-    }
-
-    const settings = await getServiceSettings();
-
-    if (settings.isYookassaEnabled) {
-      const payment = await prisma.payment.create({
-        data: {
-          userId: currentSessionUser.id,
-          provider: "yookassa",
-          status: "pending",
-          amount: 299,
-          currency: "RUB",
-          description: "Оплата подписки Basic через ЮKassa",
-          metadata: JSON.stringify({
-            source: "pricing-page",
-            mode: "yookassa",
-          }),
-        },
-      });
-
-      redirect(`/payment/pending?paymentId=${payment.id}`);
-    }
-
-    const updatedUser = await activateBasicSubscription(currentSessionUser.id);
-
-    await prisma.payment.create({
-      data: {
-        userId: currentSessionUser.id,
-        provider: "test",
-        status: "succeeded",
-        amount: updatedUser.subscriptionLevel === "admin" ? 0 : 299,
-        currency: "RUB",
-        description: "Тестовая активация подписки Basic",
-        paidAt: new Date(),
-        metadata: JSON.stringify({
-          source: "pricing-page",
-          mode: "test",
-        }),
-      },
-    });
-
-    redirect("/dashboard");
   }
 
   return (
@@ -104,7 +52,7 @@ export default async function PricingPage() {
           </div>
           <div className="mt-2 text-sm text-gray-500">
             {serviceSettings.isYookassaEnabled
-              ? "При оформлении будет создан платеж в режиме ожидания подтверждения."
+              ? "При оформлении будет выполнен переход на страницу оплаты ЮKassa."
               : "Сейчас используется тестовая активация подписки без внешнего платежного шлюза."}
           </div>
         </div>
@@ -126,7 +74,7 @@ export default async function PricingPage() {
               <li>• Доступ к скачиванию расширения</li>
               <li>• Доступ к личному кабинету и основной услуге</li>
               <li>• Срок действия подписки — 30 дней</li>
-              <li>• Подготовлен переход на оплату через ЮKassa</li>
+              <li>• Поддержка тестового режима и оплаты через ЮKassa</li>
             </ul>
 
             {!sessionUser ? (
@@ -139,16 +87,9 @@ export default async function PricingPage() {
                 </Link>
               </div>
             ) : (
-              <form action={buyBasicAction} className="flex flex-col gap-4 sm:flex-row">
-                <button type="submit" className="btn-secondary">
-                  {serviceSettings.isYookassaEnabled
-                    ? "Перейти к оплате"
-                    : "Активировать подписку"}
-                </button>
-                <Link href="/dashboard" className="btn-secondary">
-                  В кабинет
-                </Link>
-              </form>
+              <BuyBasicButton
+                isYookassaEnabled={serviceSettings.isYookassaEnabled}
+              />
             )}
           </div>
 
