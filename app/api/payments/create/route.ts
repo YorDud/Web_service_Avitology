@@ -79,11 +79,15 @@ export async function POST() {
       userEmail: user.email,
     });
 
-    const confirmationUrl =
-      yookassaPayment.confirmation &&
-      "confirmation_url" in yookassaPayment.confirmation
-        ? yookassaPayment.confirmation.confirmation_url
-        : null;
+    console.log(
+  "YOOKASSA CREATE PAYMENT RESPONSE:",
+  JSON.stringify(yookassaPayment, null, 2)
+);
+
+const confirmationUrl =
+  (yookassaPayment as any)?.confirmation?.confirmation_url ?? null;
+
+console.log("YOOKASSA CONFIRMATION URL:", confirmationUrl);
 
     await prisma.payment.update({
       where: { id: payment.id },

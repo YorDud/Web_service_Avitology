@@ -180,7 +180,7 @@ export default function AuthPage() {
                     setError("");
                     setSuccess("");
                   }}
-                  className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold transition sm:px-5 ${
+                  className={`flex-1 whitespace-nowrap rounded-xl px-3 py-3 text-sm font-bold transition sm:px-5 ${
                     mode === "login"
                       ? "bg-white text-black shadow-sm"
                       : "text-gray-500"
@@ -195,7 +195,7 @@ export default function AuthPage() {
                     setError("");
                     setSuccess("");
                   }}
-                  className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold transition sm:px-5 ${
+                  className={`flex-1 whitespace-nowrap rounded-xl px-3 py-3 text-sm font-bold transition sm:px-5 ${
                     mode === "register"
                       ? "bg-white text-black shadow-sm"
                       : "text-gray-500"
