@@ -10,6 +10,9 @@
 !.yarn/releases
 !.yarn/versions
 
+prisma/dev.db
+prisma/dev.db-journal
+
 # testing
 /coverage
 
