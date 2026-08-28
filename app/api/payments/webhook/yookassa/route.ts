@@ -8,14 +8,8 @@ type YookassaWebhookBody = {
     id?: string;
     status?: string;
     paid?: boolean;
-    amount?: {
-      value?: string;
-      currency?: string;
-    };
     metadata?: {
       internalPaymentId?: string;
-      userId?: string;
-      email?: string;
     };
   };
 };
@@ -66,6 +60,7 @@ export async function POST(req: Request) {
             status: "succeeded",
             paidAt: new Date(),
             metadata: JSON.stringify({
+              source: "yookassa-webhook",
               webhookEvent: event,
               yookassaStatus: status,
               paid: body.object.paid ?? true,
@@ -83,6 +78,7 @@ export async function POST(req: Request) {
         data: {
           status: "canceled",
           metadata: JSON.stringify({
+            source: "yookassa-webhook",
             webhookEvent: event,
             yookassaStatus: status,
             paid: body.object.paid ?? false,
@@ -98,6 +94,7 @@ export async function POST(req: Request) {
       data: {
         status: "pending",
         metadata: JSON.stringify({
+          source: "yookassa-webhook",
           webhookEvent: event,
           yookassaStatus: status ?? "pending",
           paid: body.object.paid ?? false,

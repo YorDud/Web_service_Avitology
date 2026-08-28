@@ -20,6 +20,26 @@ type UserItem = {
   notes: string | null;
 };
 
+type PaymentItem = {
+  id: number;
+  userId: number;
+  provider: string;
+  status: string;
+  amount: number;
+  currency: string;
+  description: string | null;
+  externalPaymentId: string | null;
+  confirmationUrl: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
+};
+
 type ServiceSettings = {
   id: number;
   isYookassaEnabled: boolean;
@@ -27,12 +47,43 @@ type ServiceSettings = {
 
 type Props = {
   users: UserItem[];
+  payments: PaymentItem[];
   adminName: string;
   initialServiceSettings: ServiceSettings;
 };
 
+function formatDateTime(value: string | null) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function getPaymentStatusClass(status: string) {
+  switch (status) {
+    case "succeeded":
+      return "border-green-200 bg-green-50 text-green-700";
+    case "pending":
+      return "border-yellow-200 bg-yellow-50 text-yellow-700";
+    case "canceled":
+    case "failed":
+      return "border-red-200 bg-red-50 text-red-700";
+    default:
+      return "border-gray-200 bg-white text-gray-700";
+  }
+}
+
 export default function AdminUsersClient({
   users: initialUsers,
+  payments,
   adminName,
   initialServiceSettings,
 }: Props) {

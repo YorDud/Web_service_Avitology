@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
+import { syncYookassaPaymentByInternalId } from "@/lib/payments/sync-yookassa-payment";
 
 type RouteContext = {
   params: Promise<{
@@ -29,7 +30,7 @@ export async function GET(_req: Request, context: RouteContext) {
       );
     }
 
-    const payment = await prisma.payment.findUnique({
+    let payment = await prisma.payment.findUnique({
       where: { id: paymentId },
     });
 
@@ -38,6 +39,10 @@ export async function GET(_req: Request, context: RouteContext) {
         { error: "Платеж не найден" },
         { status: 404 }
       );
+    }
+
+    if (payment.provider === "yookassa" && payment.status !== "succeeded") {
+      payment = await syncYookassaPaymentByInternalId(payment.id);
     }
 
     return NextResponse.json({

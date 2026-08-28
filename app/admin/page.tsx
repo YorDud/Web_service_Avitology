@@ -58,11 +58,60 @@ export default async function AdminPage() {
     notes: user.notes,
   }));
 
+  const dbPayments = await prisma.payment.findMany({
+    orderBy: { id: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      userId: true,
+      provider: true,
+      status: true,
+      amount: true,
+      currency: true,
+      description: true,
+      externalPaymentId: true,
+      confirmationUrl: true,
+      paidAt: true,
+      createdAt: true,
+      expiresAt: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  const payments = dbPayments.map((payment) => ({
+    id: payment.id,
+    userId: payment.userId,
+    provider: payment.provider,
+    status: payment.status,
+    amount: payment.amount,
+    currency: payment.currency,
+    description: payment.description,
+    externalPaymentId: payment.externalPaymentId,
+    confirmationUrl: payment.confirmationUrl,
+    paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
+    createdAt: payment.createdAt.toISOString(),
+    expiresAt: payment.expiresAt ? payment.expiresAt.toISOString() : null,
+    user: payment.user
+      ? {
+          id: payment.user.id,
+          name: payment.user.name,
+          email: payment.user.email,
+        }
+      : null,
+  }));
+
   const serviceSettings = await getServiceSettings();
 
   return (
     <AdminUsersClient
       users={users}
+      payments={payments}
       adminName={admin.name}
       initialServiceSettings={{
         id: serviceSettings.id,
