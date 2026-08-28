@@ -25,3 +25,12 @@ source .env
 set +a
 pm2 start npm --name avitology -- start
 pm2 save
+
+
+
+
+
+
+
+
+npm run dev 

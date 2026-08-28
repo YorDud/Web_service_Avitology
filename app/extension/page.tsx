@@ -3,9 +3,9 @@ import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
 const EXTENSION_LINKS = {
-  chrome: "https://chromewebstore.google.com/detail/test-extension-id",
-  yandex: "https://chromewebstore.google.com/detail/test-extension-id",
-  edge: "https://chromewebstore.google.com/detail/test-extension-id",
+  chrome: "https://chrome.google.com/webstore/detail/oigdilhkhidoinkpkfchkdpbkaobfhng",
+  yandex: "https://chrome.google.com/webstore/detail/oigdilhkhidoinkpkfchkdpbkaobfhng",
+  edge: "https://chrome.google.com/webstore/detail/oigdilhkhidoinkpkfchkdpbkaobfhng",
 };
 
 export default async function ExtensionPage() {

@@ -21,6 +21,7 @@ export default function AuthPage() {
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerRepeatPassword, setRegisterRepeatPassword] = useState("");
+  const [registerConsent, setRegisterConsent] = useState(false);
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
@@ -64,6 +65,14 @@ export default function AuthPage() {
     setError("");
     setSuccess("");
 
+    if (!registerConsent) {
+      setError(
+        "Для регистрации необходимо согласиться с обработкой персональных данных"
+      );
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -75,6 +84,7 @@ export default function AuthPage() {
           email: registerEmail,
           password: registerPassword,
           repeatPassword: registerRepeatPassword,
+          consentToPersonalData: registerConsent,
         }),
       });
 
@@ -98,21 +108,25 @@ export default function AuthPage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="container-main flex min-h-screen items-center justify-center py-16">
-        <div className="grid w-full max-w-6xl grid-cols-1 overflow-hidden rounded-[32px] border border-green-100 bg-white shadow-[0_20px_60px_rgba(16,24,40,0.08)] lg:grid-cols-2">
-          <div className="green-3d-card flex flex-col justify-between p-8 text-white md:p-12">
+      <div className="container-main flex min-h-screen items-center justify-center py-8 sm:py-12 md:py-16">
+        <div className="grid w-full max-w-6xl grid-cols-1 overflow-hidden rounded-[24px] border border-green-100 bg-white shadow-[0_20px_60px_rgba(16,24,40,0.08)] lg:grid-cols-2 lg:rounded-[32px]">
+          <div className="green-3d-card flex flex-col justify-between p-6 text-white md:p-10 lg:p-12">
             <div>
               <div className="mb-6 flex items-center gap-3">
                 <div className="overflow-hidden rounded-2xl border border-white/20 bg-white/10 shadow-[0_8px_20px_rgba(16,24,40,0.12)]">
                   <img
                     src="/logo.png"
                     alt="Avitology logo"
-                    className="h-12 w-12 object-cover"
+                    className="h-11 w-11 object-cover sm:h-12 sm:w-12"
                   />
                 </div>
-                <div>
-                  <div className="text-xl font-extrabold">Авитология</div>
-                  <div className="text-sm text-white/75">Avitology</div>
+                <div className="min-w-0">
+                  <div className="text-lg font-extrabold sm:text-xl">
+                    Авитология
+                  </div>
+                  <div className="text-xs text-white/75 sm:text-sm">
+                    Avitology
+                  </div>
                 </div>
               </div>
 
@@ -120,20 +134,20 @@ export default function AuthPage() {
                 Единый аккаунт сервиса
               </div>
 
-              <h1 className="mb-5 text-4xl font-extrabold leading-tight md:text-5xl">
+              <h1 className="mb-5 text-3xl font-extrabold leading-tight sm:text-4xl md:text-5xl">
                 Вход и регистрация
                 <br />
                 в Avitology
               </h1>
 
-              <p className="max-w-xl text-base leading-8 text-white/90">
+              <p className="max-w-xl text-sm leading-7 text-white/90 sm:text-base sm:leading-8">
                 Создайте аккаунт, получите начальный уровень free и в дальнейшем
                 активируйте подписку Basic для доступа к основным возможностям
                 сервиса и браузерному расширению.
               </p>
             </div>
 
-            <div className="mt-10 space-y-4">
+            <div className="mt-8 space-y-4 md:mt-10">
               <div className="rounded-2xl border border-white/20 bg-white/10 p-4">
                 <div className="font-bold">Free</div>
                 <div className="text-sm text-white/80">
@@ -150,8 +164,8 @@ export default function AuthPage() {
             </div>
           </div>
 
-          <div className="p-8 md:p-12">
-            <div className="mb-8 flex items-center justify-between">
+          <div className="p-6 md:p-10 lg:p-12">
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <Link
                 href="/"
                 className="text-sm font-bold text-gray-500 hover:text-black"
@@ -159,14 +173,14 @@ export default function AuthPage() {
                 ← На главную
               </Link>
 
-              <div className="inline-flex rounded-2xl border border-gray-200 bg-gray-50 p-1">
+              <div className="inline-flex w-full rounded-2xl border border-gray-200 bg-gray-50 p-1 sm:w-auto">
                 <button
                   onClick={() => {
                     setMode("login");
                     setError("");
                     setSuccess("");
                   }}
-                  className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+                  className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold transition sm:px-5 ${
                     mode === "login"
                       ? "bg-white text-black shadow-sm"
                       : "text-gray-500"
@@ -181,7 +195,7 @@ export default function AuthPage() {
                     setError("");
                     setSuccess("");
                   }}
-                  className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+                  className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold transition sm:px-5 ${
                     mode === "register"
                       ? "bg-white text-black shadow-sm"
                       : "text-gray-500"
@@ -193,10 +207,10 @@ export default function AuthPage() {
             </div>
 
             <div className="mb-6">
-              <h2 className="text-3xl font-extrabold">
+              <h2 className="text-2xl font-extrabold sm:text-3xl">
                 {mode === "login" ? "Добро пожаловать" : "Создание аккаунта"}
               </h2>
-              <p className="mt-2 text-gray-500">
+              <p className="mt-2 text-sm text-gray-500 sm:text-base">
                 {mode === "login"
                   ? "Введите почту и пароль для входа в сервис"
                   : "Заполните данные для регистрации нового пользователя"}
@@ -225,8 +239,9 @@ export default function AuthPage() {
                     type="email"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
                     placeholder="Введите почту"
+                    autoComplete="email"
                   />
                 </div>
 
@@ -238,8 +253,9 @@ export default function AuthPage() {
                     type="password"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
                     placeholder="Введите пароль"
+                    autoComplete="current-password"
                   />
                 </div>
 
@@ -269,8 +285,9 @@ export default function AuthPage() {
                     type="text"
                     value={registerName}
                     onChange={(e) => setRegisterName(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
                     placeholder="Введите имя"
+                    autoComplete="name"
                   />
                 </div>
 
@@ -282,8 +299,9 @@ export default function AuthPage() {
                     type="email"
                     value={registerEmail}
                     onChange={(e) => setRegisterEmail(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
                     placeholder="Введите почту"
+                    autoComplete="email"
                   />
                 </div>
 
@@ -295,8 +313,9 @@ export default function AuthPage() {
                     type="password"
                     value={registerPassword}
                     onChange={(e) => setRegisterPassword(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
                     placeholder="Введите пароль"
+                    autoComplete="new-password"
                   />
                 </div>
 
@@ -308,10 +327,37 @@ export default function AuthPage() {
                     type="password"
                     value={registerRepeatPassword}
                     onChange={(e) => setRegisterRepeatPassword(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
                     placeholder="Повторите пароль"
+                    autoComplete="new-password"
                   />
                 </div>
+
+                <label className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <input
+                    type="checkbox"
+                    checked={registerConsent}
+                    onChange={(e) => setRegisterConsent(e.target.checked)}
+                    className="mt-1 h-4 w-4 shrink-0 accent-green-600"
+                  />
+                  <span className="text-sm leading-6 text-gray-700">
+                    Я даю согласие на обработку персональных данных и принимаю{" "}
+                    <Link
+                      href="/personal-data-consent"
+                      className="font-bold text-green-700 hover:underline"
+                    >
+                      условия согласия
+                    </Link>
+                    , а также ознакомлен с{" "}
+                    <Link
+                      href="/privacy"
+                      className="font-bold text-green-700 hover:underline"
+                    >
+                      Политикой конфиденциальности
+                    </Link>
+                    .
+                  </span>
+                </label>
 
                 <button
                   type="submit"

@@ -585,9 +585,12 @@ function Footer() {
         <div>© 2026 Авитология / Avitology. Все права защищены.</div>
         <div className="flex flex-wrap items-center justify-center gap-4 md:justify-end md:gap-5">
           <a href="#about">О сервисе</a>
-          <a href="#pricing">Подписка</a>
-          <a href="#extension">Расширение</a>
-          <Link href="/support">Поддержка</Link>
+  <a href="#pricing">Подписка</a>
+  <a href="#extension">Расширение</a>
+  <Link href="/about">О нас</Link>
+  <Link href="/privacy">Политика конфиденциальности</Link>
+  <Link href="/personal-data-consent">Согласие на обработку данных</Link>
+  <Link href="/support">Поддержка</Link>
         </div>
       </div>
     </footer>

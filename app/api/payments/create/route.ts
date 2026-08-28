@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getPaymentMode } from "@/lib/payment-mode";
 import { activateBasicSubscription } from "@/lib/payments/activate-basic-subscription";
+import { createYookassaPayment } from "@/lib/payments/yookassa";
 
 export async function POST() {
   try {
@@ -70,11 +71,41 @@ export async function POST() {
       },
     });
 
+    const yookassaPayment = await createYookassaPayment({
+      amount: payment.amount,
+      description: payment.description || "Оплата подписки Basic через ЮKassa",
+      paymentId: payment.id,
+      userId: user.id,
+      userEmail: user.email,
+    });
+
+    const confirmationUrl =
+      yookassaPayment.confirmation &&
+      "confirmation_url" in yookassaPayment.confirmation
+        ? yookassaPayment.confirmation.confirmation_url
+        : null;
+
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        externalPaymentId: yookassaPayment.id,
+        confirmationUrl,
+        expiresAt: yookassaPayment.expires_at
+          ? new Date(yookassaPayment.expires_at)
+          : null,
+        metadata: JSON.stringify({
+          source: "web-pricing",
+          mode: "yookassa",
+          yookassaStatus: yookassaPayment.status,
+        }),
+      },
+    });
+
     return NextResponse.json({
       success: true,
       provider: "yookassa",
       paymentId: payment.id,
-      redirectUrl: `/payment/pending?paymentId=${payment.id}`,
+      redirectUrl: confirmationUrl || `/payment/pending?paymentId=${payment.id}`,
     });
   } catch (error) {
     console.error("CREATE PAYMENT ERROR:", error);
