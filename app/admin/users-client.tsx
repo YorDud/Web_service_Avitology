@@ -698,6 +698,82 @@ export default function AdminUsersClient({
                 </div>
               </div>
             </div>
+
+            <div className="white-card p-8">
+              <div className="mb-6 text-2xl font-extrabold">
+                История платежей
+              </div>
+
+              {payments.length === 0 ? (
+                <div className="text-gray-500">Платежей пока нет.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-y-2">
+                    <thead>
+                      <tr className="text-left text-sm text-gray-500">
+                        <th className="px-3 py-2">ID</th>
+                        <th className="px-3 py-2">Пользователь</th>
+                        <th className="px-3 py-2">Провайдер</th>
+                        <th className="px-3 py-2">Статус</th>
+                        <th className="px-3 py-2">Сумма</th>
+                        <th className="px-3 py-2">Описание</th>
+                        <th className="px-3 py-2">Внешний ID</th>
+                        <th className="px-3 py-2">Создан</th>
+                        <th className="px-3 py-2">Оплачен</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map((payment) => (
+                        <tr
+                          key={payment.id}
+                          className="rounded-2xl bg-gray-50 text-sm text-gray-700"
+                        >
+                          <td className="px-3 py-3 font-bold">{payment.id}</td>
+                          <td className="px-3 py-3">
+                            <div className="font-medium">
+                              {payment.user?.name || "—"}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              ID {payment.userId}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {payment.user?.email || "—"}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 uppercase">
+                            {payment.provider}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-bold uppercase ${getPaymentStatusClass(
+                                payment.status
+                              )}`}
+                            >
+                              {payment.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            {payment.amount} {payment.currency}
+                          </td>
+                          <td className="px-3 py-3 max-w-[240px]">
+                            {payment.description || "—"}
+                          </td>
+                          <td className="px-3 py-3 break-all text-xs">
+                            {payment.externalPaymentId || "—"}
+                          </td>
+                          <td className="px-3 py-3">
+                            {formatDateTime(payment.createdAt)}
+                          </td>
+                          <td className="px-3 py-3">
+                            {formatDateTime(payment.paidAt)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </section>
         </div>
       </div>
