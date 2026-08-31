@@ -34,6 +34,9 @@ let filters = {
   }
 };
 
+let avitologyTableExpanded = false;
+const highlightedAccounts = new Set();
+
 function isSearchPage() {
   const url = location.href;
   return (
@@ -800,7 +803,23 @@ function ensureInlineContainer() {
           <div class="avitology-inline-title">Авитология — результаты анализа</div>
           <div class="avitology-inline-subtitle">Поиск, сортировка, фильтры и экспорт</div>
         </div>
-      </div>
+      <a
+    href="https://avitology.site"
+    target="_blank"
+    rel="noreferrer"
+    class="avitology-brand-card"
+  >
+    <img
+      src="https://avitology.site/logo.png"
+      alt="Авитология"
+      class="avitology-brand-logo"
+    />
+    <div>
+      <div class="avitology-brand-title">Авитология</div>
+      <div class="avitology-brand-link">avitology.site</div>
+    </div>
+  </a>
+</div>
 
       <div class="avitology-tabs">
         <button class="avitology-tab active" data-tab="positions">По позициям в поиске</button>
@@ -1265,33 +1284,137 @@ function applySellerFilters(rows) {
   return result;
 }
 
+function escapeAttr(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function getAccountKey(row) {
+  return normalizeWhitespace(row.seller || "Без имени");
+}
+
+function groupRowsBySeller(rows) {
+  const map = new Map();
+
+  for (const row of rows) {
+    const seller = getAccountKey(row);
+
+    if (!map.has(seller)) {
+      map.set(seller, {
+        seller,
+        rating: row.rating || "—",
+        reviews: row.reviews || "—",
+        positions: [],
+      });
+    }
+
+    map.get(seller).positions.push({
+      id: row.id,
+      position: row.position,
+      title: row.title,
+      price: row.price,
+      url: row.url || "",
+    });
+  }
+
+  return Array.from(map.values()).sort((a, b) => {
+    const aFirst = a.positions[0]?.position ?? 999999;
+    const bFirst = b.positions[0]?.position ?? 999999;
+    return aFirst - bFirst;
+  });
+}
+
 function renderPositionsTable(rows) {
   const wrap = getInlineTableWrapEl();
   const summary = getInlineSummaryEl();
   if (!wrap || !summary) return;
 
   const filteredRows = applyPositionFilters(rows);
+  const groupedRows = groupRowsBySeller(filteredRows);
 
-  summary.textContent = `Показано результатов: ${filteredRows.length} из ${rows.length}`;
+  summary.textContent = `Показано аккаунтов: ${groupedRows.length} · объявлений: ${filteredRows.length} из ${rows.length}`;
 
   wrap.innerHTML = `
-    <div id="avitology-inline-table-scroller" class="avitology-inline-table-scroll">
+    <div
+      id="avitology-inline-table-scroller"
+      class="avitology-inline-table-scroll ${avitologyTableExpanded ? "expanded" : ""}"
+    >
       <table class="avitology-table">
         <thead>
           <tr>
             <th>Пометить</th>
-            <th>Позиция</th>
-            <th>Объявление</th>
-            <th>Цена</th>
+            <th>Позиции</th>
             <th>Аккаунт</th>
+            <th>Объявления</th>
             <th>Рейтинг</th>
             <th>Отзывы</th>
           </tr>
         </thead>
         <tbody>
-          ${filteredRows
-            .map((row, index) => {
-              const checked = checkedPositionIds.has(row.id) ? "checked" : "";
+          ${groupedRows
+            .map((group, index) => {
+              const accountKey = getAccountKey(group);
+              const accountActive = highlightedAccounts.has(accountKey)
+                ? "active"
+                : "";
+
+              const positionsHtml = group.positions
+                .map((item) => {
+                  const safeUrl = item.url ? escapeAttr(item.url) : "";
+                  const badge = `
+                    <span class="avitology-position-badge">${item.position}</span>
+                  `;
+
+                  if (!safeUrl) return badge;
+
+                  return `
+                    <a
+                      href="${safeUrl}"
+                      target="_blank"
+                      rel="noreferrer"
+                      class="avitology-position-badge"
+                      title="Открыть объявление"
+                    >
+                      ${item.position}
+                    </a>
+                  `;
+                })
+                .join("");
+
+              const adsHtml = group.positions
+                .map((item) => {
+                  const safeTitle = escapeHtml(item.title || "Без названия");
+                  const safeUrl = item.url ? escapeAttr(item.url) : "";
+                  const safePrice = escapeHtml(item.price || "—");
+
+                  if (!safeUrl) {
+                    return `
+                      <div class="mb-2">
+                        <div>${safeTitle}</div>
+                        <div style="font-size:12px;color:#667085;margin-top:2px;">${safePrice}</div>
+                      </div>
+                    `;
+                  }
+
+                  return `
+                    <div class="mb-2">
+                      <a
+                        href="${safeUrl}"
+                        target="_blank"
+                        rel="noreferrer"
+                        class="avitology-title-link"
+                        title="${safeTitle}"
+                      >
+                        ${safeTitle}
+                      </a>
+                      <div style="font-size:12px;color:#667085;margin-top:2px;">${safePrice}</div>
+                    </div>
+                  `;
+                })
+                .join("");
 
               return `
                 <tr>
@@ -1299,16 +1422,26 @@ function renderPositionsTable(rows) {
                     <input
                       class="avitology-checkbox"
                       type="checkbox"
-                      data-row-index="${index}"
-                      ${checked}
+                      data-group-index="${index}"
                     />
                   </td>
-                  <td>${row.position}</td>
-                  <td title="${escapeHtml(row.title)}">${escapeHtml(row.title)}</td>
-                  <td>${escapeHtml(row.price || "—")}</td>
-                  <td>${escapeHtml(row.seller || "—")}</td>
-                  <td>${escapeHtml(row.rating || "—")}</td>
-                  <td>${escapeHtml(row.reviews || "—")}</td>
+                  <td>
+                    <div class="avitology-position-badges">
+                      ${positionsHtml}
+                    </div>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="avitology-account-chip ${accountActive}"
+                      data-account-name="${escapeAttr(accountKey)}"
+                    >
+                      ${escapeHtml(accountKey)}
+                    </button>
+                  </td>
+                  <td>${adsHtml}</td>
+                  <td>${escapeHtml(group.rating || "—")}</td>
+                  <td>${escapeHtml(group.reviews || "—")}</td>
                 </tr>
               `;
             })
@@ -1316,46 +1449,72 @@ function renderPositionsTable(rows) {
         </tbody>
       </table>
     </div>
+
+    <div class="avitology-table-expand-wrap">
+      <button
+        type="button"
+        id="avitology-expand-table-btn"
+        class="avitology-table-expand-btn"
+      >
+        ${avitologyTableExpanded ? "Свернуть таблицу" : "Развернуть все позиции"}
+      </button>
+    </div>
   `;
 
   const scroller = document.querySelector("#avitology-inline-table-scroller");
   if (scroller) {
-    scroller.addEventListener("scroll", () => {
-      tableScrollTopByTab.positions = scroller.scrollTop;
+    scroller.addEventListener("scroll", syncHeaderShadowIfNeeded, {
+      passive: true,
     });
   }
 
-  const checkboxes = wrap.querySelectorAll(".avitology-checkbox");
-  checkboxes.forEach((checkbox) => {
-    checkbox.addEventListener("change", (event) => {
-      const target = event.target;
-      const index = Number(target.getAttribute("data-row-index"));
-      const row = filteredRows[index];
+  const expandBtn = document.querySelector("#avitology-expand-table-btn");
+  if (expandBtn) {
+    expandBtn.addEventListener("click", () => {
+      avitologyTableExpanded = !avitologyTableExpanded;
+      renderPositionsTable(rows);
+    });
+  }
 
-      if (!row) return;
+  const accountButtons = wrap.querySelectorAll("[data-account-name]");
+  accountButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const accountName = btn.getAttribute("data-account-name") || "";
 
-      saveCurrentTableScroll();
-
-      if (target.checked) {
-        checkedPositionIds.add(row.id);
-        if (row.card) row.card.classList.add("avitology-highlighted");
+      if (highlightedAccounts.has(accountName)) {
+        highlightedAccounts.delete(accountName);
       } else {
-        checkedPositionIds.delete(row.id);
-        if (row.card) row.card.classList.remove("avitology-highlighted");
+        highlightedAccounts.add(accountName);
       }
 
-      restoreCurrentTableScroll();
-	  saveExtensionState();
+      renderPositionsTable(rows);
     });
   });
 
-  rows.forEach((row) => {
-    if (checkedPositionIds.has(row.id) && row.card) {
-      row.card.classList.add("avitology-highlighted");
-    }
+  const checkboxes = wrap.querySelectorAll("[data-group-index]");
+  checkboxes.forEach((checkbox) => {
+    checkbox.addEventListener("change", (event) => {
+      const groupIndex = Number(
+        event.currentTarget.getAttribute("data-group-index")
+      );
+      const group = groupedRows[groupIndex];
+      if (!group) return;
+
+      const checked = !!event.currentTarget.checked;
+
+      for (const item of group.positions) {
+        if (checked) {
+          checkedPositionIds.add(item.id);
+        } else {
+          checkedPositionIds.delete(item.id);
+        }
+      }
+
+      highlightCheckedCards();
+    });
   });
 
-  restoreCurrentTableScroll();
+  highlightCheckedCards();
 }
 
 function renderSellersTable(rows) {

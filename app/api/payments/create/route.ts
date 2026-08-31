@@ -4,8 +4,9 @@ import { getSessionUser } from "@/lib/session";
 import { getPaymentMode } from "@/lib/payment-mode";
 import { activateBasicSubscription } from "@/lib/payments/activate-basic-subscription";
 import { createYookassaPayment } from "@/lib/payments/yookassa";
+import { getSubscriptionPlan } from "@/lib/subscription-plans";
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     const sessionUser = await getSessionUser();
 
@@ -15,6 +16,10 @@ export async function POST() {
         { status: 401 }
       );
     }
+
+    const body = await req.json().catch(() => null);
+    const planCode = body?.planCode || "1m";
+    const plan = getSubscriptionPlan(planCode);
 
     const user = await prisma.user.findUnique({
       where: { id: sessionUser.id },
@@ -28,23 +33,29 @@ export async function POST() {
     }
 
     const paymentMode = await getPaymentMode();
-    console.log("PAYMENT MODE:", paymentMode);
+    console.log("PAYMENT MODE:", paymentMode, "PLAN:", plan.code);
 
     if (paymentMode === "test") {
-      const updatedUser = await activateBasicSubscription(user.id);
+      const updatedUser = await activateBasicSubscription(user.id, {
+        months: plan.months,
+        price: plan.price,
+      });
 
       const payment = await prisma.payment.create({
         data: {
           userId: user.id,
           provider: "test",
           status: "succeeded",
-          amount: updatedUser.subscriptionLevel === "admin" ? 0 : 299,
+          amount: updatedUser.subscriptionLevel === "admin" ? 0 : plan.price,
           currency: "RUB",
-          description: "Тестовая активация подписки Basic",
+          description: `Тестовая активация подписки Basic (${plan.title})`,
+          planCode: plan.code,
+          durationMonths: plan.months,
           paidAt: new Date(),
           metadata: JSON.stringify({
             source: "web-pricing",
             mode: "test",
+            planCode: plan.code,
           }),
         },
       });
@@ -62,12 +73,15 @@ export async function POST() {
         userId: user.id,
         provider: "yookassa",
         status: "pending",
-        amount: 299,
+        amount: plan.price,
         currency: "RUB",
-        description: "Оплата подписки Basic через ЮKassa",
+        description: plan.description,
+        planCode: plan.code,
+        durationMonths: plan.months,
         metadata: JSON.stringify({
           source: "web-pricing",
           mode: "yookassa",
+          planCode: plan.code,
         }),
       },
     });
@@ -75,7 +89,7 @@ export async function POST() {
     try {
       const yookassaPayment = await createYookassaPayment({
         amount: payment.amount,
-        description: payment.description || "Оплата подписки Basic через ЮKassa",
+        description: payment.description || plan.description,
         paymentId: payment.id,
         userId: user.id,
         userEmail: user.email,
@@ -104,6 +118,7 @@ export async function POST() {
             source: "web-pricing",
             mode: "yookassa",
             yookassaStatus,
+            planCode: plan.code,
           }),
         },
       });
@@ -136,6 +151,7 @@ export async function POST() {
           metadata: JSON.stringify({
             source: "web-pricing",
             mode: "yookassa",
+            planCode: plan.code,
             providerError:
               providerError instanceof Error
                 ? providerError.message
@@ -150,7 +166,7 @@ export async function POST() {
       );
     }
   } catch (error) {
-    console.error("CREATE PAYMENT ERROR:", error);
+    console.error("PAYMENT CREATE ERROR:", error);
 
     return NextResponse.json(
       { error: "Ошибка создания платежа" },

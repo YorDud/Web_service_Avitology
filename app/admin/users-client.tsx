@@ -13,6 +13,7 @@ type UserItem = {
   subscriptionPrice: number;
   subscriptionPaidAt: string | null;
   subscriptionEndsAt: string | null;
+  usedFreeTrial: boolean;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
@@ -28,6 +29,8 @@ type PaymentItem = {
   amount: number;
   currency: string;
   description: string | null;
+  planCode: string | null;
+  durationMonths: number;
   externalPaymentId: string | null;
   confirmationUrl: string | null;
   paidAt: string | null;
@@ -43,6 +46,7 @@ type PaymentItem = {
 type ServiceSettings = {
   id: number;
   isYookassaEnabled: boolean;
+  isFreeTrialEnabled: boolean;
 };
 
 type Props = {
@@ -118,6 +122,7 @@ export default function AdminUsersClient({
       user.subscriptionPrice,
       user.subscriptionPaidAt,
       user.subscriptionEndsAt,
+      user.usedFreeTrial ? "trial used yes true" : "trial no false",
       user.createdAt,
       user.updatedAt,
       user.lastLoginAt,
@@ -155,6 +160,7 @@ export default function AdminUsersClient({
         },
         body: JSON.stringify({
           isYookassaEnabled: serviceSettings.isYookassaEnabled,
+          isFreeTrialEnabled: serviceSettings.isFreeTrialEnabled,
         }),
       });
 
@@ -391,7 +397,7 @@ export default function AdminUsersClient({
               </button>
 
               {serviceSettingsOpen && (
-                <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-6">
+                <div className="mt-6 space-y-6 rounded-2xl border border-gray-200 bg-gray-50 p-6">
                   <label className="flex items-start gap-3">
                     <input
                       type="checkbox"
@@ -417,7 +423,32 @@ export default function AdminUsersClient({
                     </div>
                   </label>
 
-                  <div className="mt-6 flex flex-wrap gap-4">
+                  <label className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={serviceSettings.isFreeTrialEnabled}
+                      onChange={(e) =>
+                        setServiceSettings({
+                          ...serviceSettings,
+                          isFreeTrialEnabled: e.target.checked,
+                        })
+                      }
+                      className="mt-1 h-5 w-5 rounded border-gray-300"
+                    />
+
+                    <div>
+                      <div className="font-bold text-gray-900">
+                        Включить услугу «Попробовать 1 день бесплатно»
+                      </div>
+                      <div className="mt-1 text-sm text-gray-500">
+                        Если включено, авторизованные пользователи без даты
+                        оплаты и без использованного пробного периода увидят
+                        кнопку бесплатного доступа на 1 день.
+                      </div>
+                    </div>
+                  </label>
+
+                  <div className="flex flex-wrap gap-4">
                     <button
                       type="button"
                       onClick={saveServiceSettings}
@@ -553,6 +584,17 @@ export default function AdminUsersClient({
                       <option value="true">Да</option>
                       <option value="false">Нет</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Пробный период
+                    </label>
+                    <input
+                      value={selectedUser.usedFreeTrial ? "Использован" : "Нет"}
+                      disabled
+                      className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4"
+                    />
                   </div>
 
                   <div>
@@ -715,6 +757,7 @@ export default function AdminUsersClient({
                         <th className="px-3 py-2">Пользователь</th>
                         <th className="px-3 py-2">Провайдер</th>
                         <th className="px-3 py-2">Статус</th>
+                        <th className="px-3 py-2">Срок</th>
                         <th className="px-3 py-2">Сумма</th>
                         <th className="px-3 py-2">Описание</th>
                         <th className="px-3 py-2">Внешний ID</th>
@@ -751,6 +794,14 @@ export default function AdminUsersClient({
                             >
                               {payment.status}
                             </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            {payment.durationMonths} мес.
+                            {payment.planCode ? (
+                              <div className="text-xs text-gray-500">
+                                {payment.planCode}
+                              </div>
+                            ) : null}
                           </td>
                           <td className="px-3 py-3">
                             {payment.amount} {payment.currency}

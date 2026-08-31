@@ -52,7 +52,10 @@ export async function POST(req: Request) {
 
     if (event === "payment.succeeded" || status === "succeeded") {
       if (payment.status !== "succeeded") {
-        await activateBasicSubscription(payment.userId);
+        await activateBasicSubscription(payment.userId, {
+          months: payment.durationMonths || 1,
+          price: payment.amount,
+        });
 
         await prisma.payment.update({
           where: { id: payment.id },
@@ -64,6 +67,8 @@ export async function POST(req: Request) {
               webhookEvent: event,
               yookassaStatus: status,
               paid: body.object.paid ?? true,
+              planCode: payment.planCode,
+              durationMonths: payment.durationMonths,
             }),
           },
         });
@@ -82,6 +87,8 @@ export async function POST(req: Request) {
             webhookEvent: event,
             yookassaStatus: status,
             paid: body.object.paid ?? false,
+            planCode: payment.planCode,
+            durationMonths: payment.durationMonths,
           }),
         },
       });
@@ -98,6 +105,8 @@ export async function POST(req: Request) {
           webhookEvent: event,
           yookassaStatus: status ?? "pending",
           paid: body.object.paid ?? false,
+          planCode: payment.planCode,
+          durationMonths: payment.durationMonths,
         }),
       },
     });

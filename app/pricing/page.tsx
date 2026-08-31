@@ -17,6 +17,12 @@ export default async function PricingPage() {
     });
   }
 
+  const canUseFreeTrial =
+    !!user &&
+    !user.usedFreeTrial &&
+    !user.subscriptionPaidAt &&
+    serviceSettings.isFreeTrialEnabled;
+
   return (
     <main className="min-h-screen bg-white">
       <div className="container-main py-16">
@@ -63,18 +69,21 @@ export default async function PricingPage() {
               BASIC
             </div>
 
-            <div className="mb-4 text-4xl font-extrabold">299 ₽ / месяц</div>
+            <div className="mb-4 text-4xl font-extrabold">
+              Выберите срок подписки
+            </div>
             <div className="mb-8 text-white/90">
               Доступ к услуге “Места в поиске Авито”, личному кабинету и
               скачиванию расширения Avitology.
             </div>
 
             <ul className="mb-8 space-y-3 text-[15px] text-white/95">
+              <li>• 1 месяц — 299 ₽</li>
+              <li>• 3 месяца — 807 ₽ со скидкой 10%</li>
+              <li>• 6 месяцев — 1345 ₽ со скидкой 25%</li>
               <li>• Доступ к аналитике мест в поиске Авито</li>
               <li>• Доступ к скачиванию расширения</li>
               <li>• Доступ к личному кабинету и основной услуге</li>
-              <li>• Срок действия подписки — 30 дней</li>
-              <li>• Поддержка тестового режима и оплаты через ЮKassa</li>
             </ul>
 
             {!sessionUser ? (
@@ -89,6 +98,8 @@ export default async function PricingPage() {
             ) : (
               <BuyBasicButton
                 isYookassaEnabled={serviceSettings.isYookassaEnabled}
+                isFreeTrialEnabled={serviceSettings.isFreeTrialEnabled}
+                canUseFreeTrial={canUseFreeTrial}
               />
             )}
           </div>
@@ -102,81 +113,51 @@ export default async function PricingPage() {
               <div className="space-y-4">
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="text-sm text-gray-500">Статус</div>
-                  <div className="mt-1 text-xl font-bold">Гость</div>
+                  <div className="mt-1 text-lg font-bold">Гость</div>
                 </div>
-                <div className="text-gray-500">
-                  Войдите в аккаунт, чтобы активировать подписку.
+
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-600">
+                  Войдите в аккаунт, чтобы оплатить подписку или активировать
+                  пробный период.
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Пользователь</div>
-                  <div className="mt-1 text-xl font-bold">
-                    {user.name} — ID {user.id}
-                  </div>
+                  <div className="text-sm text-gray-500">Имя</div>
+                  <div className="mt-1 text-lg font-bold">{user.name}</div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Почта</div>
-                  <div className="mt-1 text-xl font-bold">{user.email}</div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Текущий уровень</div>
-                  <div className="mt-1 text-xl font-bold uppercase">
+                  <div className="text-sm text-gray-500">Подписка</div>
+                  <div className="mt-1 text-lg font-bold uppercase">
                     {user.subscriptionLevel}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Стоимость</div>
-                  <div className="mt-1 text-xl font-bold">
-                    {user.subscriptionPrice} ₽
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <div className="text-sm text-gray-500">Дата оплаты</div>
-                  <div className="mt-1 text-xl font-bold">
+                  <div className="mt-1 text-base font-semibold">
                     {formatRuDateTime(user.subscriptionPaidAt)}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Дата окончания</div>
-                  <div className="mt-1 text-xl font-bold">
+                  <div className="text-sm text-gray-500">Действует до</div>
+                  <div className="mt-1 text-base font-semibold">
                     {formatRuDateTime(user.subscriptionEndsAt)}
                   </div>
                 </div>
 
-                {user.subscriptionLevel === "basic" && (
-                  <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-green-700">
-                    Подписка Basic активна. Доступ к основной услуге открыт.
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="text-sm text-gray-500">Пробный период</div>
+                  <div className="mt-1 text-base font-semibold">
+                    {user.usedFreeTrial ? "Уже использован" : "Ещё доступен"}
                   </div>
-                )}
-
-                {user.subscriptionLevel === "admin" && (
-                  <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-green-700">
-                    У пользователя с полным доступом все функции уже активны.
-                  </div>
-                )}
-
-                {user.subscriptionLevel === "free" && (
-                  <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-700">
-                    Сейчас у вас базовый уровень доступа. Для использования
-                    основной услуги необходимо подключить подписку Basic.
-                  </div>
-                )}
+                </div>
               </div>
             )}
           </div>
-
-          <p className="subscription-note">
-            После подтверждения оплаты доступ к расширению активируется
-            автоматически. В некоторых случаях обновление доступа может занять
-            до 15 минут.
-          </p>
         </div>
       </div>
     </main>

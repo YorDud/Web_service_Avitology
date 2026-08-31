@@ -35,6 +35,7 @@ model User {
   subscriptionPrice    Int               @default(0)
   subscriptionPaidAt   DateTime?
   subscriptionEndsAt   DateTime?
+  usedFreeTrial        Boolean           @default(false)
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
   lastLoginAt          DateTime?
@@ -45,10 +46,11 @@ model User {
 }
 
 model ServiceSettings {
-  id                Int      @id @default(1)
-  isYookassaEnabled Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 Int      @id @default(1)
+  isYookassaEnabled  Boolean  @default(false)
+  isFreeTrialEnabled Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Payment {
@@ -62,6 +64,9 @@ model Payment {
   amount            Int
   currency          String          @default("RUB")
   description       String?
+
+  planCode          String?
+  durationMonths    Int             @default(1)
 
   externalPaymentId String?         @unique
   confirmationUrl   String?

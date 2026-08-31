@@ -30,6 +30,7 @@ export default async function AdminPage() {
       subscriptionPrice: true,
       subscriptionPaidAt: true,
       subscriptionEndsAt: true,
+      usedFreeTrial: true,
       createdAt: true,
       updatedAt: true,
       lastLoginAt: true,
@@ -51,6 +52,7 @@ export default async function AdminPage() {
     subscriptionEndsAt: user.subscriptionEndsAt
       ? user.subscriptionEndsAt.toISOString()
       : null,
+    usedFreeTrial: user.usedFreeTrial,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
@@ -69,6 +71,8 @@ export default async function AdminPage() {
       amount: true,
       currency: true,
       description: true,
+      planCode: true,
+      durationMonths: true,
       externalPaymentId: true,
       confirmationUrl: true,
       paidAt: true,
@@ -92,6 +96,8 @@ export default async function AdminPage() {
     amount: payment.amount,
     currency: payment.currency,
     description: payment.description,
+    planCode: payment.planCode,
+    durationMonths: payment.durationMonths,
     externalPaymentId: payment.externalPaymentId,
     confirmationUrl: payment.confirmationUrl,
     paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
@@ -116,6 +122,7 @@ export default async function AdminPage() {
       initialServiceSettings={{
         id: serviceSettings.id,
         isYookassaEnabled: serviceSettings.isYookassaEnabled,
+        isFreeTrialEnabled: serviceSettings.isFreeTrialEnabled,
       }}
     />
   );
