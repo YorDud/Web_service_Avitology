@@ -1,9 +1,12 @@
 const statusCard = document.getElementById("statusCard");
 const refreshBtn = document.getElementById("refreshBtn");
 const openSiteBtn = document.getElementById("openSiteBtn");
+const versionCard = document.getElementById("versionCard");
 
 const SITE_URL = "https://avitology.site";
 const DEV_SITE_URL = "http://localhost:3000";
+const WEBSTORE_URL =
+  "https://chromewebstore.google.com/detail/avitology/oigdilhkhidoinkpkfchkdpbkaobfhng";
 
 async function getSiteUrl() {
   try {
@@ -26,6 +29,11 @@ async function getSiteUrl() {
 async function getAccessUrl() {
   const siteUrl = await getSiteUrl();
   return `${siteUrl}/api/extension/access`;
+}
+
+async function getVersionUrl() {
+  const siteUrl = await getSiteUrl();
+  return `${siteUrl}/api/extension/version`;
 }
 
 async function saveAccessState(data) {
@@ -73,6 +81,21 @@ function renderStatus(data) {
   `;
 }
 
+function compareVersions(a, b) {
+  const pa = String(a || "").split(".").map(Number);
+  const pb = String(b || "").split(".").map(Number);
+  const len = Math.max(pa.length, pb.length);
+
+  for (let i = 0; i < len; i++) {
+    const av = pa[i] || 0;
+    const bv = pb[i] || 0;
+    if (av > bv) return 1;
+    if (av < bv) return -1;
+  }
+
+  return 0;
+}
+
 async function loadSavedState() {
   try {
     const result = await globalThis.extApi?.storage?.local.get([
@@ -83,6 +106,99 @@ async function loadSavedState() {
   } catch (error) {
     console.error("Failed to load saved state:", error);
     return null;
+  }
+}
+
+async function loadSavedVersionState() {
+  try {
+    const result = await globalThis.extApi?.storage?.local.get([
+      "avitologyVersionState",
+    ]);
+
+    return result?.avitologyVersionState || null;
+  } catch (error) {
+    console.error("Failed to load saved version state:", error);
+    return null;
+  }
+}
+
+function renderVersionState(versionState) {
+  if (!versionCard) return;
+
+  if (!versionState?.isOutdated) {
+    versionCard.style.display = "none";
+    versionCard.innerHTML = "";
+    return;
+  }
+
+  versionCard.style.display = "block";
+  versionCard.innerHTML = `
+    <div class="version-title">Доступно обновление</div>
+    <div class="version-text">
+      У вас установлена версия <strong>${versionState.currentVersion || "—"}</strong>,
+      доступна <strong>${versionState.latestVersion || "—"}</strong>.
+    </div>
+    <a
+      href="${versionState.updateUrl || WEBSTORE_URL}"
+      target="_blank"
+      rel="noreferrer"
+      class="version-update-link"
+    >
+      Установить обновление
+    </a>
+  `;
+}
+
+async function checkVersion() {
+  try {
+    const currentVersion =
+      globalThis.extApi?.raw?.runtime?.getManifest?.()?.version || null;
+
+    if (!currentVersion) {
+      const saved = await loadSavedVersionState();
+      renderVersionState(saved);
+      return;
+    }
+
+    let response;
+    let data = null;
+
+    try {
+      const versionUrl = await getVersionUrl();
+      response = await fetch(versionUrl, { credentials: "omit" });
+      data = await response.json();
+    } catch {
+      response = await fetch(`${DEV_SITE_URL}/api/extension/version`, {
+        credentials: "omit",
+      });
+      data = await response.json();
+    }
+
+    if (!response?.ok || !data?.version) {
+      const saved = await loadSavedVersionState();
+      renderVersionState(saved);
+      return;
+    }
+
+    const versionState = {
+      currentVersion,
+      latestVersion: data.version,
+      isOutdated: compareVersions(currentVersion, data.version) < 0,
+      updateUrl: data.updateUrl || WEBSTORE_URL,
+      checkedAt: Date.now(),
+    };
+
+    if (globalThis.extApi?.storage?.local) {
+      await globalThis.extApi.storage.local.set({
+        avitologyVersionState: versionState,
+      });
+    }
+
+    renderVersionState(versionState);
+  } catch (error) {
+    console.error("Popup version check failed:", error);
+    const saved = await loadSavedVersionState();
+    renderVersionState(saved);
   }
 }
 
@@ -153,8 +269,9 @@ async function checkAccess() {
 }
 
 if (refreshBtn) {
-  refreshBtn.addEventListener("click", () => {
-    checkAccess();
+  refreshBtn.addEventListener("click", async () => {
+    await checkAccess();
+    await checkVersion();
   });
 }
 
@@ -173,4 +290,7 @@ if (openSiteBtn) {
   });
 }
 
-checkAccess();
+(async () => {
+  await checkAccess();
+  await checkVersion();
+})();

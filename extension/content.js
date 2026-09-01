@@ -6,10 +6,11 @@ let autoSearchTimer = null;
 
 let currentRows = [];
 let currentSellerRows = [];
-let currentTab = "positions";
+let currentTab = "sellers";
 
 let checkedPositionIds = new Set();
 let checkedSellerIds = new Set();
+const highlightedAccounts = new Set();
 
 let tableScrollTopByTab = {
   positions: 0,
@@ -18,6 +19,11 @@ let tableScrollTopByTab = {
 
 let lastRowsSignature = "";
 let extraPanelOpen = false;
+let avitologyTableExpanded = false;
+
+let isBuildingAvitology = false;
+let hasBuiltTableForThisPage = false;
+let initialLoadingVisible = false;
 
 let filters = {
   positions: {
@@ -34,8 +40,12 @@ let filters = {
   }
 };
 
-let avitologyTableExpanded = false;
-const highlightedAccounts = new Set();
+const AVITO_PROMO_ICONS = {
+  promoted: "https://avito.st/static/ims/6ba093ad-c4a4-4287-bcea-6a820b9112f1_cpx_promo_common.svg",
+  placement: "https://www.avito.st/s/common/components/monetization/icons/web/bbip.svg",
+  highlight: "https://www.avito.st/s/common/components/monetization/icons/web/highlight.svg",
+  xl: "https://www.avito.st/s/common/components/monetization/icons/web/xl.svg"
+};
 
 function isSearchPage() {
   const url = location.href;
@@ -45,6 +55,75 @@ function isSearchPage() {
     !!document.querySelector('[data-marker="catalog-serp"]') ||
     !!document.querySelector('[data-marker="item"]')
   );
+}
+
+function getStatusEl() {
+  return document.querySelector("#avitology-status");
+}
+
+function findInsertionPoint() {
+  const serp = document.querySelector('[data-marker="catalog-serp"]');
+  if (serp) return serp;
+
+  const main = document.querySelector("main");
+  if (main) return main;
+
+  return null;
+}
+
+function removeInlineContainerIfExists() {
+  const existing = document.querySelector("#avitology-inline-container");
+  if (existing) existing.remove();
+  avitologyInlineContainer = null;
+}
+
+function ensureInlineLoadingContainer() {
+  if (!isSearchPage()) return null;
+
+  let existing = document.querySelector("#avitology-inline-loading-container");
+  if (existing) return existing;
+
+  const insertionPoint = findInsertionPoint();
+  if (!insertionPoint) return null;
+
+  existing = document.createElement("div");
+  existing.id = "avitology-inline-loading-container";
+  existing.innerHTML = `
+    <div class="avitology-inline-loading-box">
+      <div class="avitology-inline-loading-inner">
+        <img
+          src="https://avitology.site/logo.png"
+          alt="Авитология"
+          class="avitology-inline-loading-logo"
+        />
+        <div class="avitology-inline-loading-texts">
+          <div class="avitology-inline-loading-title">Авитология загружает данные</div>
+          <div class="avitology-inline-loading-subtitle">Это занимает совсем немного времени</div>
+        </div>
+        <div class="avitology-inline-loading-spinner"></div>
+      </div>
+    </div>
+  `;
+
+  insertionPoint.prepend(existing);
+  initialLoadingVisible = true;
+  return existing;
+}
+
+function removeInlineLoadingContainerIfExists() {
+  const el = document.querySelector("#avitology-inline-loading-container");
+  if (el) el.remove();
+  initialLoadingVisible = false;
+}
+
+function showInitialLoadingIfNeeded() {
+  if (!isSearchPage()) return;
+  if (hasBuiltTableForThisPage) return;
+  ensureInlineLoadingContainer();
+}
+
+function hideInitialLoading() {
+  removeInlineLoadingContainerIfExists();
 }
 
 function ensurePanel() {
@@ -79,7 +158,7 @@ function ensurePanel() {
 
   const loadBtn = avitologyPanel.querySelector("#avitology-load-btn");
   loadBtn.addEventListener("click", async () => {
-    await loadData({ auto: false });
+    await forceReloadData();
   });
 
   document.addEventListener("click", handleOutsideClick, true);
@@ -137,10 +216,6 @@ function ensureToggleButton() {
 
   document.body.appendChild(avitologyToggleBtn);
   return avitologyToggleBtn;
-}
-
-function getStatusEl() {
-  return document.querySelector("#avitology-status");
 }
 
 async function getSavedAccessState() {
@@ -204,8 +279,8 @@ function getAvitoCards() {
     '[data-marker="item"]',
     '[data-marker="catalog-serp"] > *',
     '[itemtype="http://schema.org/Product"]',
-    'div[data-item-id]',
-    'article'
+    "div[data-item-id]",
+    "article"
   ];
 
   let bestNodes = [];
@@ -265,8 +340,8 @@ function extractPrice(root) {
   const softCandidates = [
     '[class*="price"]',
     '[class*="cost"]',
-    'strong',
-    'span'
+    "strong",
+    "span"
   ];
 
   for (const selector of softCandidates) {
@@ -282,10 +357,6 @@ function extractPrice(root) {
   const fullText = normalizeWhitespace(root.textContent || "");
   const match = fullText.match(/\d[\d\s]{1,15}(₽|руб)/i);
   return match ? normalizeWhitespace(match[0]) : "—";
-}
-
-function cleanupSellerText(value) {
-  return normalizeSellerName(value);
 }
 
 function extractSeller(root) {
@@ -387,8 +458,8 @@ function extractRating(root) {
   }
 
   const allText = normalizeWhitespace(root.textContent || "");
-
   const pairMatch = allText.match(/(\d+[.,]\d+)\s*[·•]?\s*(\d[\d\s]*)\s*(отзыв|отзыва|отзывов)/i);
+
   if (pairMatch) {
     const value = pairMatch[1].replace(",", ".");
     const num = Number(value);
@@ -457,7 +528,7 @@ function normalizeSellerName(value) {
   text = text.replace(/[|•·]+/g, " ").trim();
 
   const hardCutPatterns = [
-    /(\S)(\d[.,]\d)/g, // Илья5,0 -> Илья 5,0
+    /(\S)(\d[.,]\d)/g,
     /(\D)(\d{2,}\s*(?:отзыв|отзыва|отзывов))/gi,
     /(\D)(яПомогаю)/gi,
     /(\D)(Над[её]жный продавец)/gi,
@@ -485,7 +556,11 @@ function normalizeSellerName(value) {
     /\bМагазин\b.*$/i,
     /\bОнлайн\b.*$/i,
     /\bСегодня\b.*$/i,
-    /\bВчера\b.*$/i
+    /\bВчера\b.*$/i,
+    /\bПоиск\b.*$/i,
+    /\bФильтры\b.*$/i,
+    /\bСохранить поиск\b.*$/i,
+    /\bОбъявления\b.*$/i
   ];
 
   for (const pattern of stopPatterns) {
@@ -509,7 +584,11 @@ function normalizeSellerName(value) {
     /вчера/gi,
     /доставка/gi,
     /компания/gi,
-    /магазин/gi
+    /магазин/gi,
+    /поиск/gi,
+    /фильтры/gi,
+    /сохранить поиск/gi,
+    /объявления/gi
   ];
 
   garbagePatterns.forEach((pattern) => {
@@ -521,6 +600,22 @@ function normalizeSellerName(value) {
 
   if (!text) return "Без имени";
 
+  const badExact = new Set([
+    "поиск",
+    "фильтры",
+    "объявления",
+    "сегодня",
+    "вчера",
+    "доставка",
+    "магазин",
+    "компания",
+    "онлайн"
+  ]);
+
+  if (badExact.has(text.toLowerCase())) {
+    return "Без имени";
+  }
+
   const parts = text
     .split(/ {2,}|,|;/)
     .map((item) => item.trim())
@@ -531,7 +626,7 @@ function normalizeSellerName(value) {
       (item) =>
         item.length >= 2 &&
         item.length <= 40 &&
-        !/отзыв|рейтинг|проверен|продавец|помогаю/i.test(item)
+        !/отзыв|рейтинг|проверен|продавец|помогаю|поиск|фильтр|объявлен/i.test(item)
     ) || text;
 
   text = bestPart.trim();
@@ -545,6 +640,7 @@ function normalizeSellerName(value) {
   text = text.replace(/\s+/g, " ").trim();
 
   if (!text || text.length < 2) return "Без имени";
+  if (badExact.has(text.toLowerCase())) return "Без имени";
 
   return text;
 }
@@ -561,7 +657,6 @@ function isLikelySellerName(value) {
   return true;
 }
 
-
 function isLikelyAdCard(element) {
   const text = normalizeWhitespace(element.textContent || "");
 
@@ -570,9 +665,9 @@ function isLikelyAdCard(element) {
   const hasTitle =
     !!element.querySelector('[data-marker="item-title"]') ||
     !!element.querySelector("h3") ||
-    !!element.querySelector('a[href]');
+    !!element.querySelector("a[href]");
 
-  const hasLink = !!element.querySelector('a[href]');
+  const hasLink = !!element.querySelector("a[href]");
   const hasPrice =
     !!element.querySelector('[data-marker="item-price"]') ||
     /₽|руб/i.test(text);
@@ -586,6 +681,35 @@ function makeRowFingerprint(row) {
     normalizeWhitespace(row.price).toLowerCase(),
     normalizeWhitespace(row.seller).toLowerCase()
   ].join(" | ");
+}
+
+function detectPromotionIconsFromCard(card) {
+  const className = String(card.className || "");
+  const icons = [];
+
+  const hasPromoted =
+    !!card.querySelector('[class*="arrow-_7e8a483d725ed77f"]') ||
+    !!card.querySelector('[class*="arrow-"] img[src*="ca5e4a9966826af1.svg"]');
+
+  const hasXL = /\bxl-[^\s]+/.test(className);
+  const hasHighlight = !!card.querySelector('[class*="yellowHighlight"]');
+
+  if (hasPromoted) {
+    icons.push(AVITO_PROMO_ICONS.promoted);
+  }
+
+  if (hasHighlight) {
+    icons.push(AVITO_PROMO_ICONS.highlight);
+  }
+
+  if (hasXL) {
+    icons.push(AVITO_PROMO_ICONS.xl);
+  }
+
+  return {
+    icons,
+    loaded: true
+  };
 }
 
 function buildRows(cards) {
@@ -606,6 +730,7 @@ function buildRows(cards) {
 
     const link = extractLink(card);
     const price = extractPrice(card);
+    const promotions = detectPromotionIconsFromCard(card);
     const seller = normalizeSellerName(extractSeller(card)) || "Без имени";
     const rating = extractRating(card);
     const reviews = extractReviews(card);
@@ -620,14 +745,54 @@ function buildRows(cards) {
       position: index + 1,
       rating,
       reviews,
+      promotions,
       card
     };
+  });
+
+  const filtered = rows.filter((row) => {
+    const title = normalizeWhitespace(row.title || "");
+    const price = normalizeWhitespace(row.price || "");
+    const seller = normalizeWhitespace(row.seller || "");
+
+    if (!title) return false;
+    if (/^\d+$/.test(title)) return false;
+    if (title.length < 3) return false;
+    if (price && title === price) return false;
+    if (/^\d[\d\s₽руб.,-]*$/i.test(title)) return false;
+
+    const badTitlePatterns = [
+      /^поиск$/i,
+      /^сортировка$/i,
+      /^фильтры$/i,
+      /^написать$/i,
+      /^ещ[её] фото$/i,
+      /^показать телефон$/i,
+      /^позвонить$/i,
+      /^контакты$/i,
+      /^описание$/i,
+      /^объявления$/i
+    ];
+
+    if (badTitlePatterns.some((pattern) => pattern.test(title))) return false;
+    if (!row.link) return false;
+    if (/^\d+(\s+\d+){2,}/.test(title)) return false;
+
+    if (
+      seller &&
+      /^(поиск|сортировка|фильтры|написать|ещ[её] фото)$/i.test(seller) &&
+      title.length < 8
+    ) {
+      return false;
+    }
+
+    return true;
   });
 
   const unique = [];
   const seen = new Set();
 
-  for (const row of rows) {
+  for (const row of filtered) {
     const fingerprint = makeRowFingerprint(row);
     if (seen.has(fingerprint)) continue;
     seen.add(fingerprint);
@@ -656,6 +821,7 @@ function buildSellerRows(rows) {
         rating: row.rating || "—",
         reviews: row.reviews || "—",
         cards: [],
+        ads: [],
         firstPosition: row.position
       });
     }
@@ -671,6 +837,15 @@ function buildSellerRows(rows) {
     if (row.card && !sellerRow.cards.includes(row.card)) {
       sellerRow.cards.push(row.card);
     }
+
+    sellerRow.ads.push({
+      id: row.id,
+      title: row.title,
+      price: row.price,
+      position: row.position,
+      link: row.link,
+      promotions: row.promotions || { icons: [], loaded: true }
+    });
 
     if (sellerRow.rating === "—" && row.rating !== "—") {
       sellerRow.rating = row.rating;
@@ -694,6 +869,38 @@ function buildSellerRows(rows) {
     .sort((a, b) => a.firstPosition - b.firstPosition);
 }
 
+function renderPromotionBadges(promotions) {
+  if (!promotions || !Array.isArray(promotions.icons) || !promotions.icons.length) {
+    return "";
+  }
+
+  return promotions.icons
+    .map((src) => {
+      let title = "Продвижение";
+
+      if (src.includes("cpx_promo_common.svg")) {
+        title = "Продвинуто";
+      } else if (src.includes("/bbip.svg")) {
+        title = "Размещение";
+      } else if (src.includes("/highlight.svg")) {
+        title = "Выделено";
+      } else if (src.includes("/xl.svg")) {
+        title = "XL";
+      }
+
+      return `
+        <img
+          src="${escapeAttr(src)}"
+          alt="${escapeAttr(title)}"
+          title="${escapeAttr(title)}"
+          class="avitology-promo-real-icon"
+          loading="lazy"
+        />
+      `;
+    })
+    .join("");
+}
+
 function getSellerKey(value) {
   return String(value || "Без имени").trim().toLowerCase();
 }
@@ -708,9 +915,11 @@ async function saveExtensionState() {
       currentTab,
       checkedPositionIds: Array.from(checkedPositionIds),
       checkedSellerIds: Array.from(checkedSellerIds),
+      highlightedAccounts: Array.from(highlightedAccounts),
       tableScrollTopByTab,
       filters,
-      extraPanelOpen
+      extraPanelOpen,
+      avitologyTableExpanded
     };
 
     await globalThis.extApi.storage.local.set({
@@ -724,19 +933,24 @@ async function saveExtensionState() {
 async function loadExtensionState() {
   try {
     if (!globalThis.extApi) return;
-	const result = await globalThis.extApi.storage.local.get(getPageStateKey());
+    const result = await globalThis.extApi.storage.local.get(getPageStateKey());
     const data = result[getPageStateKey()];
 
     if (!data) return;
 
-    currentTab = data.currentTab || "positions";
+    currentTab = data.currentTab || "sellers";
     checkedPositionIds = new Set(data.checkedPositionIds || []);
     checkedSellerIds = new Set(data.checkedSellerIds || []);
+    highlightedAccounts.clear();
+    (data.highlightedAccounts || []).forEach((item) => highlightedAccounts.add(item));
+
     tableScrollTopByTab = {
       positions: data.tableScrollTopByTab?.positions || 0,
       sellers: data.tableScrollTopByTab?.sellers || 0
     };
+
     extraPanelOpen = !!data.extraPanelOpen;
+    avitologyTableExpanded = !!data.avitologyTableExpanded;
 
     filters = {
       positions: {
@@ -760,26 +974,10 @@ async function loadExtensionState() {
 async function resetExtensionState() {
   try {
     if (!globalThis.extApi) return;
-	await globalThis.extApi.storage.local.remove(getPageStateKey());
+    await globalThis.extApi.storage.local.remove(getPageStateKey());
   } catch (error) {
     console.error("Avitology reset state error:", error);
   }
-}
-
-function findInsertionPoint() {
-  const serp = document.querySelector('[data-marker="catalog-serp"]');
-  if (serp) return serp;
-
-  const main = document.querySelector("main");
-  if (main) return main;
-
-  return null;
-}
-
-function removeInlineContainerIfExists() {
-  const existing = document.querySelector("#avitology-inline-container");
-  if (existing) existing.remove();
-  avitologyInlineContainer = null;
 }
 
 function ensureInlineContainer() {
@@ -803,30 +1001,31 @@ function ensureInlineContainer() {
           <div class="avitology-inline-title">Авитология — результаты анализа</div>
           <div class="avitology-inline-subtitle">Поиск, сортировка, фильтры и экспорт</div>
         </div>
-      <a
-    href="https://avitology.site"
-    target="_blank"
-    rel="noreferrer"
-    class="avitology-brand-card"
-  >
-    <img
-      src="https://avitology.site/logo.png"
-      alt="Авитология"
-      class="avitology-brand-logo"
-    />
-    <div>
-      <div class="avitology-brand-title">Авитология</div>
-      <div class="avitology-brand-link">avitology.site</div>
-    </div>
-  </a>
-</div>
 
-      <div class="avitology-tabs">
-        <button class="avitology-tab active" data-tab="positions">По позициям в поиске</button>
-        <button class="avitology-tab" data-tab="sellers">По продавцам</button>
+        <a
+          href="https://avitology.site"
+          target="_blank"
+          rel="noreferrer"
+          class="avitology-brand-card"
+        >
+          <img
+            src="https://avitology.site/logo.png"
+            alt="Авитология"
+            class="avitology-brand-logo"
+          />
+          <div>
+            <div class="avitology-brand-title">Авитология</div>
+            <div class="avitology-brand-link">avitology.site</div>
+          </div>
+        </a>
       </div>
 
-            <div class="avitology-extra-wrap">
+      <div class="avitology-tabs">
+        <button class="avitology-tab active" data-tab="sellers">По продавцам</button>
+        <button class="avitology-tab" data-tab="positions">По позициям в поиске</button>
+      </div>
+
+      <div class="avitology-extra-wrap">
         <button id="avitology-extra-toggle" class="avitology-extra-toggle" type="button">
           <span id="avitology-extra-arrow">▼</span>
           <span>Дополнительно</span>
@@ -854,9 +1053,9 @@ function ensureInlineContainer() {
             </label>
 
             <button id="avitology-export-btn" class="avitology-toolbar-btn">Экспорт CSV</button>
-			<button id="avitology-export-xlsx-btn" class="avitology-toolbar-btn">Экспорт XLSX</button>
+            <button id="avitology-export-xlsx-btn" class="avitology-toolbar-btn">Экспорт XLSX</button>
             <button id="avitology-clear-btn" class="avitology-toolbar-btn secondary">Снять все отметки</button>
-			<button id="avitology-reset-state-btn" class="avitology-toolbar-btn secondary">Сбросить состояние</button>
+            <button id="avitology-reset-state-btn" class="avitology-toolbar-btn secondary">Сбросить состояние</button>
           </div>
         </div>
       </div>
@@ -871,12 +1070,11 @@ function ensureInlineContainer() {
 
   insertionPoint.prepend(avitologyInlineContainer);
 
-      const tabs = avitologyInlineContainer.querySelectorAll(".avitology-tab");
+  const tabs = avitologyInlineContainer.querySelectorAll(".avitology-tab");
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       saveCurrentTableScroll();
-      currentTab = tab.getAttribute("data-tab") || "positions";
-      closeExtraPanelAndReset();
+      currentTab = tab.getAttribute("data-tab") || "sellers";
       updateToolbarState();
       updateActiveTabUi();
       renderCurrentTab();
@@ -912,13 +1110,8 @@ function closeExtraPanelAndReset() {
   const panel = document.querySelector("#avitology-extra-panel");
   const arrow = document.querySelector("#avitology-extra-arrow");
 
-  if (panel) {
-    panel.style.display = "none";
-  }
-
-  if (arrow) {
-    arrow.textContent = "▼";
-  }
+  if (panel) panel.style.display = "none";
+  if (arrow) arrow.textContent = "▼";
 
   extraPanelOpen = false;
   resetCurrentTabFilters();
@@ -953,7 +1146,6 @@ function toggleExtraPanel() {
 
   saveExtensionState();
 }
-
 
 function bindToolbarEvents() {
   const searchInput = document.querySelector("#avitology-table-search");
@@ -1017,12 +1209,12 @@ function bindToolbarEvents() {
       exportCurrentTabToCsv();
     });
   }
-  
+
   if (exportXlsxBtn) {
-	  exportXlsxBtn.addEventListener("click", () => {
-    exportReportToXlsx();
-	});
-	}
+    exportXlsxBtn.addEventListener("click", () => {
+      exportReportToXlsx();
+    });
+  }
 
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
@@ -1036,8 +1228,10 @@ function bindToolbarEvents() {
     resetStateBtn.addEventListener("click", async () => {
       checkedPositionIds.clear();
       checkedSellerIds.clear();
-      currentTab = "positions";
+      highlightedAccounts.clear();
+      currentTab = "sellers";
       extraPanelOpen = false;
+      avitologyTableExpanded = false;
       tableScrollTopByTab = { positions: 0, sellers: 0 };
 
       filters = {
@@ -1138,6 +1332,14 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function escapeAttr(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 function saveCurrentTableScroll() {
@@ -1284,172 +1486,26 @@ function applySellerFilters(rows) {
   return result;
 }
 
-function escapeAttr(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
+function highlightCheckedCards() {
+  currentRows.forEach((row) => {
+    if (!row.card) return;
 
-function getAccountKey(row) {
-  return normalizeWhitespace(row.seller || "Без имени");
-}
+    const sellerKey = getSellerKey(row.seller);
+    const shouldHighlight =
+      checkedPositionIds.has(row.id) ||
+      checkedSellerIds.has(sellerKey) ||
+      highlightedAccounts.has(normalizeWhitespace(row.seller || "Без имени"));
 
-function groupRowsBySeller(rows) {
-  const map = new Map();
-
-  for (const row of rows) {
-    const seller = getAccountKey(row);
-
-    if (!map.has(seller)) {
-      map.set(seller, {
-        seller,
-        rating: row.rating || "—",
-        reviews: row.reviews || "—",
-        positions: [],
-      });
+    if (shouldHighlight) {
+      row.card.classList.add("avitology-highlighted");
+    } else {
+      row.card.classList.remove("avitology-highlighted");
     }
-
-    map.get(seller).positions.push({
-      id: row.id,
-      position: row.position,
-      title: row.title,
-      price: row.price,
-      url: row.url || "",
-    });
-  }
-
-  return Array.from(map.values()).sort((a, b) => {
-    const aFirst = a.positions[0]?.position ?? 999999;
-    const bFirst = b.positions[0]?.position ?? 999999;
-    return aFirst - bFirst;
   });
 }
 
-function renderPositionsTable(rows) {
-  const wrap = getInlineTableWrapEl();
-  const summary = getInlineSummaryEl();
-  if (!wrap || !summary) return;
-
-  const filteredRows = applyPositionFilters(rows);
-  const groupedRows = groupRowsBySeller(filteredRows);
-
-  summary.textContent = `Показано аккаунтов: ${groupedRows.length} · объявлений: ${filteredRows.length} из ${rows.length}`;
-
-  wrap.innerHTML = `
-    <div
-      id="avitology-inline-table-scroller"
-      class="avitology-inline-table-scroll ${avitologyTableExpanded ? "expanded" : ""}"
-    >
-      <table class="avitology-table">
-        <thead>
-          <tr>
-            <th>Пометить</th>
-            <th>Позиции</th>
-            <th>Аккаунт</th>
-            <th>Объявления</th>
-            <th>Рейтинг</th>
-            <th>Отзывы</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${groupedRows
-            .map((group, index) => {
-              const accountKey = getAccountKey(group);
-              const accountActive = highlightedAccounts.has(accountKey)
-                ? "active"
-                : "";
-
-              const positionsHtml = group.positions
-                .map((item) => {
-                  const safeUrl = item.url ? escapeAttr(item.url) : "";
-                  const badge = `
-                    <span class="avitology-position-badge">${item.position}</span>
-                  `;
-
-                  if (!safeUrl) return badge;
-
-                  return `
-                    <a
-                      href="${safeUrl}"
-                      target="_blank"
-                      rel="noreferrer"
-                      class="avitology-position-badge"
-                      title="Открыть объявление"
-                    >
-                      ${item.position}
-                    </a>
-                  `;
-                })
-                .join("");
-
-              const adsHtml = group.positions
-                .map((item) => {
-                  const safeTitle = escapeHtml(item.title || "Без названия");
-                  const safeUrl = item.url ? escapeAttr(item.url) : "";
-                  const safePrice = escapeHtml(item.price || "—");
-
-                  if (!safeUrl) {
-                    return `
-                      <div class="mb-2">
-                        <div>${safeTitle}</div>
-                        <div style="font-size:12px;color:#667085;margin-top:2px;">${safePrice}</div>
-                      </div>
-                    `;
-                  }
-
-                  return `
-                    <div class="mb-2">
-                      <a
-                        href="${safeUrl}"
-                        target="_blank"
-                        rel="noreferrer"
-                        class="avitology-title-link"
-                        title="${safeTitle}"
-                      >
-                        ${safeTitle}
-                      </a>
-                      <div style="font-size:12px;color:#667085;margin-top:2px;">${safePrice}</div>
-                    </div>
-                  `;
-                })
-                .join("");
-
-              return `
-                <tr>
-                  <td>
-                    <input
-                      class="avitology-checkbox"
-                      type="checkbox"
-                      data-group-index="${index}"
-                    />
-                  </td>
-                  <td>
-                    <div class="avitology-position-badges">
-                      ${positionsHtml}
-                    </div>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      class="avitology-account-chip ${accountActive}"
-                      data-account-name="${escapeAttr(accountKey)}"
-                    >
-                      ${escapeHtml(accountKey)}
-                    </button>
-                  </td>
-                  <td>${adsHtml}</td>
-                  <td>${escapeHtml(group.rating || "—")}</td>
-                  <td>${escapeHtml(group.reviews || "—")}</td>
-                </tr>
-              `;
-            })
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-
+function renderExpandButton() {
+  return `
     <div class="avitology-table-expand-wrap">
       <button
         type="button"
@@ -1460,61 +1516,141 @@ function renderPositionsTable(rows) {
       </button>
     </div>
   `;
+}
+
+function bindExpandButton(callback) {
+  const expandBtn = document.querySelector("#avitology-expand-table-btn");
+  if (!expandBtn) return;
+
+  expandBtn.addEventListener("click", () => {
+    saveCurrentTableScroll();
+    avitologyTableExpanded = !avitologyTableExpanded;
+    callback();
+    saveExtensionState();
+  });
+}
+
+function renderPositionsTable(rows) {
+  const wrap = getInlineTableWrapEl();
+  const summary = getInlineSummaryEl();
+  if (!wrap || !summary) return;
+
+  const filteredRows = applyPositionFilters(rows);
+
+  summary.textContent = `Показано результатов: ${filteredRows.length} из ${rows.length}`;
+
+  wrap.innerHTML = `
+    <div
+      id="avitology-inline-table-scroller"
+      class="avitology-inline-table-scroll ${avitologyTableExpanded ? "expanded" : ""}"
+    >
+      <table class="avitology-table">
+        <thead>
+          <tr>
+            <th class="avitology-check-col">✓</th>
+            <th class="avitology-position-col">Позиция</th>
+            <th>Объявление</th>
+            <th>Цена</th>
+            <th>Аккаунт</th>
+            <th>Рейтинг</th>
+            <th>Отзывы</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredRows
+            .map((row, index) => {
+              const checked = checkedPositionIds.has(row.id) ? "checked" : "";
+              const sellerHighlighted = highlightedAccounts.has(
+                normalizeWhitespace(row.seller || "Без имени")
+              )
+                ? "avitology-seller-highlight"
+                : "";
+
+              const safeUrl = row.link ? escapeAttr(row.link) : "";
+              const positionBadge = safeUrl
+                ? `
+                  <a
+                    href="${safeUrl}"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="avitology-position-badge"
+                    title="Открыть объявление"
+                  >
+                    ${row.position}
+                  </a>
+                `
+                : `<span class="avitology-position-badge">${row.position}</span>`;
+
+              const positionHtml = `
+                <div class="avitology-position-badges">
+                  ${positionBadge}
+                  ${renderPromotionBadges(row.promotions)}
+                </div>
+              `;
+
+              return `
+                <tr class="${sellerHighlighted}">
+                  <td>
+                    <input
+                      class="avitology-checkbox"
+                      type="checkbox"
+                      data-row-index="${index}"
+                      ${checked}
+                    />
+                  </td>
+                  <td class="avitology-position-col-cell">${positionHtml}</td>
+                  <td title="${escapeAttr(row.title)}">
+                    ${
+                      safeUrl
+                        ? `<a href="${safeUrl}" target="_blank" rel="noreferrer" class="avitology-title-link">${escapeHtml(row.title)}</a>`
+                        : escapeHtml(row.title)
+                    }
+                  </td>
+                  <td><span class="avitology-price-nowrap">${escapeHtml(row.price || "—")}</span></td>
+                  <td>${escapeHtml(row.seller && row.seller !== "Без имени" ? row.seller : "—")}</td>
+                  <td>${escapeHtml(row.rating || "—")}</td>
+                  <td>${escapeHtml(row.reviews || "—")}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+    ${renderExpandButton()}
+  `;
 
   const scroller = document.querySelector("#avitology-inline-table-scroller");
   if (scroller) {
-    scroller.addEventListener("scroll", syncHeaderShadowIfNeeded, {
-      passive: true,
+    scroller.addEventListener("scroll", () => {
+      tableScrollTopByTab.positions = scroller.scrollTop;
     });
   }
 
-  const expandBtn = document.querySelector("#avitology-expand-table-btn");
-  if (expandBtn) {
-    expandBtn.addEventListener("click", () => {
-      avitologyTableExpanded = !avitologyTableExpanded;
-      renderPositionsTable(rows);
-    });
-  }
+  bindExpandButton(() => renderPositionsTable(rows));
 
-  const accountButtons = wrap.querySelectorAll("[data-account-name]");
-  accountButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const accountName = btn.getAttribute("data-account-name") || "";
-
-      if (highlightedAccounts.has(accountName)) {
-        highlightedAccounts.delete(accountName);
-      } else {
-        highlightedAccounts.add(accountName);
-      }
-
-      renderPositionsTable(rows);
-    });
-  });
-
-  const checkboxes = wrap.querySelectorAll("[data-group-index]");
+  const checkboxes = wrap.querySelectorAll("[data-row-index]");
   checkboxes.forEach((checkbox) => {
     checkbox.addEventListener("change", (event) => {
-      const groupIndex = Number(
-        event.currentTarget.getAttribute("data-group-index")
+      const rowIndex = Number(
+        event.currentTarget.getAttribute("data-row-index")
       );
-      const group = groupedRows[groupIndex];
-      if (!group) return;
+      const row = filteredRows[rowIndex];
+      if (!row) return;
 
-      const checked = !!event.currentTarget.checked;
-
-      for (const item of group.positions) {
-        if (checked) {
-          checkedPositionIds.add(item.id);
-        } else {
-          checkedPositionIds.delete(item.id);
-        }
+      if (event.currentTarget.checked) {
+        checkedPositionIds.add(row.id);
+      } else {
+        checkedPositionIds.delete(row.id);
       }
 
       highlightCheckedCards();
+      saveExtensionState();
     });
   });
 
   highlightCheckedCards();
+  restoreCurrentTableScroll();
 }
 
 function renderSellersTable(rows) {
@@ -1527,12 +1663,15 @@ function renderSellersTable(rows) {
   summary.textContent = `Показано продавцов: ${filteredRows.length} из ${rows.length}`;
 
   wrap.innerHTML = `
-    <div id="avitology-inline-table-scroller" class="avitology-inline-table-scroll">
+    <div
+      id="avitology-inline-table-scroller"
+      class="avitology-inline-table-scroll ${avitologyTableExpanded ? "expanded" : ""}"
+    >
       <table class="avitology-table">
         <thead>
           <tr>
-            <th>Пометить в выдаче</th>
-            <th>Аккаунт</th>
+            <th class="avitology-check-col">✓</th>
+            <th>Продавец</th>
             <th>Объявлений</th>
             <th>Позиции в выдаче</th>
             <th>Рейтинг</th>
@@ -1544,6 +1683,38 @@ function renderSellersTable(rows) {
             .map((row, index) => {
               const sellerKey = getSellerKey(row.seller);
               const checked = checkedSellerIds.has(sellerKey) ? "checked" : "";
+              const accountActive = highlightedAccounts.has(
+                normalizeWhitespace(row.seller || "Без имени")
+              )
+                ? "active"
+                : "";
+
+              const positionsHtml = row.ads
+                .map((item) => {
+                  const safeUrl = item.link ? escapeAttr(item.link) : "";
+
+                  const positionBadge = safeUrl
+                    ? `
+                      <a
+                        href="${safeUrl}"
+                        target="_blank"
+                        rel="noreferrer"
+                        class="avitology-position-badge"
+                        title="Открыть объявление"
+                      >
+                        ${item.position}
+                      </a>
+                    `
+                    : `<span class="avitology-position-badge">${item.position}</span>`;
+
+                  return `
+                    <div class="avitology-position-badge-row">
+                      ${positionBadge}
+                      ${renderPromotionBadges(item.promotions)}
+                    </div>
+                  `;
+                })
+                .join("");
 
               return `
                 <tr>
@@ -1555,9 +1726,21 @@ function renderSellersTable(rows) {
                       ${checked}
                     />
                   </td>
-                  <td>${escapeHtml(row.seller)}</td>
+                  <td class="avitology-seller-cell">
+                    <button
+                      type="button"
+                      class="avitology-account-chip ${accountActive}"
+                      data-account-name="${escapeAttr(normalizeWhitespace(row.seller || "Без имени"))}"
+                    >
+                      ${escapeHtml(row.seller)}
+                    </button>
+                  </td>
                   <td>${row.count}</td>
-                  <td>${escapeHtml(row.positions.join(", "))}</td>
+                  <td>
+                    <div class="avitology-position-badges avitology-seller-positions-list">
+                      ${positionsHtml}
+                    </div>
+                  </td>
                   <td>${escapeHtml(row.rating || "—")}</td>
                   <td>${escapeHtml(row.reviews || "—")}</td>
                 </tr>
@@ -1567,6 +1750,7 @@ function renderSellersTable(rows) {
         </tbody>
       </table>
     </div>
+    ${renderExpandButton()}
   `;
 
   const scroller = document.querySelector("#avitology-inline-table-scroller");
@@ -1575,6 +1759,25 @@ function renderSellersTable(rows) {
       tableScrollTopByTab.sellers = scroller.scrollTop;
     });
   }
+
+  bindExpandButton(() => renderSellersTable(rows));
+
+  const accountButtons = wrap.querySelectorAll("[data-account-name]");
+  accountButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const accountName = btn.getAttribute("data-account-name") || "";
+
+      if (highlightedAccounts.has(accountName)) {
+        highlightedAccounts.delete(accountName);
+      } else {
+        highlightedAccounts.add(accountName);
+      }
+
+      renderSellersTable(rows);
+      highlightCheckedCards();
+      saveExtensionState();
+    });
+  });
 
   const checkboxes = wrap.querySelectorAll(".avitology-seller-checkbox");
   checkboxes.forEach((checkbox) => {
@@ -1587,34 +1790,18 @@ function renderSellersTable(rows) {
 
       const sellerKey = getSellerKey(row.seller);
 
-      saveCurrentTableScroll();
-
       if (target.checked) {
         checkedSellerIds.add(sellerKey);
-        row.cards.forEach((card) => {
-          if (card) card.classList.add("avitology-highlighted");
-        });
       } else {
         checkedSellerIds.delete(sellerKey);
-        row.cards.forEach((card) => {
-          if (card) card.classList.remove("avitology-highlighted");
-        });
       }
 
-      restoreCurrentTableScroll();
-	  saveExtensionState();
+      highlightCheckedCards();
+      saveExtensionState();
     });
   });
 
-  rows.forEach((row) => {
-    const sellerKey = getSellerKey(row.seller);
-    if (checkedSellerIds.has(sellerKey)) {
-      row.cards.forEach((card) => {
-        if (card) card.classList.add("avitology-highlighted");
-      });
-    }
-  });
-
+  highlightCheckedCards();
   restoreCurrentTableScroll();
 }
 
@@ -1643,6 +1830,7 @@ function renderCurrentTab() {
 function clearAllMarks() {
   checkedPositionIds.clear();
   checkedSellerIds.clear();
+  highlightedAccounts.clear();
 
   currentRows.forEach((row) => {
     if (row.card) row.card.classList.remove("avitology-highlighted");
@@ -1806,129 +1994,151 @@ function exportReportToXlsx() {
   XLSX.writeFile(wb, filename);
 }
 
-async function loadData({ auto = false } = {}) {
-  const statusEl = getStatusEl();
+async function buildTableOnceForCurrentPage({ auto = false } = {}) {
+  if (isBuildingAvitology || hasBuiltTableForThisPage) return;
+  isBuildingAvitology = true;
 
-  if (!isSearchPage()) {
-    removeInlineContainerIfExists();
+  try {
+    const statusEl = getStatusEl();
+
+    if (!isSearchPage()) {
+      removeInlineContainerIfExists();
+      hideInitialLoading();
+      return;
+    }
+
+    showInitialLoadingIfNeeded();
+
     if (statusEl) {
       statusEl.className = "avitology-status warning";
-      statusEl.textContent =
-        "Сейчас не страница поиска. Таблицы доступны только после поиска на Авито.";
+      statusEl.textContent = auto
+        ? "Обнаружена страница поиска. Загружаем таблицу..."
+        : "Идет анализ страницы...";
     }
-    return;
-  }
 
-  if (statusEl) {
-    statusEl.className = "avitology-status warning";
-    statusEl.textContent = auto
-      ? "Обнаружено обновление поисковой выдачи. Автоматически анализируем..."
-      : "Идет анализ страницы...";
-  }
-
-  const access = await checkAccess();
-  if (!access) {
-    removeInlineContainerIfExists();
-    return;
-  }
-
-  const cards = getAvitoCards();
-  const rows = buildRows(cards);
-
-  if (!rows.length) {
-    removeInlineContainerIfExists();
-    if (statusEl) {
-      statusEl.className = "avitology-status warning";
-      statusEl.textContent =
-        "На странице поиска пока не найдено объявлений для таблиц.";
+    const access = await checkAccess();
+    if (!access) {
+      removeInlineContainerIfExists();
+      hideInitialLoading();
+      return;
     }
-    return;
-  }
 
-  const newSignature = rows
-    .map((row) => `${row.id}|${row.position}|${row.title}|${row.price}|${row.seller}`)
-    .join("::");
+    const cards = getAvitoCards();
+    const rows = buildRows(cards);
 
-  const shouldRerender =
-    !avitologyInlineContainer ||
-    newSignature !== lastRowsSignature;
+    if (!rows.length) {
+      if (statusEl) {
+        statusEl.className = "avitology-status warning";
+        statusEl.textContent = "Объявления ещё не появились. Ожидаем загрузку выдачи...";
+      }
+      return;
+    }
 
-  currentRows = rows;
-  currentSellerRows = buildSellerRows(rows);
+    currentRows = rows;
+    currentSellerRows = buildSellerRows(rows);
+    lastRowsSignature = rows
+      .map((row) => `${row.position}|${row.title}|${row.price}|${row.seller}`)
+      .join("::");
 
-  if (!shouldRerender && auto) {
+    hideInitialLoading();
+    ensureInlineContainer();
+    renderCurrentTab();
+    saveExtensionState();
+
+    hasBuiltTableForThisPage = true;
+
     if (statusEl) {
       statusEl.className = "avitology-status success";
       statusEl.textContent = `Найдено карточек: ${rows.length}, продавцов: ${currentSellerRows.length}.`;
     }
-    return;
+  } finally {
+    isBuildingAvitology = false;
+  }
+}
+
+async function forceReloadData() {
+  hasBuiltTableForThisPage = false;
+  removeInlineContainerIfExists();
+  showInitialLoadingIfNeeded();
+  await buildTableOnceForCurrentPage({ auto: false });
+}
+
+function scheduleBuildAttempt() {
+  if (!isSearchPage()) return;
+  if (hasBuiltTableForThisPage) return;
+  if (isBuildingAvitology) return;
+
+  if (autoSearchTimer) {
+    clearTimeout(autoSearchTimer);
   }
 
-  lastRowsSignature = newSignature;
+  autoSearchTimer = setTimeout(() => {
+    buildTableOnceForCurrentPage({ auto: true });
+  }, 700);
+}
 
-    ensureInlineContainer();
-  renderCurrentTab();
-  saveExtensionState();
+function resetPageBuildState() {
+  hasBuiltTableForThisPage = false;
+  isBuildingAvitology = false;
+  initialLoadingVisible = false;
+  lastRowsSignature = "";
+  removeInlineContainerIfExists();
+  hideInitialLoading();
 
-  if (statusEl) {
-    statusEl.className = "avitology-status success";
-    statusEl.textContent = `Найдено карточек: ${rows.length}, продавцов: ${currentSellerRows.length}.`;
-  }
+  tableScrollTopByTab = {
+    positions: 0,
+    sellers: 0
+  };
+
+  checkedPositionIds = new Set();
+  checkedSellerIds = new Set();
+  highlightedAccounts.clear();
+  currentTab = "sellers";
+  extraPanelOpen = false;
+  avitologyTableExpanded = false;
+
+  filters = {
+    positions: {
+      search: "",
+      onlyChecked: false,
+      sortBy: "position",
+      sortDir: "asc"
+    },
+    sellers: {
+      search: "",
+      onlyChecked: false,
+      sortBy: "firstPosition",
+      sortDir: "asc"
+    }
+  };
 }
 
 function watchUrlChanges() {
   setInterval(async () => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      lastRowsSignature = "";
-      tableScrollTopByTab.positions = 0;
-      tableScrollTopByTab.sellers = 0;
 
-      checkedPositionIds = new Set();
-      checkedSellerIds = new Set();
-      currentTab = "positions";
-      extraPanelOpen = false;
-
-      filters = {
-        positions: {
-          search: "",
-          onlyChecked: false,
-          sortBy: "position",
-          sortDir: "asc"
-        },
-        sellers: {
-          search: "",
-          onlyChecked: false,
-          sortBy: "firstPosition",
-          sortDir: "asc"
-        }
-      };
-
+      resetPageBuildState();
       await loadExtensionState();
 
-      if (!isSearchPage()) {
-        removeInlineContainerIfExists();
+      if (isSearchPage()) {
+        showInitialLoadingIfNeeded();
+        scheduleBuildAttempt();
       } else {
-        scheduleAutoLoad();
+        removeInlineContainerIfExists();
+        hideInitialLoading();
       }
     }
-  }, 600);
-}
-
-function scheduleAutoLoad() {
-  if (autoSearchTimer) {
-    clearTimeout(autoSearchTimer);
-  }
-
-  autoSearchTimer = setTimeout(() => {
-    loadData({ auto: true });
-  }, 1000);
+  }, 500);
 }
 
 function bindSearchTriggers() {
   document.addEventListener(
     "click",
     (event) => {
+      if (!isSearchPage()) return;
+      if (hasBuiltTableForThisPage) return;
+
       const target = event.target;
       if (!(target instanceof Element)) return;
 
@@ -1942,7 +2152,8 @@ function bindSearchTriggers() {
         text.includes("search") ||
         clickable.getAttribute("type") === "submit"
       ) {
-        scheduleAutoLoad();
+        showInitialLoadingIfNeeded();
+        scheduleBuildAttempt();
         return;
       }
 
@@ -1953,7 +2164,8 @@ function bindSearchTriggers() {
         clickable.closest('[data-marker*="suggest"]');
 
       if (hasSuggestionRole) {
-        scheduleAutoLoad();
+        showInitialLoadingIfNeeded();
+        scheduleBuildAttempt();
       }
     },
     true
@@ -1962,16 +2174,23 @@ function bindSearchTriggers() {
   document.addEventListener(
     "keydown",
     (event) => {
+      if (!isSearchPage()) return;
+      if (hasBuiltTableForThisPage) return;
+
       if (event.key === "Enter") {
-        scheduleAutoLoad();
+        showInitialLoadingIfNeeded();
+        scheduleBuildAttempt();
       }
     },
     true
   );
 
   const observer = new MutationObserver(() => {
-    if (isSearchPage()) {
-      scheduleAutoLoad();
+    if (!isSearchPage()) return;
+    if (hasBuiltTableForThisPage) return;
+    if (document.querySelector('[data-marker="item"]')) {
+      showInitialLoadingIfNeeded();
+      scheduleBuildAttempt();
     }
   });
 
@@ -1988,6 +2207,7 @@ function handleAccessStateUpdate(state) {
 
   if (!state.authenticated || !state.access) {
     removeInlineContainerIfExists();
+    hideInitialLoading();
 
     if (statusEl) {
       statusEl.className = "avitology-status error";
@@ -2001,8 +2221,9 @@ function handleAccessStateUpdate(state) {
       statusEl.textContent = "Доступ подтверждён. Расширение активно.";
     }
 
-    if (isSearchPage()) {
-      scheduleAutoLoad();
+    if (isSearchPage() && !hasBuiltTableForThisPage) {
+      showInitialLoadingIfNeeded();
+      scheduleBuildAttempt();
     }
   }
 }
@@ -2031,7 +2252,8 @@ async function init() {
   watchAccessStateChanges();
 
   if (isSearchPage()) {
-    scheduleAutoLoad();
+    showInitialLoadingIfNeeded();
+    scheduleBuildAttempt();
   }
 }
 

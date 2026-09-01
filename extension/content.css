@@ -88,27 +88,8 @@
   border: 1px solid #dce5ea;
 }
 
-.avitology-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.avitology-table th,
-.avitology-table td {
-  text-align: left;
-  padding: 10px 8px;
-  font-size: 13px;
-  border-bottom: 1px solid #f0f2f5;
-  vertical-align: top;
-}
-
-.avitology-table th {
-  color: #667085;
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-.avitology-checkbox {
+.avitology-checkbox,
+.avitology-seller-checkbox {
   width: 16px;
   height: 16px;
   cursor: pointer;
@@ -156,9 +137,11 @@
   color: #101828;
   min-width: 180px;
 }
+
 .avitology-brand-card:hover {
   opacity: 0.96;
 }
+
 .avitology-brand-logo {
   width: 38px;
   height: 38px;
@@ -166,6 +149,7 @@
   object-fit: cover;
   flex-shrink: 0;
 }
+
 .avitology-brand-title {
   font-size: 14px;
   font-weight: 800;
@@ -178,135 +162,6 @@
   margin-top: 2px;
 }
 
-.avitology-inline-table-scroll {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: 320px;
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
-}
-
-.avitology-inline-table-scroll.expanded {
-  max-height: none;
-}
-
-.avitology-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-.avitology-table thead th {
-  position: sticky;
-  top: 0;
-  background: #f8fafc;
-  z-index: 2;
-}
-
-.avitology-table th,
-.avitology-table td {
-  text-align: left;
-  padding: 10px 10px;
-  font-size: 13px;
-  border-bottom: 1px solid #e5e7eb;
-  border-right: 1px solid #e5e7eb;
-  vertical-align: top;
-  background: #fff;
-}
-
-.avitology-table th:last-child,
-.avitology-table td:last-child {
-  border-right: none;
-}
-
-.avitology-table th {
-  color: #667085;
-  font-size: 12px;
-  text-transform: uppercase;
-  font-weight: 800;
-}
-
-.avitology-account-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 7px 10px;
-  border: 1px solid #dce5ea;
-  border-radius: 12px;
-  background: #fff;
-  cursor: pointer;
-  font-weight: 700;
-  transition: 0.2s ease;
-}
-
-.avitology-account-chip:hover {
-  border-color: #03bd48;
-}
-
-.avitology-account-chip.active {
-  background: #ecfff3;
-  border-color: #03bd48;
-  color: #067647;
-  box-shadow: 0 6px 14px rgba(3, 189, 72, 0.12);
-}
-
-.avitology-position-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 120px;
-}
-
-.avitology-position-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 10px;
-  border: 1px solid #c9f4d8;
-  background: #ecfff3;
-  color: #067647;
-  font-weight: 800;
-  text-decoration: none;
-  box-sizing: border-box;
-}
-
-.avitology-position-badge:hover {
-  opacity: 0.92;
-}
-
-.avitology-table-expand-wrap {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
-}
-
-.avitology-table-expand-btn {
-  border: 1px solid #dce5ea;
-  background: #fff;
-  color: #101828;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.avitology-table-expand-btn:hover {
-  border-color: #03bd48;
-}
-
-.avitology-title-link {
-  color: #101828;
-  text-decoration: none;
-  font-weight: 700;
-}
-
-.avitology-title-link:hover {
-  color: #067647;
-}
-
 .avitology-inline-title {
   font-size: 24px;
   font-weight: 800;
@@ -328,98 +183,6 @@
   margin-bottom: 14px;
   font-size: 14px;
   font-weight: 600;
-}
-
-.avitology-inline-table-scroll {
-  overflow-x: auto;
-}
-
-#avitology-toggle-btn:hover {
-  opacity: 0.95;
-}
-
-#avitology-inline-container {
-  width: 100%;
-  margin: 16px 0 24px;
-  box-sizing: border-box;
-}
-
-.avitology-inline-box {
-  background: #ffffff;
-  border: 1px solid #d9f3e4;
-  border-radius: 24px;
-  box-shadow: 0 20px 50px rgba(16, 24, 40, 0.08);
-  padding: 20px;
-  box-sizing: border-box;
-}
-
-.avitology-inline-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.avitology-inline-title {
-  font-size: 24px;
-  font-weight: 800;
-  color: #101828;
-}
-
-.avitology-inline-subtitle {
-  font-size: 13px;
-  color: #667085;
-  margin-top: 4px;
-}
-
-.avitology-inline-summary {
-  border-radius: 14px;
-  background: #f7fff9;
-  border: 1px solid #d9f3e4;
-  color: #067647;
-  padding: 12px 14px;
-  margin-bottom: 14px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.avitology-inline-table-scroll {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: 320px;
-}
-
-.avitology-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.avitology-table thead th {
-  position: sticky;
-  top: 0;
-  background: #fff;
-  z-index: 2;
-}
-
-#avitology-toggle-btn:hover {
-  opacity: 0.95;
-}
-
-.avitology-open-link {
-  display: inline-block;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: #ecfff3;
-  border: 1px solid #c9f4d8;
-  color: #067647;
-  font-weight: 700;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.avitology-open-link:hover {
-  opacity: 0.92;
 }
 
 .avitology-tabs {
@@ -450,6 +213,32 @@
 
 .avitology-tab:hover {
   opacity: 0.95;
+}
+
+.avitology-extra-wrap {
+  margin-bottom: 14px;
+}
+
+.avitology-extra-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dce5ea;
+  background: #fff;
+  color: #101828;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.avitology-extra-toggle:hover {
+  opacity: 0.96;
+}
+
+.avitology-extra-panel {
+  margin-top: 12px;
 }
 
 .avitology-toolbar {
@@ -517,33 +306,287 @@
   opacity: 0.96;
 }
 
-.avitology-table tbody tr:hover {
+.avitology-inline-table-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 320px;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+}
+
+.avitology-inline-table-scroll.expanded {
+  max-height: none !important;
+}
+
+.avitology-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.avitology-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 2;
+}
+
+.avitology-table th,
+.avitology-table td {
+  text-align: left;
+  padding: 10px 10px;
+  font-size: 13px;
+  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  vertical-align: top;
+  background: #fff;
+}
+
+.avitology-table th:last-child,
+.avitology-table td:last-child {
+  border-right: none;
+}
+
+.avitology-table th {
+  color: #667085;
+  font-size: 12px;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.avitology-table tbody tr:hover td {
   background: #f8fdf9;
 }
 
-.avitology-extra-wrap {
-  margin-bottom: 14px;
-}
-
-.avitology-extra-toggle {
+.avitology-account-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-start;
+  text-align: left;
+  width: auto;
+  max-width: 100%;
+  padding: 7px 12px;
+  border: 1px solid #dce5ea;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  transition: 0.2s ease;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.avitology-seller-cell {
+  text-align: left !important;
+  vertical-align: middle;
+}
+
+.avitology-account-chip:hover {
+  border-color: #03bd48;
+}
+
+.avitology-account-chip.active {
+  background: #ecfff3;
+  border-color: #03bd48;
+  color: #067647;
+  box-shadow: 0 6px 14px rgba(3, 189, 72, 0.12);
+}
+
+.avitology-position-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.avitology-position-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #c9f4d8;
+  background: #ecfff3;
+  color: #067647;
+  font-weight: 800;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.avitology-position-badge:hover {
+  opacity: 0.92;
+}
+
+.avitology-table-expand-wrap {
+  display: flex;
+  justify-content: stretch;
+  margin-top: 10px;
+}
+
+.avitology-table-expand-btn {
+  width: 100%;
   border: 1px solid #dce5ea;
   background: #fff;
   color: #101828;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-size: 14px;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  line-height: 1.2;
 }
 
-.avitology-extra-toggle:hover {
-  opacity: 0.96;
+.avitology-table-expand-btn:hover {
+  border-color: #03bd48;
 }
 
-.avitology-extra-panel {
-  margin-top: 12px;
+.avitology-title-link {
+  color: #101828;
+  text-decoration: none;
+  font-weight: 700;
 }
 
+.avitology-title-link:hover {
+  color: #067647;
+}
+
+.avitology-seller-highlight td {
+  background: #ecfff3 !important;
+}
+
+.avitology-open-link {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #ecfff3;
+  border: 1px solid #c9f4d8;
+  color: #067647;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.avitology-open-link:hover {
+  opacity: 0.92;
+}
+
+#avitology-toggle-btn:hover {
+  opacity: 0.95;
+}
+
+.avitology-position-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+
+.avitology-seller-positions-list {
+  gap: 12px !important;
+}
+
+.avitology-promo-real-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  vertical-align: middle;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.avitology-position-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.avitology-check-col {
+  width: 25px;
+  min-width: 25px;
+  text-align: center;
+}
+
+.avitology-position-col {
+  width: 100px;
+  min-width: 100px;
+}
+
+.avitology-position-col-cell {
+  width: 100px;
+  min-width: 100px;
+}
+
+.avitology-price-nowrap {
+  white-space: nowrap;
+  display: inline-block;
+}
+
+
+
+
+
+
+#avitology-inline-loading-container {
+  margin-bottom: 20px;
+}
+
+.avitology-inline-loading-box {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  box-shadow: 0 12px 30px rgba(16, 24, 40, 0.08);
+  padding: 22px 24px;
+}
+
+.avitology-inline-loading-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+}
+
+.avitology-inline-loading-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.avitology-inline-loading-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.avitology-inline-loading-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.avitology-inline-loading-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.avitology-inline-loading-spinner {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid #d1d5db;
+  border-top-color: #03bd48;
+  animation: avitology-spin 0.8s linear infinite;
+}
+
+@keyframes avitology-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

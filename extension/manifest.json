@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Avitology",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Инструменты аналитики и работы с Авито",
   "icons": {
     "16": "icons/icon16.png",

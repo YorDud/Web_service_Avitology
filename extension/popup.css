@@ -36,6 +36,43 @@ body {
   color: #667085;
 }
 
+.version-card {
+  background: #fff8e8;
+  border: 1px solid #f7df9a;
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 10px 25px rgba(16, 24, 40, 0.06);
+  margin-bottom: 16px;
+}
+
+.version-title {
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: #8a6512;
+}
+
+.version-text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #7a5a0f;
+  margin-bottom: 12px;
+}
+
+.version-update-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #ffffff;
+  color: #101828;
+  border: 1px solid #e5c96c;
+}
+
 .status-card {
   background: white;
   border: 1px solid #e8eef3;
