@@ -14,7 +14,7 @@ export default function SupportPage() {
           <div className="mb-10 text-center">
             <div className="badge-green mb-5 inline-flex">Техническая поддержка</div>
             <h1 className="section-title mb-5">
-              Свяжитесь со службой поддержки Avitology
+              Свяжитесь со службой поддержки HelpSell
             </h1>
             <p className="section-text mx-auto max-w-3xl">
               Если у вас возникли вопросы по доступу к сервису, подписке,

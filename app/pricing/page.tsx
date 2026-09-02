@@ -30,24 +30,24 @@ export default async function PricingPage() {
           <div className="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-[0_8px_20px_rgba(16,24,40,0.08)]">
             <img
               src="/logo.png"
-              alt="Avitology logo"
+              alt="HelpSell logo"
               className="h-12 w-12 object-cover"
             />
           </div>
           <div>
-            <div className="text-xl font-extrabold">Авитология</div>
-            <div className="text-sm text-gray-500">Avitology</div>
+            <div className="text-xl font-extrabold">HelpSell</div>
+            <div className="text-sm text-gray-500">HelpSell</div>
           </div>
         </div>
 
         <div className="mb-10 max-w-3xl">
           <div className="badge-green mb-5">Подписка</div>
           <h1 className="mb-5 text-5xl font-extrabold leading-tight">
-            Подписка Basic для доступа к сервисам Avitology
+            Подписка Basic для доступа к сервисам HelpSell
           </h1>
           <p className="text-lg leading-8 text-gray-500">
             Подписка Basic открывает доступ к основному инструменту сервиса,
-            личному кабинету и работе с расширением Avitology.
+            личному кабинету и работе с расширением HelpSell.
           </p>
         </div>
 
@@ -74,7 +74,7 @@ export default async function PricingPage() {
             </div>
             <div className="mb-8 text-white/90">
               Доступ к услуге “Места в поиске Авито”, личному кабинету и
-              скачиванию расширения Avitology.
+              скачиванию расширения HelpSell.
             </div>
 
             <ul className="mb-8 space-y-3 text-[15px] text-white/95">

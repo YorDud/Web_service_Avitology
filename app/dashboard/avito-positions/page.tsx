@@ -58,7 +58,7 @@ export default async function AvitoPositionsPage() {
             <p className="mt-4 max-w-3xl text-lg leading-8 text-gray-500">
               Инструмент помогает анализировать выдачу объявлений на Авито,
               понимать позиции в поиске, видеть данные по продавцу и работать
-              через фирменное браузерное расширение Avitology.
+              через фирменное браузерное расширение HelpSell.
             </p>
           </div>
 
@@ -129,7 +129,7 @@ export default async function AvitoPositionsPage() {
                     ШАГ 1
                   </div>
                   <div className="text-lg font-bold">
-                    Авторизуйтесь на сайте Avitology
+                    Авторизуйтесь на сайте HelpSell
                   </div>
                   <div className="mt-1 text-gray-600">
                     Используйте ваш единый аккаунт сервиса.
@@ -154,7 +154,7 @@ export default async function AvitoPositionsPage() {
                     ШАГ 3
                   </div>
                   <div className="text-lg font-bold">
-                    Установите расширение Avitology
+                    Установите расширение HelpSell
                   </div>
                   <div className="mt-1 text-gray-600">
                     Расширение будет работать прямо на страницах поиска Авито.

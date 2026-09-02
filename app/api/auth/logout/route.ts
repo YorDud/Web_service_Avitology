@@ -6,7 +6,7 @@ export async function POST() {
     process.env.NEXTAUTH_URL ||
     process.env.AUTH_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "https://avitology.site";
+    "https://helpsell.ru";
 
   const response = NextResponse.redirect(`${baseUrl}/auth`);
 

@@ -3,7 +3,7 @@ const refreshBtn = document.getElementById("refreshBtn");
 const openSiteBtn = document.getElementById("openSiteBtn");
 const versionCard = document.getElementById("versionCard");
 
-const SITE_URL = "https://avitology.site";
+const SITE_URL = "https://helpsell.ru";
 const DEV_SITE_URL = "http://localhost:3000";
 const WEBSTORE_URL =
   "https://chromewebstore.google.com/detail/avitology/oigdilhkhidoinkpkfchkdpbkaobfhng";
@@ -11,10 +11,10 @@ const WEBSTORE_URL =
 async function getSiteUrl() {
   try {
     const result = await globalThis.extApi?.storage?.local.get([
-      "avitologySiteUrl",
+      "helpsellSiteUrl",
     ]);
 
-    const customUrl = result?.avitologySiteUrl;
+    const customUrl = result?.helpsellSiteUrl;
 
     if (customUrl && typeof customUrl === "string") {
       return customUrl.replace(/\/$/, "");
@@ -40,7 +40,7 @@ async function saveAccessState(data) {
   if (!globalThis.extApi) return;
 
   await globalThis.extApi.storage.local.set({
-    avitologyAccessState: {
+    helpsellAccessState: {
       authenticated: !!data.authenticated,
       access: !!data.access,
       subscriptionLevel: data.subscriptionLevel || null,
@@ -56,7 +56,7 @@ function renderStatus(data) {
     statusCard.innerHTML = `
       <div class="status-title">Требуется вход</div>
       <div class="status-text">
-        Войдите в аккаунт Avitology на сайте, чтобы использовать расширение.
+        Войдите в аккаунт HelpSell на сайте, чтобы использовать расширение.
       </div>
     `;
     return;
@@ -99,10 +99,10 @@ function compareVersions(a, b) {
 async function loadSavedState() {
   try {
     const result = await globalThis.extApi?.storage?.local.get([
-      "avitologyAccessState",
+      "helpsellAccessState",
     ]);
 
-    return result?.avitologyAccessState || null;
+    return result?.helpsellAccessState || null;
   } catch (error) {
     console.error("Failed to load saved state:", error);
     return null;
@@ -112,10 +112,10 @@ async function loadSavedState() {
 async function loadSavedVersionState() {
   try {
     const result = await globalThis.extApi?.storage?.local.get([
-      "avitologyVersionState",
+      "helpsellVersionState",
     ]);
 
-    return result?.avitologyVersionState || null;
+    return result?.helpsellVersionState || null;
   } catch (error) {
     console.error("Failed to load saved version state:", error);
     return null;
@@ -190,7 +190,7 @@ async function checkVersion() {
 
     if (globalThis.extApi?.storage?.local) {
       await globalThis.extApi.storage.local.set({
-        avitologyVersionState: versionState,
+        helpsellVersionState: versionState,
       });
     }
 

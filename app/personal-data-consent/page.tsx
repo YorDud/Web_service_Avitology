@@ -26,7 +26,7 @@ export default function PersonalDataConsentPage() {
             <div className="space-y-6 text-[15px] leading-7 text-gray-700 md:text-base">
               <p>
                 Настоящим, заполняя формы на сайте{" "}
-                <strong>https://avitology.site</strong>, пользователь свободно,
+                <strong>https://helpsell.ru</strong>, пользователь свободно,
                 своей волей и в своём интересе даёт согласие на обработку своих
                 персональных данных Индивидуальному предпринимателю{" "}
                 <strong>Пялкину Андрею Сергеевичу</strong>.

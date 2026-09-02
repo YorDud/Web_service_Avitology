@@ -27,14 +27,14 @@ export default async function DashboardPage() {
             <div className="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-[0_8px_20px_rgba(16,24,40,0.08)]">
               <img
                 src="/logo.png"
-                alt="Avitology logo"
+                alt="HelpSell logo"
                 className="h-12 w-12 object-cover"
               />
             </div>
             <div>
               <div className="text-xl font-extrabold">Личный кабинет</div>
               <div className="text-sm text-gray-500">
-                Авитология / Avitology
+                HelpSell / HelpSell
               </div>
             </div>
           </div>

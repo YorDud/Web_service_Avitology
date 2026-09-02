@@ -3,23 +3,23 @@ import "./globals.css";
 import CookieBanner from "@/components/CookieBanner";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://avitology.site"),
+  metadataBase: new URL("https://helpsell.ru"),
   title: {
-    default: "Avitology — аналитика и инструменты для Авито",
-    template: "%s | Avitology",
+    default: "HelpSell — аналитика и инструменты для Авито",
+    template: "%s | HelpSell",
   },
   description:
-    "Avitology — сервис аналитики и инструментов для работы с поиском Авито. Подписка, личный кабинет и расширение для браузера.",
+    "HelpSell — сервис аналитики и инструментов для работы с поиском Авито. Подписка, личный кабинет и расширение для браузера.",
   alternates: {
     canonical: "/",
   },
   openGraph: {
     type: "website",
-    url: "https://avitology.site",
-    siteName: "Avitology",
-    title: "Avitology — аналитика и инструменты для Авито",
+    url: "https://helpsell.ru",
+    siteName: "HelpSell",
+    title: "HelpSell — аналитика и инструменты для Авито",
     description:
-      "Avitology — сервис аналитики и инструментов для работы с поиском Авито. Подписка, личный кабинет и расширение для браузера.",
+      "HelpSell — сервис аналитики и инструментов для работы с поиском Авито. Подписка, личный кабинет и расширение для браузера.",
     locale: "ru_RU",
   },
   robots: {

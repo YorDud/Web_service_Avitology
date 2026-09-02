@@ -1,7 +1,7 @@
 importScripts("ext-api.js");
 
 const SITE_URL =
-  "https://avitology.site";
+  "https://helpsell.ru";
 
 const DEV_SITE_URL =
   "http://localhost:3000";
@@ -20,10 +20,10 @@ const CHECK_INTERVAL_MINUTES = 5;
 async function getAccessUrl() {
   try {
     const result = await globalThis.extApi?.storage?.local.get([
-      "avitologySiteUrl",
+      "helpsellSiteUrl",
     ]);
 
-    const customUrl = result?.avitologySiteUrl;
+    const customUrl = result?.helpsellSiteUrl;
 
     if (customUrl && typeof customUrl === "string") {
       return `${customUrl.replace(/\/$/, "")}/api/extension/access`;
@@ -73,7 +73,7 @@ async function checkExtensionVersion() {
     const isOutdated = compareVersions(currentVersion, data.version) < 0;
 
     await globalThis.extApi.storage.local.set({
-      avitologyVersionState: {
+      helpsellVersionState: {
         currentVersion,
         latestVersion: data.version,
         isOutdated,
@@ -92,7 +92,7 @@ async function saveAccessState(data) {
   if (!globalThis.extApi) return;
 
   await globalThis.extApi.storage.local.set({
-    avitologyAccessState: {
+    helpsellAccessState: {
       authenticated: !!data.authenticated,
       access: !!data.access,
       subscriptionLevel: data.subscriptionLevel || null,
@@ -128,7 +128,7 @@ async function checkAccessInBackground() {
 
     await saveAccessState(data);
   } catch (error) {
-    console.error("Avitology background access check failed:", error);
+    console.error("HelpSell background access check failed:", error);
 
     try {
       const response = await fetch(DEV_ACCESS_URL, {
@@ -154,7 +154,7 @@ async function checkAccessInBackground() {
 
       await saveAccessState(data);
     } catch (devError) {
-      console.error("Avitology dev fallback access check failed:", devError);
+      console.error("HelpSell dev fallback access check failed:", devError);
     }
   }
 }
@@ -176,12 +176,12 @@ if (rawApi?.runtime?.onStartup) {
 }
 
 if (rawApi?.alarms) {
-  rawApi.alarms.create("avitology_access_check", {
+  rawApi.alarms.create("helpsell_access_check", {
     periodInMinutes: CHECK_INTERVAL_MINUTES,
   });
 
   rawApi.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === "avitology_access_check") {
+    if (alarm.name === "helpsell_access_check") {
       checkAccessInBackground();
       checkExtensionVersion();
     }

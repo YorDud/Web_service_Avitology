@@ -29,23 +29,23 @@ export default async function ExtensionPage() {
           <div className="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-[0_8px_20px_rgba(16,24,40,0.08)]">
             <img
               src="/logo.png"
-              alt="Avitology logo"
+              alt="HelpSell logo"
               className="h-12 w-12 object-cover"
             />
           </div>
           <div>
-            <div className="text-xl font-extrabold">Авитология</div>
-            <div className="text-sm text-gray-500">Avitology</div>
+            <div className="text-xl font-extrabold">HelpSell</div>
+            <div className="text-sm text-gray-500">HelpSell</div>
           </div>
         </div>
 
         <div className="mb-10 max-w-4xl">
           <div className="badge-green mb-5">Расширение для браузера</div>
           <h1 className="mb-5 text-5xl font-extrabold leading-tight">
-            Установите расширение Avitology для работы с поиском Авито
+            Установите расширение HelpSell для работы с поиском Авито
           </h1>
           <p className="text-lg leading-8 text-gray-500">
-            Расширение Avitology подключается к вашему аккаунту сервиса,
+            Расширение HelpSell подключается к вашему аккаунту сервиса,
             проверяет действующий уровень доступа и помогает работать с
             результатами поиска Авито непосредственно в интерфейсе браузера.
           </p>
@@ -112,7 +112,7 @@ export default async function ExtensionPage() {
                   </div>
                   <div className="mt-1 text-gray-600">
                     Выберите ваш браузер и откройте страницу установки
-                    расширения Avitology.
+                    расширения HelpSell.
                   </div>
                 </div>
 
@@ -134,7 +134,7 @@ export default async function ExtensionPage() {
                     ШАГ 3
                   </div>
                   <div className="text-lg font-bold">
-                    Авторизуйтесь на сайте Avitology
+                    Авторизуйтесь на сайте HelpSell
                   </div>
                   <div className="mt-1 text-gray-600">
                     Используйте тот же аккаунт, что и для доступа к сервису и
@@ -166,7 +166,7 @@ export default async function ExtensionPage() {
                 <div className="rounded-2xl bg-white p-5 shadow-sm">
                   <div className="font-bold">Авторизация через аккаунт</div>
                   <div className="mt-1 text-gray-600">
-                    Расширение использует текущий аккаунт Avitology и работает
+                    Расширение использует текущий аккаунт HelpSell и работает
                     в связке с личным кабинетом.
                   </div>
                 </div>
@@ -205,7 +205,7 @@ export default async function ExtensionPage() {
               <div className="space-y-4 text-gray-600 leading-8">
                 <p>
                   Для полноценной работы расширения требуется авторизация на
-                  сайте Avitology.
+                  сайте HelpSell.
                 </p>
                 <p>
                   Доступ к функциональности зависит от уровня вашей подписки.
@@ -232,7 +232,7 @@ export default async function ExtensionPage() {
                   </div>
                   <p className="mb-6 text-white/90">
                     Чтобы использовать расширение, сначала войдите в аккаунт
-                    Avitology.
+                    HelpSell.
                   </p>
                   <Link href="/auth" className="btn-secondary">
                     Войти в аккаунт

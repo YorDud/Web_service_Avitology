@@ -3,7 +3,7 @@ import YooKassa from "yookassa";
 const shopId = process.env.YOOKASSA_SHOP_ID;
 const secretKey = process.env.YOOKASSA_SECRET_KEY;
 const returnUrl =
-  process.env.YOOKASSA_RETURN_URL || "https://avitology.site/payment/success";
+  process.env.YOOKASSA_RETURN_URL || "https://helpsell.ru/payment/success";
 
 if (!shopId) {
   throw new Error("YOOKASSA_SHOP_ID is not set");

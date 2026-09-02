@@ -1,4 +1,4 @@
-#avitology-panel {
+#helpsell-panel {
   position: fixed;
   top: 90px;
   right: 20px;
@@ -13,29 +13,29 @@
   font-family: Arial, Helvetica, sans-serif;
 }
 
-.avitology-panel-header {
+.helpsell-panel-header {
   padding: 18px 18px 12px;
   border-bottom: 1px solid #edf2f7;
   background: linear-gradient(180deg, #f7fff9 0%, #ffffff 100%);
 }
 
-.avitology-panel-title {
+.helpsell-panel-title {
   font-size: 22px;
   font-weight: 800;
   color: #101828;
 }
 
-.avitology-panel-subtitle {
+.helpsell-panel-subtitle {
   font-size: 13px;
   color: #667085;
   margin-top: 4px;
 }
 
-.avitology-panel-content {
+.helpsell-panel-content {
   padding: 16px 18px 18px;
 }
 
-.avitology-status {
+.helpsell-status {
   border-radius: 16px;
   padding: 12px 14px;
   margin-bottom: 14px;
@@ -43,31 +43,31 @@
   line-height: 1.5;
 }
 
-.avitology-status.success {
+.helpsell-status.success {
   background: #ecfff3;
   border: 1px solid #c9f4d8;
   color: #067a33;
 }
 
-.avitology-status.warning {
+.helpsell-status.warning {
   background: #fff8e8;
   border: 1px solid #f7df9a;
   color: #8a6512;
 }
 
-.avitology-status.error {
+.helpsell-status.error {
   background: #fff1f1;
   border: 1px solid #f3cccc;
   color: #b42318;
 }
 
-.avitology-actions {
+.helpsell-actions {
   display: flex;
   gap: 10px;
   margin-bottom: 14px;
 }
 
-.avitology-btn {
+.helpsell-btn {
   border: none;
   border-radius: 14px;
   padding: 10px 14px;
@@ -76,38 +76,38 @@
   cursor: pointer;
 }
 
-.avitology-btn.primary {
+.helpsell-btn.primary {
   background: linear-gradient(180deg, #10d95c 0%, #03bd48 100%);
   color: white;
   box-shadow: 0 10px 20px rgba(3, 189, 72, 0.2);
 }
 
-.avitology-btn.secondary {
+.helpsell-btn.secondary {
   background: white;
   color: #101828;
   border: 1px solid #dce5ea;
 }
 
-.avitology-checkbox,
-.avitology-seller-checkbox {
+.helpsell-checkbox,
+.helpsell-seller-checkbox {
   width: 16px;
   height: 16px;
   cursor: pointer;
 }
 
-.avitology-highlighted {
+.helpsell-highlighted {
   outline: 3px solid #03bd48 !important;
   outline-offset: 2px !important;
   border-radius: 12px !important;
 }
 
-#avitology-inline-container {
+#helpsell-inline-container {
   width: 100%;
   margin: 16px 0 24px;
   box-sizing: border-box;
 }
 
-.avitology-inline-box {
+.helpsell-inline-box {
   background: #ffffff;
   border: 1px solid #d9f3e4;
   border-radius: 24px;
@@ -116,7 +116,7 @@
   box-sizing: border-box;
 }
 
-.avitology-inline-header {
+.helpsell-inline-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -124,7 +124,7 @@
   margin-bottom: 12px;
 }
 
-.avitology-brand-card {
+.helpsell-brand-card {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -138,11 +138,11 @@
   min-width: 180px;
 }
 
-.avitology-brand-card:hover {
+.helpsell-brand-card:hover {
   opacity: 0.96;
 }
 
-.avitology-brand-logo {
+.helpsell-brand-logo {
   width: 38px;
   height: 38px;
   border-radius: 12px;
@@ -150,31 +150,31 @@
   flex-shrink: 0;
 }
 
-.avitology-brand-title {
+.helpsell-brand-title {
   font-size: 14px;
   font-weight: 800;
   line-height: 1.2;
 }
 
-.avitology-brand-link {
+.helpsell-brand-link {
   font-size: 12px;
   color: #667085;
   margin-top: 2px;
 }
 
-.avitology-inline-title {
+.helpsell-inline-title {
   font-size: 24px;
   font-weight: 800;
   color: #101828;
 }
 
-.avitology-inline-subtitle {
+.helpsell-inline-subtitle {
   font-size: 13px;
   color: #667085;
   margin-top: 4px;
 }
 
-.avitology-inline-summary {
+.helpsell-inline-summary {
   border-radius: 14px;
   background: #f7fff9;
   border: 1px solid #d9f3e4;
@@ -185,14 +185,14 @@
   font-weight: 600;
 }
 
-.avitology-tabs {
+.helpsell-tabs {
   display: flex;
   gap: 10px;
   margin-bottom: 14px;
   flex-wrap: wrap;
 }
 
-.avitology-tab {
+.helpsell-tab {
   border: 1px solid #dce5ea;
   background: #fff;
   color: #101828;
@@ -204,22 +204,22 @@
   transition: 0.2s ease;
 }
 
-.avitology-tab.active {
+.helpsell-tab.active {
   background: linear-gradient(180deg, #10d95c 0%, #03bd48 100%);
   color: #fff;
   border-color: #03bd48;
   box-shadow: 0 10px 20px rgba(3, 189, 72, 0.18);
 }
 
-.avitology-tab:hover {
+.helpsell-tab:hover {
   opacity: 0.95;
 }
 
-.avitology-extra-wrap {
+.helpsell-extra-wrap {
   margin-bottom: 14px;
 }
 
-.avitology-extra-toggle {
+.helpsell-extra-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -233,15 +233,15 @@
   cursor: pointer;
 }
 
-.avitology-extra-toggle:hover {
+.helpsell-extra-toggle:hover {
   opacity: 0.96;
 }
 
-.avitology-extra-panel {
+.helpsell-extra-panel {
   margin-top: 12px;
 }
 
-.avitology-toolbar {
+.helpsell-toolbar {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -249,8 +249,8 @@
   margin-bottom: 14px;
 }
 
-.avitology-toolbar-input,
-.avitology-toolbar-select {
+.helpsell-toolbar-input,
+.helpsell-toolbar-select {
   border: 1px solid #dce5ea;
   background: #fff;
   color: #101828;
@@ -260,16 +260,16 @@
   outline: none;
 }
 
-.avitology-toolbar-input {
+.helpsell-toolbar-input {
   min-width: 220px;
   flex: 1 1 220px;
 }
 
-.avitology-toolbar-select {
+.helpsell-toolbar-select {
   min-width: 170px;
 }
 
-.avitology-toolbar-btn {
+.helpsell-toolbar-btn {
   border: 1px solid #03bd48;
   background: linear-gradient(180deg, #10d95c 0%, #03bd48 100%);
   color: #fff;
@@ -280,13 +280,13 @@
   cursor: pointer;
 }
 
-.avitology-toolbar-btn.secondary {
+.helpsell-toolbar-btn.secondary {
   border: 1px solid #dce5ea;
   background: #fff;
   color: #101828;
 }
 
-.avitology-checkbox-label {
+.helpsell-checkbox-label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -299,14 +299,14 @@
   color: #101828;
 }
 
-.avitology-toolbar-btn:hover,
-.avitology-toolbar-input:hover,
-.avitology-toolbar-select:hover,
-.avitology-checkbox-label:hover {
+.helpsell-toolbar-btn:hover,
+.helpsell-toolbar-input:hover,
+.helpsell-toolbar-select:hover,
+.helpsell-checkbox-label:hover {
   opacity: 0.96;
 }
 
-.avitology-inline-table-scroll {
+.helpsell-inline-table-scroll {
   overflow-x: auto;
   overflow-y: auto;
   max-height: 320px;
@@ -314,25 +314,25 @@
   border-radius: 18px;
 }
 
-.avitology-inline-table-scroll.expanded {
+.helpsell-inline-table-scroll.expanded {
   max-height: none !important;
 }
 
-.avitology-table {
+.helpsell-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }
 
-.avitology-table thead th {
+.helpsell-table thead th {
   position: sticky;
   top: 0;
   background: #f8fafc;
   z-index: 2;
 }
 
-.avitology-table th,
-.avitology-table td {
+.helpsell-table th,
+.helpsell-table td {
   text-align: left;
   padding: 10px 10px;
   font-size: 13px;
@@ -342,23 +342,23 @@
   background: #fff;
 }
 
-.avitology-table th:last-child,
-.avitology-table td:last-child {
+.helpsell-table th:last-child,
+.helpsell-table td:last-child {
   border-right: none;
 }
 
-.avitology-table th {
+.helpsell-table th {
   color: #667085;
   font-size: 12px;
   text-transform: uppercase;
   font-weight: 800;
 }
 
-.avitology-table tbody tr:hover td {
+.helpsell-table tbody tr:hover td {
   background: #f8fdf9;
 }
 
-.avitology-account-chip {
+.helpsell-account-chip {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -376,29 +376,29 @@
   line-height: 1.25;
 }
 
-.avitology-seller-cell {
+.helpsell-seller-cell {
   text-align: left !important;
   vertical-align: middle;
 }
 
-.avitology-account-chip:hover {
+.helpsell-account-chip:hover {
   border-color: #03bd48;
 }
 
-.avitology-account-chip.active {
+.helpsell-account-chip.active {
   background: #ecfff3;
   border-color: #03bd48;
   color: #067647;
   box-shadow: 0 6px 14px rgba(3, 189, 72, 0.12);
 }
 
-.avitology-position-badges {
+.helpsell-position-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.avitology-position-badge {
+.helpsell-position-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -414,17 +414,17 @@
   box-sizing: border-box;
 }
 
-.avitology-position-badge:hover {
+.helpsell-position-badge:hover {
   opacity: 0.92;
 }
 
-.avitology-table-expand-wrap {
+.helpsell-table-expand-wrap {
   display: flex;
   justify-content: stretch;
   margin-top: 10px;
 }
 
-.avitology-table-expand-btn {
+.helpsell-table-expand-btn {
   width: 100%;
   border: 1px solid #dce5ea;
   background: #fff;
@@ -437,25 +437,25 @@
   line-height: 1.2;
 }
 
-.avitology-table-expand-btn:hover {
+.helpsell-table-expand-btn:hover {
   border-color: #03bd48;
 }
 
-.avitology-title-link {
+.helpsell-title-link {
   color: #101828;
   text-decoration: none;
   font-weight: 700;
 }
 
-.avitology-title-link:hover {
+.helpsell-title-link:hover {
   color: #067647;
 }
 
-.avitology-seller-highlight td {
+.helpsell-seller-highlight td {
   background: #ecfff3 !important;
 }
 
-.avitology-open-link {
+.helpsell-open-link {
   display: inline-block;
   padding: 6px 10px;
   border-radius: 10px;
@@ -467,15 +467,15 @@
   white-space: nowrap;
 }
 
-.avitology-open-link:hover {
+.helpsell-open-link:hover {
   opacity: 0.92;
 }
 
-#avitology-toggle-btn:hover {
+#helpsell-toggle-btn:hover {
   opacity: 0.95;
 }
 
-.avitology-position-badge-row {
+.helpsell-position-badge-row {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -483,11 +483,11 @@
   margin-bottom: 5px;
 }
 
-.avitology-seller-positions-list {
+.helpsell-seller-positions-list {
   gap: 12px !important;
 }
 
-.avitology-promo-real-icon {
+.helpsell-promo-real-icon {
   width: 18px;
   height: 18px;
   display: inline-block;
@@ -496,30 +496,30 @@
   flex-shrink: 0;
 }
 
-.avitology-position-badges {
+.helpsell-position-badges {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
 }
 
-.avitology-check-col {
+.helpsell-check-col {
   width: 25px;
   min-width: 25px;
   text-align: center;
 }
 
-.avitology-position-col {
+.helpsell-position-col {
   width: 100px;
   min-width: 100px;
 }
 
-.avitology-position-col-cell {
+.helpsell-position-col-cell {
   width: 100px;
   min-width: 100px;
 }
 
-.avitology-price-nowrap {
+.helpsell-price-nowrap {
   white-space: nowrap;
   display: inline-block;
 }
@@ -529,11 +529,11 @@
 
 
 
-#avitology-inline-loading-container {
+#helpsell-inline-loading-container {
   margin-bottom: 20px;
 }
 
-.avitology-inline-loading-box {
+.helpsell-inline-loading-box {
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 18px;
@@ -541,48 +541,48 @@
   padding: 22px 24px;
 }
 
-.avitology-inline-loading-inner {
+.helpsell-inline-loading-inner {
   display: flex;
   align-items: center;
   gap: 16px;
   min-height: 72px;
 }
 
-.avitology-inline-loading-logo {
+.helpsell-inline-loading-logo {
   width: 46px;
   height: 46px;
   object-fit: contain;
   flex-shrink: 0;
 }
 
-.avitology-inline-loading-texts {
+.helpsell-inline-loading-texts {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.avitology-inline-loading-title {
+.helpsell-inline-loading-title {
   font-size: 16px;
   font-weight: 700;
   color: #111827;
 }
 
-.avitology-inline-loading-subtitle {
+.helpsell-inline-loading-subtitle {
   font-size: 13px;
   color: #6b7280;
 }
 
-.avitology-inline-loading-spinner {
+.helpsell-inline-loading-spinner {
   margin-left: auto;
   width: 22px;
   height: 22px;
   border-radius: 50%;
   border: 3px solid #d1d5db;
   border-top-color: #03bd48;
-  animation: avitology-spin 0.8s linear infinite;
+  animation: helpsell-spin 0.8s linear infinite;
 }
 
-@keyframes avitology-spin {
+@keyframes helpsell-spin {
   from {
     transform: rotate(0deg);
   }

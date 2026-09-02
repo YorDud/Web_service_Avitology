@@ -21,7 +21,7 @@ let lastRowsSignature = "";
 let extraPanelOpen = false;
 let avitologyTableExpanded = false;
 
-let isBuildingAvitology = false;
+let isBuildingHelpSell = false;
 let hasBuiltTableForThisPage = false;
 let initialLoadingVisible = false;
 
@@ -58,7 +58,7 @@ function isSearchPage() {
 }
 
 function getStatusEl() {
-  return document.querySelector("#avitology-status");
+  return document.querySelector("#helpsell-status");
 }
 
 function findInsertionPoint() {
@@ -72,7 +72,7 @@ function findInsertionPoint() {
 }
 
 function removeInlineContainerIfExists() {
-  const existing = document.querySelector("#avitology-inline-container");
+  const existing = document.querySelector("#helpsell-inline-container");
   if (existing) existing.remove();
   avitologyInlineContainer = null;
 }
@@ -80,27 +80,27 @@ function removeInlineContainerIfExists() {
 function ensureInlineLoadingContainer() {
   if (!isSearchPage()) return null;
 
-  let existing = document.querySelector("#avitology-inline-loading-container");
+  let existing = document.querySelector("#helpsell-inline-loading-container");
   if (existing) return existing;
 
   const insertionPoint = findInsertionPoint();
   if (!insertionPoint) return null;
 
   existing = document.createElement("div");
-  existing.id = "avitology-inline-loading-container";
+  existing.id = "helpsell-inline-loading-container";
   existing.innerHTML = `
-    <div class="avitology-inline-loading-box">
-      <div class="avitology-inline-loading-inner">
+    <div class="helpsell-inline-loading-box">
+      <div class="helpsell-inline-loading-inner">
         <img
-          src="https://avitology.site/logo.png"
-          alt="Авитология"
-          class="avitology-inline-loading-logo"
+          src="https://helpsell.ru/logo.png"
+          alt="HelpSell"
+          class="helpsell-inline-loading-logo"
         />
-        <div class="avitology-inline-loading-texts">
-          <div class="avitology-inline-loading-title">Авитология загружает данные</div>
-          <div class="avitology-inline-loading-subtitle">Это занимает совсем немного времени</div>
+        <div class="helpsell-inline-loading-texts">
+          <div class="helpsell-inline-loading-title">HelpSell загружает данные</div>
+          <div class="helpsell-inline-loading-subtitle">Это занимает совсем немного времени</div>
         </div>
-        <div class="avitology-inline-loading-spinner"></div>
+        <div class="helpsell-inline-loading-spinner"></div>
       </div>
     </div>
   `;
@@ -111,7 +111,7 @@ function ensureInlineLoadingContainer() {
 }
 
 function removeInlineLoadingContainerIfExists() {
-  const el = document.querySelector("#avitology-inline-loading-container");
+  const el = document.querySelector("#helpsell-inline-loading-container");
   if (el) el.remove();
   initialLoadingVisible = false;
 }
@@ -130,20 +130,20 @@ function ensurePanel() {
   if (avitologyPanel) return avitologyPanel;
 
   avitologyPanel = document.createElement("div");
-  avitologyPanel.id = "avitology-panel";
+  avitologyPanel.id = "helpsell-panel";
   avitologyPanel.innerHTML = `
-    <div class="avitology-panel-header">
-      <div class="avitology-panel-title">Авитология</div>
-      <div class="avitology-panel-subtitle">Управление инструментом</div>
+    <div class="helpsell-panel-header">
+      <div class="helpsell-panel-title">HelpSell</div>
+      <div class="helpsell-panel-subtitle">Управление инструментом</div>
     </div>
-    <div class="avitology-panel-content">
-      <div id="avitology-status" class="avitology-status warning">
+    <div class="helpsell-panel-content">
+      <div id="helpsell-status" class="helpsell-status warning">
         Ожидание страницы поиска Авито...
       </div>
 
-      <div class="avitology-actions">
-        <button id="avitology-load-btn" class="avitology-btn primary">Обновить анализ</button>
-        <button id="avitology-hide-btn" class="avitology-btn secondary">Скрыть</button>
+      <div class="helpsell-actions">
+        <button id="helpsell-load-btn" class="helpsell-btn primary">Обновить анализ</button>
+        <button id="helpsell-hide-btn" class="helpsell-btn secondary">Скрыть</button>
       </div>
     </div>
   `;
@@ -151,12 +151,12 @@ function ensurePanel() {
   document.body.appendChild(avitologyPanel);
   avitologyPanel.style.display = "none";
 
-  const hideBtn = avitologyPanel.querySelector("#avitology-hide-btn");
+  const hideBtn = avitologyPanel.querySelector("#helpsell-hide-btn");
   hideBtn.addEventListener("click", () => {
     hidePanel();
   });
 
-  const loadBtn = avitologyPanel.querySelector("#avitology-load-btn");
+  const loadBtn = avitologyPanel.querySelector("#helpsell-load-btn");
   loadBtn.addEventListener("click", async () => {
     await forceReloadData();
   });
@@ -189,8 +189,8 @@ function ensureToggleButton() {
   if (avitologyToggleBtn) return avitologyToggleBtn;
 
   avitologyToggleBtn = document.createElement("button");
-  avitologyToggleBtn.id = "avitology-toggle-btn";
-  avitologyToggleBtn.textContent = "Avitology";
+  avitologyToggleBtn.id = "helpsell-toggle-btn";
+  avitologyToggleBtn.textContent = "HelpSell";
   avitologyToggleBtn.style.position = "fixed";
   avitologyToggleBtn.style.right = "20px";
   avitologyToggleBtn.style.bottom = "20px";
@@ -220,55 +220,55 @@ function ensureToggleButton() {
 
 async function getSavedAccessState() {
   if (!globalThis.extApi) return null;
-  const result = await globalThis.extApi.storage.local.get("avitologyAccessState");
-  return result.avitologyAccessState || null;
+  const result = await globalThis.extApi.storage.local.get("helpsellAccessState");
+  return result.helpsellAccessState || null;
 }
 
 async function checkAccess() {
   const statusEl = getStatusEl();
   if (!statusEl) return false;
 
-  statusEl.className = "avitology-status warning";
+  statusEl.className = "helpsell-status warning";
   statusEl.textContent = "Проверяем сохраненный статус доступа...";
 
   try {
     const state = await getSavedAccessState();
 
     if (!state) {
-      statusEl.className = "avitology-status warning";
+      statusEl.className = "helpsell-status warning";
       statusEl.textContent =
         "Нет данных о доступе. Откройте popup расширения и нажмите «Обновить статус».";
       return false;
     }
 
     if (!state.authenticated) {
-      statusEl.className = "avitology-status error";
+      statusEl.className = "helpsell-status error";
       statusEl.textContent =
         "Расширение не видит авторизацию. Откройте popup и обновите статус после входа на сайт.";
       return false;
     }
 
     if (!state.access) {
-      statusEl.className = "avitology-status warning";
+      statusEl.className = "helpsell-status warning";
       statusEl.textContent =
         "Нет доступа к услуге. Нужна подписка Basic или Admin.";
       return false;
     }
 
     if (!isSearchPage()) {
-      statusEl.className = "avitology-status warning";
+      statusEl.className = "helpsell-status warning";
       statusEl.textContent =
         "Таблицы работают только на страницах поиска Авито.";
       return false;
     }
 
-    statusEl.className = "avitology-status success";
+    statusEl.className = "helpsell-status success";
     statusEl.textContent =
       "Доступ подтвержден. Можно анализировать результаты поиска.";
     return true;
   } catch (error) {
-    console.error("Avitology storage access error:", error);
-    statusEl.className = "avitology-status error";
+    console.error("HelpSell storage access error:", error);
+    statusEl.className = "helpsell-status error";
     statusEl.textContent = "Ошибка доступа к данным расширения.";
     return false;
   }
@@ -893,7 +893,7 @@ function renderPromotionBadges(promotions) {
           src="${escapeAttr(src)}"
           alt="${escapeAttr(title)}"
           title="${escapeAttr(title)}"
-          class="avitology-promo-real-icon"
+          class="helpsell-promo-real-icon"
           loading="lazy"
         />
       `;
@@ -926,7 +926,7 @@ async function saveExtensionState() {
       [getPageStateKey()]: data
     });
   } catch (error) {
-    console.error("Avitology save state error:", error);
+    console.error("HelpSell save state error:", error);
   }
 }
 
@@ -967,7 +967,7 @@ async function loadExtensionState() {
       }
     };
   } catch (error) {
-    console.error("Avitology load state error:", error);
+    console.error("HelpSell load state error:", error);
   }
 }
 
@@ -976,7 +976,7 @@ async function resetExtensionState() {
     if (!globalThis.extApi) return;
     await globalThis.extApi.storage.local.remove(getPageStateKey());
   } catch (error) {
-    console.error("Avitology reset state error:", error);
+    console.error("HelpSell reset state error:", error);
   }
 }
 
@@ -993,84 +993,84 @@ function ensureInlineContainer() {
   if (!insertionPoint) return null;
 
   avitologyInlineContainer = document.createElement("div");
-  avitologyInlineContainer.id = "avitology-inline-container";
+  avitologyInlineContainer.id = "helpsell-inline-container";
   avitologyInlineContainer.innerHTML = `
-    <div class="avitology-inline-box">
-      <div class="avitology-inline-header">
+    <div class="helpsell-inline-box">
+      <div class="helpsell-inline-header">
         <div>
-          <div class="avitology-inline-title">Авитология — результаты анализа</div>
-          <div class="avitology-inline-subtitle">Поиск, сортировка, фильтры и экспорт</div>
+          <div class="helpsell-inline-title">HelpSell — результаты анализа</div>
+          <div class="helpsell-inline-subtitle">Поиск, сортировка, фильтры и экспорт</div>
         </div>
 
         <a
-          href="https://avitology.site"
+          href="https://helpsell.ru"
           target="_blank"
           rel="noreferrer"
-          class="avitology-brand-card"
+          class="helpsell-brand-card"
         >
           <img
-            src="https://avitology.site/logo.png"
-            alt="Авитология"
-            class="avitology-brand-logo"
+            src="https://helpsell.ru/logo.png"
+            alt="HelpSell"
+            class="helpsell-brand-logo"
           />
           <div>
-            <div class="avitology-brand-title">Авитология</div>
-            <div class="avitology-brand-link">avitology.site</div>
+            <div class="helpsell-brand-title">HelpSell</div>
+            <div class="helpsell-brand-link">helpsell.ru</div>
           </div>
         </a>
       </div>
 
-      <div class="avitology-tabs">
-        <button class="avitology-tab active" data-tab="sellers">По продавцам</button>
-        <button class="avitology-tab" data-tab="positions">По позициям в поиске</button>
+      <div class="helpsell-tabs">
+        <button class="helpsell-tab active" data-tab="sellers">По продавцам</button>
+        <button class="helpsell-tab" data-tab="positions">По позициям в поиске</button>
       </div>
 
-      <div class="avitology-extra-wrap">
-        <button id="avitology-extra-toggle" class="avitology-extra-toggle" type="button">
-          <span id="avitology-extra-arrow">▼</span>
+      <div class="helpsell-extra-wrap">
+        <button id="helpsell-extra-toggle" class="helpsell-extra-toggle" type="button">
+          <span id="helpsell-extra-arrow">▼</span>
           <span>Дополнительно</span>
         </button>
 
-        <div id="avitology-extra-panel" class="avitology-extra-panel" style="display: none;">
-          <div class="avitology-toolbar">
+        <div id="helpsell-extra-panel" class="helpsell-extra-panel" style="display: none;">
+          <div class="helpsell-toolbar">
             <input
-              id="avitology-table-search"
-              class="avitology-toolbar-input"
+              id="helpsell-table-search"
+              class="helpsell-toolbar-input"
               type="text"
               placeholder="Поиск по текущей вкладке..."
             />
 
-            <select id="avitology-sort-by" class="avitology-toolbar-select"></select>
+            <select id="helpsell-sort-by" class="helpsell-toolbar-select"></select>
 
-            <select id="avitology-sort-dir" class="avitology-toolbar-select">
+            <select id="helpsell-sort-dir" class="helpsell-toolbar-select">
               <option value="asc">По возрастанию</option>
               <option value="desc">По убыванию</option>
             </select>
 
-            <label class="avitology-checkbox-label">
-              <input id="avitology-only-checked" type="checkbox" />
+            <label class="helpsell-checkbox-label">
+              <input id="helpsell-only-checked" type="checkbox" />
               Только отмеченные
             </label>
 
-            <button id="avitology-export-btn" class="avitology-toolbar-btn">Экспорт CSV</button>
-            <button id="avitology-export-xlsx-btn" class="avitology-toolbar-btn">Экспорт XLSX</button>
-            <button id="avitology-clear-btn" class="avitology-toolbar-btn secondary">Снять все отметки</button>
-            <button id="avitology-reset-state-btn" class="avitology-toolbar-btn secondary">Сбросить состояние</button>
+            <button id="helpsell-export-btn" class="helpsell-toolbar-btn">Экспорт CSV</button>
+            <button id="helpsell-export-xlsx-btn" class="helpsell-toolbar-btn">Экспорт XLSX</button>
+            <button id="helpsell-clear-btn" class="helpsell-toolbar-btn secondary">Снять все отметки</button>
+            <button id="helpsell-reset-state-btn" class="helpsell-toolbar-btn secondary">Сбросить состояние</button>
           </div>
         </div>
       </div>
 
-      <div id="avitology-inline-summary" class="avitology-inline-summary">
+      <div id="helpsell-inline-summary" class="helpsell-inline-summary">
         Таблица еще не построена
       </div>
 
-      <div id="avitology-inline-table-wrap"></div>
+      <div id="helpsell-inline-table-wrap"></div>
     </div>
   `;
 
   insertionPoint.prepend(avitologyInlineContainer);
 
-  const tabs = avitologyInlineContainer.querySelectorAll(".avitology-tab");
+  const tabs = avitologyInlineContainer.querySelectorAll(".helpsell-tab");
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       saveCurrentTableScroll();
@@ -1107,8 +1107,8 @@ function resetCurrentTabFilters() {
 }
 
 function closeExtraPanelAndReset() {
-  const panel = document.querySelector("#avitology-extra-panel");
-  const arrow = document.querySelector("#avitology-extra-arrow");
+  const panel = document.querySelector("#helpsell-extra-panel");
+  const arrow = document.querySelector("#helpsell-extra-arrow");
 
   if (panel) panel.style.display = "none";
   if (arrow) arrow.textContent = "▼";
@@ -1122,8 +1122,8 @@ function closeExtraPanelAndReset() {
 }
 
 function toggleExtraPanel() {
-  const panel = document.querySelector("#avitology-extra-panel");
-  const arrow = document.querySelector("#avitology-extra-arrow");
+  const panel = document.querySelector("#helpsell-extra-panel");
+  const arrow = document.querySelector("#helpsell-extra-arrow");
 
   if (!panel || !arrow) return;
 
@@ -1148,15 +1148,15 @@ function toggleExtraPanel() {
 }
 
 function bindToolbarEvents() {
-  const searchInput = document.querySelector("#avitology-table-search");
-  const sortBySelect = document.querySelector("#avitology-sort-by");
-  const sortDirSelect = document.querySelector("#avitology-sort-dir");
-  const onlyCheckedInput = document.querySelector("#avitology-only-checked");
-  const exportBtn = document.querySelector("#avitology-export-btn");
-  const exportXlsxBtn = document.querySelector("#avitology-export-xlsx-btn");
-  const clearBtn = document.querySelector("#avitology-clear-btn");
-  const resetStateBtn = document.querySelector("#avitology-reset-state-btn");
-  const extraToggleBtn = document.querySelector("#avitology-extra-toggle");
+  const searchInput = document.querySelector("#helpsell-table-search");
+  const sortBySelect = document.querySelector("#helpsell-sort-by");
+  const sortDirSelect = document.querySelector("#helpsell-sort-dir");
+  const onlyCheckedInput = document.querySelector("#helpsell-only-checked");
+  const exportBtn = document.querySelector("#helpsell-export-btn");
+  const exportXlsxBtn = document.querySelector("#helpsell-export-xlsx-btn");
+  const clearBtn = document.querySelector("#helpsell-clear-btn");
+  const resetStateBtn = document.querySelector("#helpsell-reset-state-btn");
+  const extraToggleBtn = document.querySelector("#helpsell-extra-toggle");
 
   if (extraToggleBtn) {
     extraToggleBtn.addEventListener("click", () => {
@@ -1258,10 +1258,10 @@ function bindToolbarEvents() {
 }
 
 function updateToolbarState() {
-  const searchInput = document.querySelector("#avitology-table-search");
-  const sortBySelect = document.querySelector("#avitology-sort-by");
-  const sortDirSelect = document.querySelector("#avitology-sort-dir");
-  const onlyCheckedInput = document.querySelector("#avitology-only-checked");
+  const searchInput = document.querySelector("#helpsell-table-search");
+  const sortBySelect = document.querySelector("#helpsell-sort-by");
+  const sortDirSelect = document.querySelector("#helpsell-sort-dir");
+  const onlyCheckedInput = document.querySelector("#helpsell-only-checked");
 
   if (searchInput) {
     searchInput.value = filters[currentTab].search;
@@ -1303,10 +1303,10 @@ function updateToolbarState() {
 }
 
 function updateActiveTabUi() {
-  const container = document.querySelector("#avitology-inline-container");
+  const container = document.querySelector("#helpsell-inline-container");
   if (!container) return;
 
-  const tabs = container.querySelectorAll(".avitology-tab");
+  const tabs = container.querySelectorAll(".helpsell-tab");
   tabs.forEach((tab) => {
     const tabName = tab.getAttribute("data-tab");
     if (tabName === currentTab) {
@@ -1318,11 +1318,11 @@ function updateActiveTabUi() {
 }
 
 function getInlineSummaryEl() {
-  return document.querySelector("#avitology-inline-summary");
+  return document.querySelector("#helpsell-inline-summary");
 }
 
 function getInlineTableWrapEl() {
-  return document.querySelector("#avitology-inline-table-wrap");
+  return document.querySelector("#helpsell-inline-table-wrap");
 }
 
 function escapeHtml(value) {
@@ -1343,13 +1343,13 @@ function escapeAttr(value) {
 }
 
 function saveCurrentTableScroll() {
-  const scroller = document.querySelector("#avitology-inline-table-scroller");
+  const scroller = document.querySelector("#helpsell-inline-table-scroller");
   if (!scroller) return;
   tableScrollTopByTab[currentTab] = scroller.scrollTop;
 }
 
 function restoreCurrentTableScroll() {
-  const scroller = document.querySelector("#avitology-inline-table-scroller");
+  const scroller = document.querySelector("#helpsell-inline-table-scroller");
   if (!scroller) return;
 
   const top = tableScrollTopByTab[currentTab] || 0;
@@ -1497,20 +1497,20 @@ function highlightCheckedCards() {
       highlightedAccounts.has(normalizeWhitespace(row.seller || "Без имени"));
 
     if (shouldHighlight) {
-      row.card.classList.add("avitology-highlighted");
+      row.card.classList.add("helpsell-highlighted");
     } else {
-      row.card.classList.remove("avitology-highlighted");
+      row.card.classList.remove("helpsell-highlighted");
     }
   });
 }
 
 function renderExpandButton() {
   return `
-    <div class="avitology-table-expand-wrap">
+    <div class="helpsell-table-expand-wrap">
       <button
         type="button"
-        id="avitology-expand-table-btn"
-        class="avitology-table-expand-btn"
+        id="helpsell-expand-table-btn"
+        class="helpsell-table-expand-btn"
       >
         ${avitologyTableExpanded ? "Свернуть таблицу" : "Развернуть все позиции"}
       </button>
@@ -1519,7 +1519,7 @@ function renderExpandButton() {
 }
 
 function bindExpandButton(callback) {
-  const expandBtn = document.querySelector("#avitology-expand-table-btn");
+  const expandBtn = document.querySelector("#helpsell-expand-table-btn");
   if (!expandBtn) return;
 
   expandBtn.addEventListener("click", () => {
@@ -1541,14 +1541,14 @@ function renderPositionsTable(rows) {
 
   wrap.innerHTML = `
     <div
-      id="avitology-inline-table-scroller"
-      class="avitology-inline-table-scroll ${avitologyTableExpanded ? "expanded" : ""}"
+      id="helpsell-inline-table-scroller"
+      class="helpsell-inline-table-scroll ${avitologyTableExpanded ? "expanded" : ""}"
     >
-      <table class="avitology-table">
+      <table class="helpsell-table">
         <thead>
           <tr>
-            <th class="avitology-check-col">✓</th>
-            <th class="avitology-position-col">Позиция</th>
+            <th class="helpsell-check-col">✓</th>
+            <th class="helpsell-position-col">Позиция</th>
             <th>Объявление</th>
             <th>Цена</th>
             <th>Аккаунт</th>
@@ -1563,7 +1563,7 @@ function renderPositionsTable(rows) {
               const sellerHighlighted = highlightedAccounts.has(
                 normalizeWhitespace(row.seller || "Без имени")
               )
-                ? "avitology-seller-highlight"
+                ? "helpsell-seller-highlight"
                 : "";
 
               const safeUrl = row.link ? escapeAttr(row.link) : "";
@@ -1573,16 +1573,16 @@ function renderPositionsTable(rows) {
                     href="${safeUrl}"
                     target="_blank"
                     rel="noreferrer"
-                    class="avitology-position-badge"
+                    class="helpsell-position-badge"
                     title="Открыть объявление"
                   >
                     ${row.position}
                   </a>
                 `
-                : `<span class="avitology-position-badge">${row.position}</span>`;
+                : `<span class="helpsell-position-badge">${row.position}</span>`;
 
               const positionHtml = `
-                <div class="avitology-position-badges">
+                <div class="helpsell-position-badges">
                   ${positionBadge}
                   ${renderPromotionBadges(row.promotions)}
                 </div>
@@ -1592,21 +1592,21 @@ function renderPositionsTable(rows) {
                 <tr class="${sellerHighlighted}">
                   <td>
                     <input
-                      class="avitology-checkbox"
+                      class="helpsell-checkbox"
                       type="checkbox"
                       data-row-index="${index}"
                       ${checked}
                     />
                   </td>
-                  <td class="avitology-position-col-cell">${positionHtml}</td>
+                  <td class="helpsell-position-col-cell">${positionHtml}</td>
                   <td title="${escapeAttr(row.title)}">
                     ${
                       safeUrl
-                        ? `<a href="${safeUrl}" target="_blank" rel="noreferrer" class="avitology-title-link">${escapeHtml(row.title)}</a>`
+                        ? `<a href="${safeUrl}" target="_blank" rel="noreferrer" class="helpsell-title-link">${escapeHtml(row.title)}</a>`
                         : escapeHtml(row.title)
                     }
                   </td>
-                  <td><span class="avitology-price-nowrap">${escapeHtml(row.price || "—")}</span></td>
+                  <td><span class="helpsell-price-nowrap">${escapeHtml(row.price || "—")}</span></td>
                   <td>${escapeHtml(row.seller && row.seller !== "Без имени" ? row.seller : "—")}</td>
                   <td>${escapeHtml(row.rating || "—")}</td>
                   <td>${escapeHtml(row.reviews || "—")}</td>
@@ -1620,7 +1620,7 @@ function renderPositionsTable(rows) {
     ${renderExpandButton()}
   `;
 
-  const scroller = document.querySelector("#avitology-inline-table-scroller");
+  const scroller = document.querySelector("#helpsell-inline-table-scroller");
   if (scroller) {
     scroller.addEventListener("scroll", () => {
       tableScrollTopByTab.positions = scroller.scrollTop;
@@ -1664,13 +1664,13 @@ function renderSellersTable(rows) {
 
   wrap.innerHTML = `
     <div
-      id="avitology-inline-table-scroller"
-      class="avitology-inline-table-scroll ${avitologyTableExpanded ? "expanded" : ""}"
+      id="helpsell-inline-table-scroller"
+      class="helpsell-inline-table-scroll ${avitologyTableExpanded ? "expanded" : ""}"
     >
-      <table class="avitology-table">
+      <table class="helpsell-table">
         <thead>
           <tr>
-            <th class="avitology-check-col">✓</th>
+            <th class="helpsell-check-col">✓</th>
             <th>Продавец</th>
             <th>Объявлений</th>
             <th>Позиции в выдаче</th>
@@ -1699,16 +1699,16 @@ function renderSellersTable(rows) {
                         href="${safeUrl}"
                         target="_blank"
                         rel="noreferrer"
-                        class="avitology-position-badge"
+                        class="helpsell-position-badge"
                         title="Открыть объявление"
                       >
                         ${item.position}
                       </a>
                     `
-                    : `<span class="avitology-position-badge">${item.position}</span>`;
+                    : `<span class="helpsell-position-badge">${item.position}</span>`;
 
                   return `
-                    <div class="avitology-position-badge-row">
+                    <div class="helpsell-position-badge-row">
                       ${positionBadge}
                       ${renderPromotionBadges(item.promotions)}
                     </div>
@@ -1720,16 +1720,16 @@ function renderSellersTable(rows) {
                 <tr>
                   <td>
                     <input
-                      class="avitology-seller-checkbox"
+                      class="helpsell-seller-checkbox"
                       type="checkbox"
                       data-seller-index="${index}"
                       ${checked}
                     />
                   </td>
-                  <td class="avitology-seller-cell">
+                  <td class="helpsell-seller-cell">
                     <button
                       type="button"
-                      class="avitology-account-chip ${accountActive}"
+                      class="helpsell-account-chip ${accountActive}"
                       data-account-name="${escapeAttr(normalizeWhitespace(row.seller || "Без имени"))}"
                     >
                       ${escapeHtml(row.seller)}
@@ -1737,7 +1737,7 @@ function renderSellersTable(rows) {
                   </td>
                   <td>${row.count}</td>
                   <td>
-                    <div class="avitology-position-badges avitology-seller-positions-list">
+                    <div class="helpsell-position-badges helpsell-seller-positions-list">
                       ${positionsHtml}
                     </div>
                   </td>
@@ -1753,7 +1753,7 @@ function renderSellersTable(rows) {
     ${renderExpandButton()}
   `;
 
-  const scroller = document.querySelector("#avitology-inline-table-scroller");
+  const scroller = document.querySelector("#helpsell-inline-table-scroller");
   if (scroller) {
     scroller.addEventListener("scroll", () => {
       tableScrollTopByTab.sellers = scroller.scrollTop;
@@ -1779,7 +1779,7 @@ function renderSellersTable(rows) {
     });
   });
 
-  const checkboxes = wrap.querySelectorAll(".avitology-seller-checkbox");
+  const checkboxes = wrap.querySelectorAll(".helpsell-seller-checkbox");
   checkboxes.forEach((checkbox) => {
     checkbox.addEventListener("change", (event) => {
       const target = event.target;
@@ -1810,8 +1810,8 @@ function renderCurrentTab() {
   updateActiveTabUi();
   updateToolbarState();
 
-  const panel = document.querySelector("#avitology-extra-panel");
-  const arrow = document.querySelector("#avitology-extra-arrow");
+  const panel = document.querySelector("#helpsell-extra-panel");
+  const arrow = document.querySelector("#helpsell-extra-arrow");
 
   if (panel && arrow) {
     panel.style.display = extraPanelOpen ? "block" : "none";
@@ -1833,12 +1833,12 @@ function clearAllMarks() {
   highlightedAccounts.clear();
 
   currentRows.forEach((row) => {
-    if (row.card) row.card.classList.remove("avitology-highlighted");
+    if (!row.card) row.card.classList.remove("helpsell-highlighted");
   });
 
   currentSellerRows.forEach((row) => {
     row.cards.forEach((card) => {
-      if (card) card.classList.remove("avitology-highlighted");
+      if (card) card.classList.remove("helpsell-highlighted");
     });
   });
 }
@@ -1882,7 +1882,7 @@ function exportCurrentTabToCsv() {
       ])
     ];
 
-    downloadCsv(`avitology-sellers-${formatDateForFile()}.csv`, csvRows);
+    downloadCsv(`helpsell-sellers-${formatDateForFile()}.csv`, csvRows);
   } else {
     const rows = applyPositionFilters(currentRows);
     const csvRows = [
@@ -1897,7 +1897,7 @@ function exportCurrentTabToCsv() {
       ])
     ];
 
-    downloadCsv(`avitology-positions-${formatDateForFile()}.csv`, csvRows);
+    downloadCsv(`helpsell-positions-${formatDateForFile()}.csv`, csvRows);
   }
 }
 
@@ -1990,13 +1990,13 @@ function exportReportToXlsx() {
   XLSX.utils.book_append_sheet(wb, positionsSheet, "Позиции");
   XLSX.utils.book_append_sheet(wb, sellersSheet, "Продавцы");
 
-  const filename = `avitology-report-${formatDateForFile()}.xlsx`;
+  const filename = `helpsell-report-${formatDateForFile()}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
 async function buildTableOnceForCurrentPage({ auto = false } = {}) {
-  if (isBuildingAvitology || hasBuiltTableForThisPage) return;
-  isBuildingAvitology = true;
+  if (isBuildingHelpSell || hasBuiltTableForThisPage) return;
+  isBuildingHelpSell = true;
 
   try {
     const statusEl = getStatusEl();
@@ -2010,7 +2010,7 @@ async function buildTableOnceForCurrentPage({ auto = false } = {}) {
     showInitialLoadingIfNeeded();
 
     if (statusEl) {
-      statusEl.className = "avitology-status warning";
+      statusEl.className = "helpsell-status warning";
       statusEl.textContent = auto
         ? "Обнаружена страница поиска. Загружаем таблицу..."
         : "Идет анализ страницы...";
@@ -2028,7 +2028,7 @@ async function buildTableOnceForCurrentPage({ auto = false } = {}) {
 
     if (!rows.length) {
       if (statusEl) {
-        statusEl.className = "avitology-status warning";
+        statusEl.className = "helpsell-status warning";
         statusEl.textContent = "Объявления ещё не появились. Ожидаем загрузку выдачи...";
       }
       return;
@@ -2048,11 +2048,11 @@ async function buildTableOnceForCurrentPage({ auto = false } = {}) {
     hasBuiltTableForThisPage = true;
 
     if (statusEl) {
-      statusEl.className = "avitology-status success";
+      statusEl.className = "helpsell-status success";
       statusEl.textContent = `Найдено карточек: ${rows.length}, продавцов: ${currentSellerRows.length}.`;
     }
   } finally {
-    isBuildingAvitology = false;
+    isBuildingHelpSell = false;
   }
 }
 
@@ -2066,7 +2066,7 @@ async function forceReloadData() {
 function scheduleBuildAttempt() {
   if (!isSearchPage()) return;
   if (hasBuiltTableForThisPage) return;
-  if (isBuildingAvitology) return;
+  if (isBuildingHelpSell) return;
 
   if (autoSearchTimer) {
     clearTimeout(autoSearchTimer);
@@ -2079,7 +2079,7 @@ function scheduleBuildAttempt() {
 
 function resetPageBuildState() {
   hasBuiltTableForThisPage = false;
-  isBuildingAvitology = false;
+  isBuildingHelpSell = false;
   initialLoadingVisible = false;
   lastRowsSignature = "";
   removeInlineContainerIfExists();
@@ -2210,14 +2210,14 @@ function handleAccessStateUpdate(state) {
     hideInitialLoading();
 
     if (statusEl) {
-      statusEl.className = "avitology-status error";
+      statusEl.className = "helpsell-status error";
       statusEl.textContent = !state.authenticated
         ? "Доступ отключён: пользователь не авторизован."
         : "Доступ отключён: подписка неактивна.";
     }
   } else {
     if (statusEl) {
-      statusEl.className = "avitology-status success";
+      statusEl.className = "helpsell-status success";
       statusEl.textContent = "Доступ подтверждён. Расширение активно.";
     }
 
@@ -2235,9 +2235,9 @@ function watchAccessStateChanges() {
 
   rawApi.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") return;
-    if (!changes.avitologyAccessState) return;
+    if (!changes.helpsellAccessState) return;
 
-    const newValue = changes.avitologyAccessState.newValue;
+    const newValue = changes.helpsellAccessState.newValue;
     handleAccessStateUpdate(newValue);
   });
 }

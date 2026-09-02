@@ -4,7 +4,7 @@
     null;
 
   if (!rawApi) {
-    console.error("Avitology: browser extension API not found");
+    console.error("HelpSell: browser extension API not found");
     globalThis.extApi = null;
     return;
   }

@@ -25,8 +25,8 @@ export default function PrivacyPage() {
               <p>
                 Настоящая Политика обработки персональных данных определяет
                 порядок обработки и защиты персональных данных пользователей
-                сайта Avitology, расположенного по адресу{" "}
-                <strong>https://avitology.site</strong>.
+                сайта HelpSell, расположенного по адресу{" "}
+                <strong>https://helpsell.ru</strong>.
               </p>
 
               <div>

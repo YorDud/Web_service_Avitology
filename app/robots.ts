@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/dashboard", "/admin", "/api", "/payment"],
       },
     ],
-    sitemap: "https://avitology.site/sitemap.xml",
-    host: "https://avitology.site",
+    sitemap: "https://helpsell.ru/sitemap.xml",
+    host: "https://helpsell.ru",
   };
 }

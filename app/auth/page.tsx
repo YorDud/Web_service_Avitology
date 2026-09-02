@@ -116,16 +116,16 @@ export default function AuthPage() {
                 <div className="overflow-hidden rounded-2xl border border-white/20 bg-white/10 shadow-[0_8px_20px_rgba(16,24,40,0.12)]">
                   <img
                     src="/logo.png"
-                    alt="Avitology logo"
+                    alt="HelpSell logo"
                     className="h-11 w-11 object-cover sm:h-12 sm:w-12"
                   />
                 </div>
                 <div className="min-w-0">
                   <div className="text-lg font-extrabold sm:text-xl">
-                    Авитология
+                    HelpSell
                   </div>
                   <div className="text-xs text-white/75 sm:text-sm">
-                    Avitology
+                    HelpSell
                   </div>
                 </div>
               </div>
@@ -137,7 +137,7 @@ export default function AuthPage() {
               <h1 className="mb-5 text-3xl font-extrabold leading-tight sm:text-4xl md:text-5xl">
                 Вход и регистрация
                 <br />
-                в Avitology
+                в HelpSell
               </h1>
 
               <p className="max-w-xl text-sm leading-7 text-white/90 sm:text-base sm:leading-8">

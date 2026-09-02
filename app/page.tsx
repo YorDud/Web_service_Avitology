@@ -24,15 +24,15 @@ async function Header() {
             <div className="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-[0_8px_20px_rgba(16,24,40,0.08)]">
               <img
                 src="/logo.png"
-                alt="Avitology logo"
+                alt="HelpSell logo"
                 className="h-11 w-11 object-cover sm:h-12 sm:w-12"
               />
             </div>
             <div className="min-w-0">
               <div className="truncate text-lg font-extrabold tracking-tight sm:text-xl">
-                Авитология
+                HelpSell
               </div>
-              <div className="text-xs text-gray-500 sm:text-sm">Avitology</div>
+              <div className="text-xs text-gray-500 sm:text-sm">Сервис увеличения продаж</div>
             </div>
           </div>
 
@@ -165,11 +165,11 @@ function Hero() {
             <span className="hidden sm:inline">
               <br />
             </span>{" "}
-            и расширения Avitology
+            и расширения HelpSell
           </h1>
 
           <p className="mb-8 max-w-2xl text-base leading-7 text-gray-600 sm:text-lg sm:leading-8">
-            Avitology — это веб-сервис для продавцов и команд, которым важно
+            HelpSell — это веб-сервис для продавцов и команд, которым важно
             видеть реальные позиции в поиске, быстро анализировать выдачу,
             управлять доступом по подписке и постепенно подключать новые
             инструменты для роста продаж на Авито.
@@ -263,7 +263,7 @@ function AboutSection() {
         <div className="white-card p-6 md:p-10">
           <div className="badge-green mb-5">О платформе</div>
           <h2 className="section-title mb-5">
-            Avitology — единая среда для сервисов, которые помогают продавать на
+            HelpSell — единая среда для сервисов, которые помогают продавать на
             Авито эффективнее
           </h2>
           <p className="section-text mb-4">
@@ -394,7 +394,7 @@ function HowItWorksSection() {
   const steps = [
     {
       num: "01",
-      title: "Регистрация в Avitology",
+      title: "Регистрация в HelpSell",
       text: "Пользователь создает аккаунт через красивую форму регистрации и получает уровень free.",
     },
     {
@@ -506,7 +506,7 @@ function ExtensionSection() {
           <div>
             <div className="badge-green mb-5">Расширение для браузера</div>
             <h2 className="section-title mb-5">
-              Расширение Avitology будет работать прямо на страницах Авито
+              Расширение HelpSell будет работать прямо на страницах Авито
             </h2>
             <p className="section-text mb-4">
               После авторизации пользователь сможет открыть поиск Авито и
@@ -516,7 +516,7 @@ function ExtensionSection() {
               функции.
             </p>
             <p className="section-text mb-8">
-              Интерфейс расширения Avitology разработан по современным стандартам
+              Интерфейс расширения HelpSell разработан по современным стандартам
               UI/UX — он интуитивно понятен и приятен в использовании: все
               нужные функции под рукой, а взаимодействие выстроено так, чтобы
               экономить ваше время.
@@ -582,7 +582,7 @@ function Footer() {
   return (
     <footer className="footer-line">
       <div className="container-main flex flex-col gap-4 py-8 text-center text-sm text-gray-500 md:flex-row md:items-center md:justify-between md:text-left">
-        <div>© 2026 Авитология / Avitology. Все права защищены.</div>
+        <div>© 2026 HelpSell / Все права защищены.</div>
         <div className="flex flex-wrap items-center justify-center gap-4 md:justify-end md:gap-5">
           <a href="#about">О сервисе</a>
   <a href="#pricing">Подписка</a>
