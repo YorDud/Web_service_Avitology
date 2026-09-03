@@ -81,6 +81,7 @@ export default async function AdminPage() {
       user: {
         select: {
           id: true,
+          publicId: true,
           name: true,
           email: true,
         },
@@ -106,6 +107,7 @@ export default async function AdminPage() {
     user: payment.user
       ? {
           id: payment.user.id,
+          publicId: payment.user.publicId,
           name: payment.user.name,
           email: payment.user.email,
         }
