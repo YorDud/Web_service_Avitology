@@ -15,7 +15,6 @@ type DashboardPageProps = {
   };
 };
 
-
 export default function DashboardClientPage({
   user,
 }: DashboardPageProps) {
@@ -47,7 +46,7 @@ export default function DashboardClientPage({
     user.subscriptionLevel === "admin";
 
   function handleMainInfoClick() {
-    setShowMainInfo((previous) => !previous);
+    setShowMainInfo((prev) => !prev);
 
     if (profileMenuRef.current) {
       profileMenuRef.current.open = false;
@@ -83,7 +82,6 @@ export default function DashboardClientPage({
                   <span className="dashboard-profile-name">
                     {user.name}
                   </span>
-
                   <span className="dashboard-profile-id">
                     {user.publicId}
                   </span>
@@ -121,11 +119,9 @@ export default function DashboardClientPage({
                 className="dashboard-service-card compact"
               >
                 <div className="dashboard-service-kicker">Услуга</div>
-
                 <div className="dashboard-service-title">
                   Места в поиске Авито
                 </div>
-
                 <div className="dashboard-service-text">
                   Аналитика позиций и работа с результатами поиска.
                 </div>
@@ -133,11 +129,9 @@ export default function DashboardClientPage({
             ) : (
               <div className="dashboard-service-card compact disabled">
                 <div className="dashboard-service-kicker">Услуга</div>
-
                 <div className="dashboard-service-title">
                   Места в поиске Авито
                 </div>
-
                 <div className="dashboard-service-text">
                   Требуется подписка Basic.
                 </div>
@@ -180,7 +174,6 @@ export default function DashboardClientPage({
                     <div className="dashboard-metric-label">
                       Стоимость подписки
                     </div>
-
                     <div className="dashboard-metric-value">
                       {user.subscriptionPriceText}
                     </div>
@@ -190,9 +183,8 @@ export default function DashboardClientPage({
                     <div className="dashboard-metric-label">
                       Дата оплаты
                     </div>
-
                     <div className="dashboard-metric-value small">
-                      {user.subscriptionPaidAt || "—"}
+                      {user.subscriptionPaidAt}
                     </div>
                   </div>
 
@@ -200,9 +192,8 @@ export default function DashboardClientPage({
                     <div className="dashboard-metric-label">
                       Дата окончания
                     </div>
-
                     <div className="dashboard-metric-value small">
-                      {user.subscriptionEndsAt || "—"}
+                      {user.subscriptionEndsAt}
                     </div>
                   </div>
                 </div>
@@ -211,11 +202,9 @@ export default function DashboardClientPage({
               <div className="dashboard-empty-state">
                 <div className="dashboard-empty-state-card">
                   <div className="dashboard-empty-kicker">HelpSell</div>
-
                   <div className="dashboard-empty-title">
                     Выберите действие в меню профиля
                   </div>
-
                   <div className="dashboard-empty-text">
                     Откройте главную информацию аккаунта или перейдите к
                     услугам платформы.
@@ -229,11 +218,9 @@ export default function DashboardClientPage({
                 <h2 className="mb-4 text-3xl font-extrabold tracking-[-0.03em] text-black">
                   Подключите подписку Basic
                 </h2>
-
                 <p className="mb-6 text-base leading-8 text-black/55">
                   Это откроет доступ к основным рабочим инструментам платформы.
                 </p>
-
                 <Link href="/pricing" className="btn-primary">
                   Подключить Basic
                 </Link>
@@ -245,12 +232,10 @@ export default function DashboardClientPage({
                 <h2 className="mb-4 text-3xl font-extrabold tracking-[-0.03em]">
                   Доступ активен
                 </h2>
-
                 <p className="mb-6 text-base leading-8 text-white/72">
                   Ваш аккаунт готов к работе с сервисными инструментами и
                   аналитикой.
                 </p>
-
                 <Link
                   href="/dashboard/avito-positions"
                   className="btn-secondary"

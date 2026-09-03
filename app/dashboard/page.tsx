@@ -20,19 +20,19 @@ export default async function DashboardPage() {
   }
 
   const dashboardUser = {
-    name: user.name,
-    publicId: user.publicId,
-    email: user.email,
-    subscriptionLevel: user.subscriptionLevel,
-
-    // Всегда строка — никаких number | null в client-компонент.
+    name: user.name ?? "Пользователь",
+    publicId:
+      user.publicId === null || user.publicId === undefined
+        ? "—"
+        : String(user.publicId),
+    email: user.email ?? "—",
+    subscriptionLevel: String(user.subscriptionLevel ?? "free"),
     subscriptionPriceText:
-      user.subscriptionPrice === null
+      user.subscriptionPrice === null || user.subscriptionPrice === undefined
         ? "—"
         : `${user.subscriptionPrice} ₽`,
-
-    subscriptionPaidAt: formatRuDateTime(user.subscriptionPaidAt),
-    subscriptionEndsAt: formatRuDateTime(user.subscriptionEndsAt),
+    subscriptionPaidAt: formatRuDateTime(user.subscriptionPaidAt) || "—",
+    subscriptionEndsAt: formatRuDateTime(user.subscriptionEndsAt) || "—",
   };
 
   return <DashboardClientPage user={dashboardUser} />;
