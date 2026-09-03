@@ -5,11 +5,11 @@ import CookieBanner from "@/components/CookieBanner";
 export const metadata: Metadata = {
   metadataBase: new URL("https://helpsell.ru"),
   title: {
-    default: "HelpSell — аналитика и инструменты для Авито",
+    default: "HelpSell — веб-сервис для продавцов и команд",
     template: "%s | HelpSell",
   },
   description:
-    "HelpSell — сервис аналитики и инструментов для работы с поиском Авито. Подписка, личный кабинет и расширение для браузера.",
+    "HelpSell — современный веб-сервис для продавцов, команд и сервисного бизнеса: аналитика, личный кабинет, доступы, отчёты и прикладные инструменты.",
   alternates: {
     canonical: "/",
   },
@@ -17,9 +17,9 @@ export const metadata: Metadata = {
     type: "website",
     url: "https://helpsell.ru",
     siteName: "HelpSell",
-    title: "HelpSell — аналитика и инструменты для Авито",
+    title: "HelpSell — веб-сервис для продавцов и команд",
     description:
-      "HelpSell — сервис аналитики и инструментов для работы с поиском Авито. Подписка, личный кабинет и расширение для браузера.",
+      "HelpSell — современный веб-сервис для продавцов, команд и сервисного бизнеса: аналитика, личный кабинет, доступы, отчёты и прикладные инструменты.",
     locale: "ru_RU",
   },
   robots: {

@@ -25,65 +25,65 @@ export default async function PricingPage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="container-main py-16">
-        <div className="mb-8 flex items-center gap-3">
-          <div className="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-[0_8px_20px_rgba(16,24,40,0.08)]">
-            <img
-              src="/logo.png"
-              alt="HelpSell logo"
-              className="h-12 w-12 object-cover"
-            />
+      <div className="container-main page-shell">
+        <div className="page-header">
+          <div className="page-header-row">
+            <div className="brand-badge">
+              <div className="brand-logo-wrap">
+                <img src="/logo.png" alt="HelpSell logo" />
+              </div>
+              <div className="brand-copy">
+                <div className="brand-title">HelpSell</div>
+                <div className="brand-subtitle">Тарифы и доступ к платформе</div>
+              </div>
+            </div>
+
+            <Link href="/" className="page-back-link">
+              ← На главную
+            </Link>
           </div>
-          <div>
-            <div className="text-xl font-extrabold">HelpSell</div>
-            <div className="text-sm text-gray-500">HelpSell</div>
+
+          <div className="page-intro">
+            <div className="badge-green mb-4">Тарифы</div>
+            <h1 className="page-title">Подключение к платформе HelpSell</h1>
+            <p className="page-subtitle">
+              Один тариф для доступа к текущим инструментам, личному кабинету и дальнейшему развитию сервиса.
+            </p>
           </div>
         </div>
 
-        <div className="mb-10 max-w-3xl">
-          <div className="badge-green mb-5">Подписка</div>
-          <h1 className="mb-5 text-5xl font-extrabold leading-tight">
-            Подписка Basic для доступа к сервисам HelpSell
-          </h1>
-          <p className="text-lg leading-8 text-gray-500">
-            Подписка Basic открывает доступ к основному инструменту сервиса,
-            личному кабинету и работе с расширением HelpSell.
-          </p>
-        </div>
-
-        <div className="mb-8 rounded-2xl border border-gray-200 bg-gray-50 p-5">
-          <div className="text-sm text-gray-500">Текущий режим оплаты</div>
-          <div className="mt-1 text-xl font-bold">
+        <div className="mb-6 info-card">
+          <div className="text-sm text-black/45">Режим оплаты</div>
+          <div className="mt-1 text-2xl font-extrabold text-black">
             {serviceSettings.isYookassaEnabled ? "ЮKassa" : "Тестовый режим"}
           </div>
-          <div className="mt-2 text-sm text-gray-500">
+          <div className="mt-2 text-sm leading-7 text-black/55">
             {serviceSettings.isYookassaEnabled
-              ? "При оформлении будет выполнен переход на страницу оплаты ЮKassa."
-              : "Сейчас используется тестовая активация подписки без внешнего платежного шлюза."}
+              ? "После выбора срока откроется страница оплаты ЮKassa."
+              : "Сейчас доступна тестовая активация подписки без внешнего платёжного шлюза."}
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+        <div className="grid gap-6 lg:grid-cols-[1.06fr_0.94fr]">
           <div className="green-3d-card p-8 text-white md:p-10">
             <div className="mb-4 inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold">
               BASIC
             </div>
 
-            <div className="mb-4 text-4xl font-extrabold">
+            <h2 className="mb-4 text-4xl font-extrabold leading-tight">
               Выберите срок подписки
-            </div>
-            <div className="mb-8 text-white/90">
-              Доступ к услуге “Места в поиске Авито”, личному кабинету и
-              скачиванию расширения HelpSell.
-            </div>
+            </h2>
+            <p className="mb-8 max-w-2xl text-sm leading-7 text-white/90 sm:text-base">
+              Доступ к инструментам платформы, личному кабинету и основным сервисным модулям.
+            </p>
 
             <ul className="mb-8 space-y-3 text-[15px] text-white/95">
               <li>• 1 месяц — 299 ₽</li>
               <li>• 3 месяца — 807 ₽ со скидкой 10%</li>
               <li>• 6 месяцев — 1345 ₽ со скидкой 25%</li>
-              <li>• Доступ к аналитике мест в поиске Авито</li>
-              <li>• Доступ к скачиванию расширения</li>
-              <li>• Доступ к личному кабинету и основной услуге</li>
+              <li>• Доступ к веб-инструментам платформы</li>
+              <li>• Личный кабинет и рабочие сценарии</li>
+              <li>• Доступ к расширению и сопутствующим модулям</li>
             </ul>
 
             {!sessionUser ? (
@@ -104,55 +104,52 @@ export default async function PricingPage() {
             )}
           </div>
 
-          <div className="white-card p-8">
-            <div className="mb-5 text-2xl font-extrabold">
-              Состояние аккаунта
-            </div>
+          <div className="white-card p-8 md:p-10">
+            <div className="mb-5 text-2xl font-extrabold">Состояние аккаунта</div>
 
             {!user ? (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Статус</div>
-                  <div className="mt-1 text-lg font-bold">Гость</div>
+                <div className="metric-card">
+                  <div className="text-sm text-black/45">Статус</div>
+                  <div className="mt-1 text-xl font-extrabold text-black">Гость</div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-600">
-                  Войдите в аккаунт, чтобы оплатить подписку или активировать
-                  пробный период.
+                <div className="info-card text-sm leading-7 text-black/58">
+                  Войдите в аккаунт, чтобы оплатить подписку или активировать пробный период.
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Имя</div>
-                  <div className="mt-1 text-lg font-bold">{user.name}</div>
+                <div className="metric-card">
+                  <div className="text-sm text-black/45">Имя</div>
+                  <div className="mt-1 text-xl font-extrabold text-black">{user.name}</div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Подписка</div>
-                  <div className="mt-1 text-lg font-bold uppercase">
+                <div className="metric-card">
+                  <div className="text-sm text-black/45">Подписка</div>
+                  <div className="mt-1 text-xl font-extrabold uppercase text-black">
                     {user.subscriptionLevel}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Дата оплаты</div>
-                  <div className="mt-1 text-base font-semibold">
+                <div className="metric-card">
+                  <div className="text-sm text-black/45">Дата оплаты</div>
+                  <div className="mt-1 text-base font-semibold text-black">
                     {formatRuDateTime(user.subscriptionPaidAt)}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Действует до</div>
-                  <div className="mt-1 text-base font-semibold">
+                <div className="metric-card">
+                  <div className="text-sm text-black/45">Действует до</div>
+                  <div className="mt-1 text-base font-semibold text-black">
                     {formatRuDateTime(user.subscriptionEndsAt)}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="text-sm text-gray-500">Пробный период</div>
-                  <div className="mt-1 text-base font-semibold">
-                    {user.usedFreeTrial ? "Уже использован" : "Ещё доступен"}
+                <div className="metric-card">
+                  <div className="text-sm text-black/45">Пробный доступ</div>
+                  <div className="mt-1 text-base font-semibold text-black">
+                    {user.usedFreeTrial ? "Использован" : "Доступен"}
                   </div>
                 </div>
               </div>

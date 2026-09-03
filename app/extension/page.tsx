@@ -3,328 +3,293 @@ import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
 const EXTENSION_LINKS = {
-  chrome: "https://chrome.google.com/webstore/detail/oigdilhkhidoinkpkfchkdpbkaobfhng",
-  yandex: "https://chrome.google.com/webstore/detail/oigdilhkhidoinkpkfchkdpbkaobfhng",
-  edge: "https://chrome.google.com/webstore/detail/oigdilhkhidoinkpkfchkdpbkaobfhng",
+  chrome:
+    "https://chrome.google.com/webstore/detail/oigdilhkhidoinkpkfchkdpbkaobfhng",
+  yandex:
+    "https://chrome.google.com/webstore/detail/oigdilhkhidoinkpkfchkdpbkaobfhng",
+  edge:
+    "https://chrome.google.com/webstore/detail/oigdilhkhidoinkpkfchkdpbkaobfhng",
 };
+
+const browsers = [
+  {
+    name: "Google Chrome",
+    short: "Chrome",
+    text: "Установка через Chrome Web Store.",
+    href: EXTENSION_LINKS.chrome,
+  },
+  {
+    name: "Yandex Browser",
+    short: "Yandex",
+    text: "Установка через страницу расширения.",
+    href: EXTENSION_LINKS.yandex,
+  },
+  {
+    name: "Microsoft Edge",
+    short: "Edge",
+    text: "Установка для работы в Microsoft Edge.",
+    href: EXTENSION_LINKS.edge,
+  },
+];
+
+const steps = [
+  {
+    number: "01",
+    title: "Выберите браузер",
+    text: "Откройте страницу установки для своего браузера.",
+  },
+  {
+    number: "02",
+    title: "Установите расширение",
+    text: "Подтвердите установку в интерфейсе браузера.",
+  },
+  {
+    number: "03",
+    title: "Войдите в HelpSell",
+    text: "Используйте тот же аккаунт, что и в личном кабинете.",
+  },
+  {
+    number: "04",
+    title: "Откройте поиск Авито",
+    text: "Расширение начнёт работать на странице результатов поиска.",
+  },
+];
 
 export default async function ExtensionPage() {
   const sessionUser = await getSessionUser();
 
-  let user = null;
-
-  if (sessionUser) {
-    user = await prisma.user.findUnique({
-      where: { id: sessionUser.id },
-    });
-  }
+  const user = sessionUser
+    ? await prisma.user.findUnique({
+        where: { id: sessionUser.id },
+      })
+    : null;
 
   const hasAccess =
     user?.subscriptionLevel === "basic" || user?.subscriptionLevel === "admin";
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="container-main py-16">
-        <div className="mb-10 flex items-center gap-3">
-          <div className="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-[0_8px_20px_rgba(16,24,40,0.08)]">
-            <img
-              src="/logo.png"
-              alt="HelpSell logo"
-              className="h-12 w-12 object-cover"
-            />
+      <div className="container-main internal-page-shell">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="brand-badge">
+            <div className="brand-logo-wrap">
+              <img src="/logo.png" alt="HelpSell logo" />
+            </div>
+            <div className="brand-copy">
+              <div className="brand-title">HelpSell</div>
+              <div className="brand-subtitle">Браузерное расширение</div>
+            </div>
           </div>
-          <div>
-            <div className="text-xl font-extrabold">HelpSell</div>
-            <div className="text-sm text-gray-500">HelpSell</div>
-          </div>
+
+          <Link href="/" className="page-back-link">
+            ← На главную
+          </Link>
         </div>
 
-        <div className="mb-10 max-w-4xl">
-          <div className="badge-green mb-5">Расширение для браузера</div>
-          <h1 className="mb-5 text-5xl font-extrabold leading-tight">
-            Установите расширение HelpSell для работы с поиском Авито
-          </h1>
-          <p className="text-lg leading-8 text-gray-500">
-            Расширение HelpSell подключается к вашему аккаунту сервиса,
-            проверяет действующий уровень доступа и помогает работать с
-            результатами поиска Авито непосредственно в интерфейсе браузера.
-          </p>
-        </div>
+        <section className="overflow-hidden rounded-[32px] bg-black p-6 text-white shadow-[0_30px_80px_rgba(16,24,40,0.2)] md:p-10">
+          <div className="grid gap-8 lg:grid-cols-[1.12fr_0.88fr] lg:items-end">
+            <div>
+              <div className="mb-5 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold">
+                Расширение HelpSell
+              </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-6">
-            <div className="white-card p-8">
-              <h2 className="mb-5 text-3xl font-extrabold">
-                Доступные браузеры
-              </h2>
+              <h1 className="max-w-3xl text-4xl font-extrabold tracking-[-0.05em] sm:text-5xl md:text-6xl">
+                Данные и сигналы
+                <span className="text-[#03bd48]"> прямо в браузере</span>
+              </h1>
 
-              <div className="grid gap-4 md:grid-cols-3">
+              <p className="mt-5 max-w-2xl text-base leading-8 text-white/70 sm:text-lg">
+                Расширение подключается к аккаунту HelpSell и помогает работать
+                с поисковой выдачей в привычном интерфейсе браузера.
+              </p>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <a
                   href={EXTENSION_LINKS.chrome}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-green-300 hover:bg-white"
+                  className="btn-primary"
                 >
-                  <div className="mb-2 text-lg font-bold">Google Chrome</div>
-                  <div className="text-sm text-gray-600">
-                    Установка расширения через Chrome Web Store
-                  </div>
+                  Установить расширение
                 </a>
 
-                <a
-                  href={EXTENSION_LINKS.yandex}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-green-300 hover:bg-white"
-                >
-                  <div className="mb-2 text-lg font-bold">Yandex Browser</div>
-                  <div className="text-sm text-gray-600">
-                    Установка через страницу расширения в Chrome Web Store
-                  </div>
-                </a>
-
-                <a
-                  href={EXTENSION_LINKS.edge}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-green-300 hover:bg-white"
-                >
-                  <div className="mb-2 text-lg font-bold">Microsoft Edge</div>
-                  <div className="text-sm text-gray-600">
-                    Установка через подготовленную страницу расширения
-                  </div>
-                </a>
+                <Link href="/dashboard" className="btn-secondary">
+                  В кабинет
+                </Link>
               </div>
             </div>
 
-            <div className="white-card p-8">
-              <h2 className="mb-5 text-3xl font-extrabold">
-                Как установить расширение
-              </h2>
-
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                  <div className="mb-2 text-sm font-extrabold text-green-600">
-                    ШАГ 1
-                  </div>
-                  <div className="text-lg font-bold">
-                    Перейдите на страницу расширения
-                  </div>
-                  <div className="mt-1 text-gray-600">
-                    Выберите ваш браузер и откройте страницу установки
-                    расширения HelpSell.
-                  </div>
+            <div className="grid gap-3">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-white/45">
+                  Браузеры
                 </div>
-
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                  <div className="mb-2 text-sm font-extrabold text-green-600">
-                    ШАГ 2
-                  </div>
-                  <div className="text-lg font-bold">
-                    Установите расширение в браузер
-                  </div>
-                  <div className="mt-1 text-gray-600">
-                    Подтвердите установку расширения стандартным способом через
-                    интерфейс браузера.
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                  <div className="mb-2 text-sm font-extrabold text-green-600">
-                    ШАГ 3
-                  </div>
-                  <div className="text-lg font-bold">
-                    Авторизуйтесь на сайте HelpSell
-                  </div>
-                  <div className="mt-1 text-gray-600">
-                    Используйте тот же аккаунт, что и для доступа к сервису и
-                    подписке.
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                  <div className="mb-2 text-sm font-extrabold text-green-600">
-                    ШАГ 4
-                  </div>
-                  <div className="text-lg font-bold">
-                    Откройте страницу поиска Авито
-                  </div>
-                  <div className="mt-1 text-gray-600">
-                    После проверки доступа расширение сможет работать на
-                    страницах поиска и отображать рабочие инструменты.
-                  </div>
-                </div>
+                <div className="mt-2 text-2xl font-extrabold">Chrome · Yandex · Edge</div>
               </div>
-            </div>
 
-            <div className="soft-green-card p-8">
-              <h2 className="mb-5 text-3xl font-extrabold">
-                Возможности расширения
-              </h2>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <div className="font-bold">Авторизация через аккаунт</div>
-                  <div className="mt-1 text-gray-600">
-                    Расширение использует текущий аккаунт HelpSell и работает
-                    в связке с личным кабинетом.
-                  </div>
+              <div className="rounded-3xl border border-[#03bd48]/35 bg-[#03bd48]/10 p-5">
+                <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#7af8a5]">
+                  Статус
                 </div>
-
-                <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <div className="font-bold">Проверка уровня доступа</div>
-                  <div className="mt-1 text-gray-600">
-                    Функции расширения доступны для пользователей с активным
-                    доступом к сервису.
-                  </div>
+                <div className="mt-2 text-2xl font-extrabold">
+                  {hasAccess ? "Доступ активен" : "Нужна подписка Basic"}
                 </div>
-
-                <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <div className="font-bold">Работа в выдаче Авито</div>
-                  <div className="mt-1 text-gray-600">
-                    Инструменты сервиса отображаются непосредственно на страницах
-                    поиска.
-                  </div>
-                </div>
-
-                <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <div className="font-bold">Наглядная работа с объявлениями</div>
-                  <div className="mt-1 text-gray-600">
-                    Расширение помогает быстрее ориентироваться в результатах
-                    поиска и работать с данными в удобном формате.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="white-card p-8">
-              <h2 className="mb-5 text-3xl font-extrabold">
-                Важная информация
-              </h2>
-
-              <div className="space-y-4 text-gray-600 leading-8">
-                <p>
-                  Для полноценной работы расширения требуется авторизация на
-                  сайте HelpSell.
-                </p>
-                <p>
-                  Доступ к функциональности зависит от уровня вашей подписки.
-                </p>
-                <p>
-                  После активации подписки обновление доступа в расширении
-                  обычно происходит автоматически. В отдельных случаях это может
-                  занять до 15 минут.
-                </p>
               </div>
             </div>
           </div>
+        </section>
 
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
           <div className="space-y-6">
-            <div className="green-3d-card p-8 text-white">
+            <section className="white-card p-6 md:p-8">
+              <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <div className="badge-green mb-3">Установка</div>
+                  <h2 className="text-3xl font-extrabold tracking-[-0.04em] text-black">
+                    Выберите браузер
+                  </h2>
+                </div>
+
+                <div className="text-sm font-semibold text-black/45">
+                  Единый аккаунт HelpSell
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                {browsers.map((browser) => (
+                  <a
+                    key={browser.name}
+                    href={browser.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group rounded-3xl border border-black/8 bg-black/[0.02] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#03bd48]/30 hover:bg-white hover:shadow-[0_18px_38px_rgba(3,189,72,0.1)]"
+                  >
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-xs font-extrabold text-white transition group-hover:bg-[#03bd48]">
+                      {browser.short.slice(0, 2)}
+                    </div>
+
+                    <div className="mt-5 text-lg font-extrabold tracking-[-0.02em] text-black">
+                      {browser.name}
+                    </div>
+
+                    <div className="mt-2 text-sm leading-7 text-black/55">
+                      {browser.text}
+                    </div>
+
+                    <div className="mt-5 text-sm font-bold text-[#03bd48]">
+                      Открыть →
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </section>
+
+            <section className="white-card p-6 md:p-8">
+              <div className="badge-green mb-3">Быстрый старт</div>
+              <h2 className="mb-6 text-3xl font-extrabold tracking-[-0.04em] text-black">
+                Подключение за несколько шагов
+              </h2>
+
+              <div className="grid gap-3">
+                {steps.map((step) => (
+                  <div
+                    key={step.number}
+                    className="flex gap-4 rounded-2xl border border-black/8 bg-black/[0.02] p-5"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-sm font-extrabold text-white">
+                      {step.number}
+                    </div>
+
+                    <div>
+                      <div className="text-lg font-extrabold text-black">
+                        {step.title}
+                      </div>
+                      <div className="mt-1 text-sm leading-7 text-black/55">
+                        {step.text}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <aside className="space-y-6">
+            <section
+              className={`rounded-[30px] p-6 shadow-[0_20px_55px_rgba(16,24,40,0.16)] md:p-8 ${
+                hasAccess ? "bg-[#03bd48] text-white" : "bg-black text-white"
+              }`}
+            >
               <div className="mb-4 inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold">
                 Статус доступа
               </div>
 
-              {!user ? (
+              {hasAccess ? (
                 <>
-                  <div className="mb-3 text-3xl font-extrabold">
-                    Требуется вход в аккаунт
-                  </div>
-                  <p className="mb-6 text-white/90">
-                    Чтобы использовать расширение, сначала войдите в аккаунт
-                    HelpSell.
-                  </p>
-                  <Link href="/auth" className="btn-secondary">
-                    Войти в аккаунт
-                  </Link>
-                </>
-              ) : hasAccess ? (
-                <>
-                  <div className="mb-3 text-3xl font-extrabold">
-                    Доступ к расширению открыт
-                  </div>
-                  <p className="mb-6 text-white/90">
-                    У вас активный уровень{" "}
-                    <span className="font-extrabold uppercase">
-                      {user.subscriptionLevel}
-                    </span>
-                    . Вы можете перейти на страницу установки расширения для
-                    вашего браузера.
+                  <h2 className="text-3xl font-extrabold tracking-[-0.04em]">
+                    Расширение готово к работе
+                  </h2>
+
+                  <p className="mt-4 text-sm leading-7 text-white/85">
+                    Ваш аккаунт может использовать расширение и основные инструменты платформы.
                   </p>
 
-                  <div className="space-y-4">
-                    <a
-                      href={EXTENSION_LINKS.chrome}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary inline-flex"
-                    >
-                      Установить для Chrome
-                    </a>
-
-                    <a
-                      href={EXTENSION_LINKS.yandex}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary inline-flex"
-                    >
-                      Установить для Yandex Browser
-                    </a>
-
-                    <a
-                      href={EXTENSION_LINKS.edge}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary inline-flex"
-                    >
-                      Установить для Edge
-                    </a>
+                  <div className="mt-7 grid gap-3">
+                    <Link href="/dashboard/avito-positions" className="btn-secondary">
+                      Открыть услугу
+                    </Link>
 
                     <Link
-                      href="/dashboard/avito-positions"
-                      className="btn-secondary"
+                      href="/dashboard"
+                      className="rounded-2xl border border-white/20 bg-white/10 px-5 py-4 text-center text-sm font-bold text-white transition hover:bg-white/20"
                     >
-                      Перейти к услуге
+                      В кабинет
                     </Link>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="mb-3 text-3xl font-extrabold">
-                    Требуется подписка Basic
-                  </div>
-                  <p className="mb-6 text-white/90">
-                    Сейчас у вас уровень{" "}
-                    <span className="font-extrabold uppercase">
-                      {user.subscriptionLevel}
-                    </span>
-                    . Для доступа к расширению необходимо подключить подписку.
+                  <h2 className="text-3xl font-extrabold tracking-[-0.04em]">
+                    Подключите Basic
+                  </h2>
+
+                  <p className="mt-4 text-sm leading-7 text-white/72">
+                    Для полноценной работы расширения нужен активный доступ к сервису.
                   </p>
-                  <div className="space-y-4">
-                    <Link href="/pricing" className="btn-secondary">
-                      Перейти к подписке
+
+                  <div className="mt-7 grid gap-3">
+                    <Link href="/pricing" className="btn-primary">
+                      Выбрать тариф
                     </Link>
-                    <Link href="/dashboard" className="btn-secondary">
-                      В личный кабинет
+
+                    <Link href="/auth" className="btn-secondary">
+                      Войти в аккаунт
                     </Link>
                   </div>
                 </>
               )}
-            </div>
+            </section>
 
-            <div className="white-card p-8">
-              <div className="mb-4 text-2xl font-extrabold">
-                Поддержка
+            <section className="rounded-[30px] bg-black p-6 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] md:p-8">
+              <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-white/45">
+                Возможности
               </div>
-              <p className="mb-6 text-gray-600 leading-8">
-                Если возникли вопросы по установке, авторизации или работе
-                расширения, обратитесь в техническую поддержку.
-              </p>
-              <Link href="/support" className="btn-primary">
-                Связаться с поддержкой
-              </Link>
-            </div>
-          </div>
+
+              <div className="mt-5 space-y-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-7 text-white/78">
+                  Работа с результатами поиска прямо в браузере.
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-7 text-white/78">
+                  Дополнительные данные и полезные сигналы по выдаче.
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-7 text-white/78">
+                  Связка с подпиской и личным кабинетом HelpSell.
+                </div>
+              </div>
+            </section>
+          </aside>
         </div>
       </div>
     </main>

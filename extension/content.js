@@ -287,6 +287,13 @@ function getAvitoCards() {
 
   for (const selector of selectors) {
     const nodes = Array.from(document.querySelectorAll(selector)).filter((el) => {
+      if (
+        el.matches?.('[data-marker="itemsCarousel"]') ||
+        el.closest?.('[data-marker="itemsCarousel"]')
+      ) {
+        return false;
+      }
+      
       return isLikelyAdCard(el);
     });
 
@@ -658,6 +665,15 @@ function isLikelySellerName(value) {
 }
 
 function isLikelyAdCard(element) {
+  if (!element) return false;
+
+  if (
+    element.matches?.('[data-marker="itemsCarousel"]') ||
+    element.closest?.('[data-marker="itemsCarousel"]')
+  ) {
+    return false;
+  }
+
   const text = normalizeWhitespace(element.textContent || "");
 
   if (!text || text.length < 20) return false;
@@ -688,11 +704,22 @@ function detectPromotionIconsFromCard(card) {
   const icons = [];
 
   const hasPromoted =
-    !!card.querySelector('[class*="arrow-_7e8a483d725ed77f"]') ||
-    !!card.querySelector('[class*="arrow-"] img[src*="ca5e4a9966826af1.svg"]');
+    !!card.querySelector('[class*="arrow-"]') ||
+    !!card.querySelector('[class^="arrow-"]') ||
+    Array.from(card.querySelectorAll("*")).some((el) =>
+      Array.from(el.classList || []).some((cls) => cls.startsWith("arrow-"))
+    );
 
-  const hasXL = /\bxl-[^\s]+/.test(className);
-  const hasHighlight = !!card.querySelector('[class*="yellowHighlight"]');
+  const hasXL =
+    /\bxl-[^\s]+/.test(className) ||
+    !!card.querySelector('[class*="xl-"]') ||
+    Array.from(card.querySelectorAll("*")).some((el) =>
+      Array.from(el.classList || []).some((cls) => cls.startsWith("xl-"))
+    );
+
+  const hasHighlight =
+    !!card.querySelector('[class*="yellowHighlight"]') ||
+    !!card.querySelector('[class*="highlight"]');
 
   if (hasPromoted) {
     icons.push(AVITO_PROMO_ICONS.promoted);
@@ -712,8 +739,27 @@ function detectPromotionIconsFromCard(card) {
   };
 }
 
+function getPageOffset() {
+  try {
+    const url = new URL(location.href);
+
+    const pageParam =
+      url.searchParams.get("p") ||
+      url.searchParams.get("page") ||
+      "1";
+
+    const page = Math.max(1, Number(pageParam) || 1);
+
+    return (page - 1) * 50;
+  } catch {
+    return 0;
+  }
+}
+
 function buildRows(cards) {
   if (!cards.length) return [];
+
+  const pageOffset = getPageOffset();
 
   const rows = cards.slice(0, 100).map((card, index) => {
     const title =
@@ -742,7 +788,7 @@ function buildRows(cards) {
       price: normalizeWhitespace(price),
       priceNumber: normalizePriceNumber(price),
       seller,
-      position: index + 1,
+      position: pageOffset + index + 1,
       rating,
       reviews,
       promotions,
@@ -751,6 +797,12 @@ function buildRows(cards) {
   });
 
   const filtered = rows.filter((row) => {
+    if (
+      row.card?.matches?.('[data-marker="itemsCarousel"]') ||
+      row.card?.closest?.('[data-marker="itemsCarousel"]')
+    ) {
+      return false;
+    }
     const title = normalizeWhitespace(row.title || "");
     const price = normalizeWhitespace(row.price || "");
     const seller = normalizeWhitespace(row.seller || "");
@@ -801,9 +853,9 @@ function buildRows(cards) {
 
   return unique.map((row, index) => ({
     ...row,
-    id: `row-${index + 1}`,
-    position: index + 1
-  }));
+    id: `row-${pageOffset + index + 1}`,
+    position: pageOffset + index + 1
+}));
 }
 
 function buildSellerRows(rows) {

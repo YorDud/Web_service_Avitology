@@ -108,254 +108,236 @@ export default function AuthPage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="container-main flex min-h-screen items-center justify-center py-8 sm:py-12 md:py-16">
-        <div className="grid w-full max-w-6xl grid-cols-1 overflow-hidden rounded-[24px] border border-green-100 bg-white shadow-[0_20px_60px_rgba(16,24,40,0.08)] lg:grid-cols-2 lg:rounded-[32px]">
-          <div className="green-3d-card flex flex-col justify-between p-6 text-white md:p-10 lg:p-12">
-            <div>
-              <div className="mb-6 flex items-center gap-3">
-                <div className="overflow-hidden rounded-2xl border border-white/20 bg-white/10 shadow-[0_8px_20px_rgba(16,24,40,0.12)]">
-                  <img
-                    src="/logo.png"
-                    alt="HelpSell logo"
-                    className="h-11 w-11 object-cover sm:h-12 sm:w-12"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-lg font-extrabold sm:text-xl">
-                    HelpSell
-                  </div>
-                  <div className="text-xs text-white/75 sm:text-sm">
-                    HelpSell
-                  </div>
-                </div>
+      <div className="container-main page-shell">
+        <div className="page-header">
+          <div className="page-header-row">
+            <div className="brand-badge">
+              <div className="brand-logo-wrap">
+                <img src="/logo.png" alt="HelpSell logo" />
               </div>
-
-              <div className="mb-4 inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold">
-                Единый аккаунт сервиса
+              <div className="brand-copy">
+                <div className="brand-title">HelpSell</div>
+                <div className="brand-subtitle">Вход и регистрация</div>
               </div>
-
-              <h1 className="mb-5 text-3xl font-extrabold leading-tight sm:text-4xl md:text-5xl">
-                Вход и регистрация
-                <br />
-                в HelpSell
-              </h1>
-
-              <p className="max-w-xl text-sm leading-7 text-white/90 sm:text-base sm:leading-8">
-                Создайте аккаунт, получите начальный уровень free и в дальнейшем
-                активируйте подписку Basic для доступа к основным возможностям
-                сервиса и браузерному расширению.
-              </p>
             </div>
 
-            <div className="mt-8 space-y-4 md:mt-10">
-              <div className="rounded-2xl border border-white/20 bg-white/10 p-4">
-                <div className="font-bold">Free</div>
-                <div className="text-sm text-white/80">
-                  Просмотр сервиса и подготовка к покупке подписки
+            <Link href="/" className="page-back-link">
+              ← На главную
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.02fr_0.98fr]">
+          <div className="green-3d-card p-8 text-white md:p-10 lg:p-12 reveal-on-scroll revealed">
+            <div className="mb-4 inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold">
+              Единый аккаунт сервиса
+            </div>
+
+            <h1 className="mb-5 text-4xl font-extrabold leading-tight tracking-[-0.04em] sm:text-5xl">
+              Вход в платформу
+              <br />
+              HelpSell
+            </h1>
+
+            <p className="max-w-xl text-sm leading-7 text-white/90 sm:text-base sm:leading-8">
+              Один аккаунт для личного кабинета, подписки, сервисных модулей,
+              аналитики и дальнейших инструментов платформы.
+            </p>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-3xl border border-white/16 bg-white/10 p-5">
+                <div className="text-sm font-bold uppercase tracking-[0.14em] text-white/70">
+                  Доступ
+                </div>
+                <div className="mt-2 text-2xl font-extrabold">Личный кабинет</div>
+                <div className="mt-2 text-sm text-white/80">
+                  Управление доступом и рабочими сценариями
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/20 bg-white/10 p-4">
-                <div className="font-bold">Basic</div>
-                <div className="text-sm text-white/80">
-                  Доступ к масштабным услугам и функциям по подписке Basic
+              <div className="rounded-3xl border border-white/16 bg-white/10 p-5">
+                <div className="text-sm font-bold uppercase tracking-[0.14em] text-white/70">
+                  Платформа
+                </div>
+                <div className="mt-2 text-2xl font-extrabold">HelpSell</div>
+                <div className="mt-2 text-sm text-white/80">
+                  Сервис для продавцов и команд
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="p-6 md:p-10 lg:p-12">
+          <div className="white-card p-6 md:p-10 lg:p-12 reveal-on-scroll revealed">
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <Link
-                href="/"
-                className="text-sm font-bold text-gray-500 hover:text-black"
-              >
-                ← На главную
-              </Link>
+              <div className="inline-flex w-full rounded-2xl border border-black/8 bg-black/[0.03] p-1 sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("login");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className={`min-h-[48px] min-w-[132px] flex-1 rounded-xl px-4 py-3 text-center text-sm font-bold whitespace-nowrap transition sm:flex-none ${
+                    mode === "login"
+                      ? "bg-white text-black shadow-sm"
+                      : "text-black/50"
+                  }`}
+                >
+                  Вход
+                </button>
 
-              <div className="inline-flex w-full rounded-2xl border border-gray-200 bg-gray-50 p-1 sm:w-auto">
-  <button
-    type="button"
-    onClick={() => {
-      setMode("login");
-      setError("");
-      setSuccess("");
-    }}
-    className={`min-h-[48px] min-w-[132px] flex-1 rounded-xl px-4 py-3 text-center text-sm font-bold whitespace-nowrap transition sm:flex-none ${
-      mode === "login"
-        ? "bg-white text-black shadow-sm"
-        : "text-gray-500"
-    }`}
-  >
-    Вход
-  </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("register");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className={`min-h-[48px] min-w-[132px] flex-1 rounded-xl px-4 py-3 text-center text-sm font-bold whitespace-nowrap transition sm:flex-none ${
+                    mode === "register"
+                      ? "bg-white text-black shadow-sm"
+                      : "text-black/50"
+                  }`}
+                >
+                  Регистрация
+                </button>
+              </div>
 
-  <button
-    type="button"
-    onClick={() => {
-      setMode("register");
-      setError("");
-      setSuccess("");
-    }}
-    className={`min-h-[48px] min-w-[132px] flex-1 rounded-xl px-4 py-3 text-center text-sm font-bold whitespace-nowrap transition sm:flex-none ${
-      mode === "register"
-        ? "bg-white text-black shadow-sm"
-        : "text-gray-500"
-    }`}
-  >
-    Регистрация
-  </button>
-</div>
+              <div className="text-sm font-semibold text-black/45">
+                {mode === "login" ? "Уже есть аккаунт" : "Новый пользователь"}
+              </div>
             </div>
 
             <div className="mb-6">
-              <h2 className="text-2xl font-extrabold sm:text-3xl">
+              <h2 className="text-3xl font-extrabold tracking-[-0.03em] text-black">
                 {mode === "login" ? "Добро пожаловать" : "Создание аккаунта"}
               </h2>
-              <p className="mt-2 text-sm text-gray-500 sm:text-base">
+              <p className="mt-2 text-sm leading-7 text-black/55 sm:text-base">
                 {mode === "login"
-                  ? "Введите почту и пароль для входа в сервис"
-                  : "Заполните данные для регистрации нового пользователя"}
+                  ? "Введите данные аккаунта для входа в платформу."
+                  : "Заполните только основные поля для быстрого старта."}
               </p>
             </div>
 
             {error && (
-              <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             )}
 
             {success && (
-              <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+              <div className="mb-5 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
                 {success}
               </div>
             )}
 
             {mode === "login" ? (
-              <form onSubmit={handleLogin} className="space-y-5">
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-gray-700">
-                    Адрес почты
+                  <label className="mb-2 block text-sm font-bold text-black">
+                    Email
                   </label>
                   <input
                     type="email"
+                    required
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
-                    placeholder="Введите почту"
-                    autoComplete="email"
+                    className="w-full rounded-2xl border border-black/8 bg-white px-4 py-4 outline-none transition focus:border-[#03bd48]"
+                    placeholder="you@example.com"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-gray-700">
+                  <label className="mb-2 block text-sm font-bold text-black">
                     Пароль
                   </label>
                   <input
                     type="password"
+                    required
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
+                    className="w-full rounded-2xl border border-black/8 bg-white px-4 py-4 outline-none transition focus:border-[#03bd48]"
                     placeholder="Введите пароль"
-                    autoComplete="current-password"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="btn-primary w-full"
                   disabled={loading}
+                  className="btn-primary w-full"
                 >
-                  {loading ? "Выполняется вход..." : "Войти"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMode("register")}
-                  className="btn-secondary w-full"
-                >
-                  Перейти к регистрации
+                  {loading ? "Входим..." : "Войти"}
                 </button>
               </form>
             ) : (
-              <form onSubmit={handleRegister} className="space-y-5">
+              <form onSubmit={handleRegister} className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-gray-700">
+                  <label className="mb-2 block text-sm font-bold text-black">
                     Имя
                   </label>
                   <input
                     type="text"
+                    required
                     value={registerName}
                     onChange={(e) => setRegisterName(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
-                    placeholder="Введите имя"
-                    autoComplete="name"
+                    className="w-full rounded-2xl border border-black/8 bg-white px-4 py-4 outline-none transition focus:border-[#03bd48]"
+                    placeholder="Ваше имя"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-gray-700">
-                    Адрес почты
+                  <label className="mb-2 block text-sm font-bold text-black">
+                    Email
                   </label>
                   <input
                     type="email"
+                    required
                     value={registerEmail}
                     onChange={(e) => setRegisterEmail(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
-                    placeholder="Введите почту"
-                    autoComplete="email"
+                    className="w-full rounded-2xl border border-black/8 bg-white px-4 py-4 outline-none transition focus:border-[#03bd48]"
+                    placeholder="you@example.com"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-gray-700">
+                  <label className="mb-2 block text-sm font-bold text-black">
                     Пароль
                   </label>
                   <input
                     type="password"
+                    required
                     value={registerPassword}
                     onChange={(e) => setRegisterPassword(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
-                    placeholder="Введите пароль"
-                    autoComplete="new-password"
+                    className="w-full rounded-2xl border border-black/8 bg-white px-4 py-4 outline-none transition focus:border-[#03bd48]"
+                    placeholder="Создайте пароль"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-gray-700">
+                  <label className="mb-2 block text-sm font-bold text-black">
                     Повторите пароль
                   </label>
                   <input
                     type="password"
+                    required
                     value={registerRepeatPassword}
                     onChange={(e) => setRegisterRepeatPassword(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-4 text-sm outline-none transition focus:border-green-500 sm:text-base"
+                    className="w-full rounded-2xl border border-black/8 bg-white px-4 py-4 outline-none transition focus:border-[#03bd48]"
                     placeholder="Повторите пароль"
-                    autoComplete="new-password"
                   />
                 </div>
 
-                <label className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <label className="flex items-start gap-3 rounded-2xl border border-black/8 bg-black/[0.02] p-4 text-sm text-black/70">
                   <input
                     type="checkbox"
                     checked={registerConsent}
                     onChange={(e) => setRegisterConsent(e.target.checked)}
-                    className="mt-1 h-4 w-4 shrink-0 accent-green-600"
+                    className="mt-1 h-4 w-4 accent-[#03bd48]"
                   />
-                  <span className="text-sm leading-6 text-gray-700">
-                    Я даю согласие на обработку персональных данных и принимаю{" "}
-                    <Link
-                      href="/personal-data-consent"
-                      className="font-bold text-green-700 hover:underline"
-                    >
-                      условия согласия
-                    </Link>
-                    , а также ознакомлен с{" "}
-                    <Link
-                      href="/privacy"
-                      className="font-bold text-green-700 hover:underline"
-                    >
-                      Политикой конфиденциальности
+                  <span>
+                    Я соглашаюсь с обработкой персональных данных и принимаю{" "}
+                    <Link href="/privacy" className="font-bold text-[#03bd48]">
+                      политику конфиденциальности
                     </Link>
                     .
                   </span>
@@ -363,18 +345,10 @@ export default function AuthPage() {
 
                 <button
                   type="submit"
-                  className="btn-primary w-full"
                   disabled={loading}
+                  className="btn-primary w-full"
                 >
-                  {loading ? "Создание аккаунта..." : "Зарегистрироваться"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMode("login")}
-                  className="btn-secondary w-full"
-                >
-                  Перейти ко входу
+                  {loading ? "Создаем аккаунт..." : "Создать аккаунт"}
                 </button>
               </form>
             )}

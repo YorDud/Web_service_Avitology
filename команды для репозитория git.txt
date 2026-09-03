@@ -37,7 +37,7 @@ mkdir -p /opt/avitology_backup_manual
 cp prisma/dev.db /opt/avitology_backup_manual/dev.db.backup 2>/dev/null || true
 cp .env /opt/avitology_backup_manual/.env.backup 2>/dev/null || true
 
-pm2 delete avitology || true
+pm2 delete helpsell || true
 
 git fetch --all --prune
 git checkout main
@@ -55,7 +55,7 @@ set +a
 
 npm run build
 
-pm2 start npm --name avitology -- start
+pm2 start npm --name helpsell -- start
 pm2 save
 pm2 status
 

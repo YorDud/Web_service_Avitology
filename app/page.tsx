@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
+import ScrollReveal from "@/components/scroll-reveal";
+
+const navItems = [
+  ["#features", "Возможности"],
+  ["#workflow", "Сценарии"],
+  ["#pricing", "Тарифы"],
+  ["#platform", "Платформа"],
+] as const;
 
 async function Header() {
   const sessionUser = await getSessionUser();
@@ -17,128 +25,106 @@ async function Header() {
     : null;
 
   return (
-    <header className="nav-blur">
-      <div className="container-main py-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-[0_8px_20px_rgba(16,24,40,0.08)]">
+    <header className="nav-shell">
+      <div className="container-main nav-shell-inner">
+        <div className="nav-frame">
+          <Link href="/" className="brand-link">
+            <div className="brand-logo-wrap">
               <img
                 src="/logo.png"
                 alt="HelpSell logo"
-                className="h-11 w-11 object-cover sm:h-12 sm:w-12"
+                className="h-8 w-8 object-contain sm:h-9 sm:w-9"
               />
             </div>
-            <div className="min-w-0">
-              <div className="truncate text-lg font-extrabold tracking-tight sm:text-xl">
-                HelpSell
-              </div>
-              <div className="text-xs text-gray-500 sm:text-sm">Сервис увеличения продаж</div>
+            <div className="brand-copy">
+              <div className="brand-title">HelpSell</div>
+              <div className="brand-subtitle">Веб-сервис для продавцов и команд</div>
             </div>
-          </div>
+          </Link>
 
-          <nav className="hidden items-center gap-6 xl:flex">
-            <a
-              href="#about"
-              className="text-sm font-semibold text-gray-600 hover:text-black"
-            >
-              О сервисе
-            </a>
-            <a
-              href="#features"
-              className="text-sm font-semibold text-gray-600 hover:text-black"
-            >
-              Возможности
-            </a>
-            <a
-              href="#pricing"
-              className="text-sm font-semibold text-gray-600 hover:text-black"
-            >
-              Подписка
-            </a>
-            <a
-              href="#extension"
-              className="text-sm font-semibold text-gray-600 hover:text-black"
-            >
-              Расширение
-            </a>
-            <Link
-              href="/support"
-              className="text-sm font-semibold text-gray-600 hover:text-black"
-            >
+          <nav className="nav-desktop">
+            {navItems.map(([href, label]) => (
+              <a key={href} href={href} className="nav-link-pill">
+                {label}
+              </a>
+            ))}
+            <Link href="/about" className="nav-link-pill nav-link-static">
+              О нас
+            </Link>
+            <Link href="/support" className="nav-link-pill nav-link-static">
               Поддержка
             </Link>
           </nav>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch lg:justify-end">
-            <Link href="/pricing" className="btn-primary text-center">
-              Купить подписку
-            </Link>
-
+          <div className="nav-actions hidden sm:flex">
             {user ? (
+              <Link href="/dashboard" className="dashboard-chip dashboard-chip-wide">
+                <span className="dashboard-chip-main">
+                  <span className="dashboard-chip-name">{user.name}</span>
+                  <span className="dashboard-chip-id">{user.publicId}</span>
+                </span>
+                <span className="dashboard-chip-accent">Кабинет</span>
+              </Link>
+            ) : (
               <>
-                <Link
-                  href="/dashboard"
-                  className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-center text-sm font-bold text-gray-900 shadow-sm transition hover:border-green-300 hover:shadow-md md:hidden"
-                >
-                  Личный кабинет
+                <Link href="/auth" className="btn-secondary btn-header-secondary">
+                  Войти
                 </Link>
-
-                <Link
-                  href="/dashboard"
-                  className="hidden min-w-[220px] rounded-2xl border border-gray-200 bg-white px-4 py-2 shadow-sm transition hover:border-green-300 hover:shadow-md md:block"
-                >
-                  <div className="truncate text-sm font-bold text-gray-900">
-                    {user.name}
-                  </div>
-                  <div className="text-xs text-gray-500">ID: {user.publicId}</div>
-                  <div className="text-xs font-medium text-green-600">
-                    {user.subscriptionLevel === "admin"
-                      ? "Администратор"
-                      : user.subscriptionLevel === "basic"
-                      ? "Подписка Basic"
-                      : "Бесплатный доступ"}
-                  </div>
+                <Link href="/pricing" className="btn-primary btn-header-primary">
+                  Начать
                 </Link>
               </>
-            ) : (
-              <Link href="/auth" className="btn-secondary text-center">
-                Войти
-              </Link>
             )}
           </div>
-        </div>
 
-        <div className="mt-4 flex flex-wrap gap-3 xl:hidden">
-          <a
-            href="#about"
-            className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700"
-          >
-            О сервисе
-          </a>
-          <a
-            href="#features"
-            className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700"
-          >
-            Возможности
-          </a>
-          <a
-            href="#pricing"
-            className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700"
-          >
-            Подписка
-          </a>
-          <a
-            href="#extension"
-            className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700"
-          >
-            Расширение
-          </a>
-          <Link
-            href="/support"
-            className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700"
-          >
-            Поддержка
-          </Link>
+          <details className="mobile-menu sm:hidden">
+            <summary className="mobile-menu-button" aria-label="Открыть меню">
+              <span />
+              <span />
+              <span />
+            </summary>
+            <div className="mobile-menu-panel">
+              <div className="mobile-menu-links">
+                {navItems.map(([href, label]) => (
+                  <a key={href} href={href} className="mobile-nav-link">
+                    {label}
+                  </a>
+                ))}
+                <Link href="/about" className="mobile-nav-link">
+                  О нас
+                </Link>
+                <Link href="/extension" className="mobile-nav-link">
+                  Расширение
+                </Link>
+                <Link href="/support" className="mobile-nav-link">
+                  Поддержка
+                </Link>
+                <Link href="/privacy" className="mobile-nav-link">
+                  Политика
+                </Link>
+                <Link href="/personal-data-consent" className="mobile-nav-link">
+                  Согласие на обработку данных
+                </Link>
+              </div>
+
+              <div className="mt-4 grid gap-2">
+                {user ? (
+                  <Link href="/dashboard" className="btn-secondary">
+                    Кабинет
+                  </Link>
+                ) : (
+                  <>
+                    <Link href="/auth" className="btn-secondary">
+                      Войти
+                    </Link>
+                    <Link href="/pricing" className="btn-primary">
+                      Начать
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+          </details>
         </div>
       </div>
     </header>
@@ -147,175 +133,143 @@ async function Header() {
 
 function Hero() {
   return (
-    <section className="section-space">
-      <div className="container-main hero-grid items-center gap-8">
-        <div>
-          <div className="badge-green mb-6 inline-flex max-w-full flex-wrap gap-2">
-            <span>●</span>
-            Платформа аналитики и автоматизации для Авито
-          </div>
-
-          <h1 className="mb-6 text-4xl font-extrabold leading-tight tracking-tight text-gray-950 sm:text-5xl lg:text-6xl">
-            Ускоряйте продажи на{" "}
-            <span style={{ color: "#03bd48" }}>Авито</span>
-            <span className="hidden sm:inline">
-              <br />
-            </span>{" "}
-            с помощью аналитики, парсинга
-            <span className="hidden sm:inline">
-              <br />
-            </span>{" "}
-            и расширения HelpSell
-          </h1>
-
-          <p className="mb-8 max-w-2xl text-base leading-7 text-gray-600 sm:text-lg sm:leading-8">
-            HelpSell — это веб-сервис для продавцов и команд, которым важно
-            видеть реальные позиции в поиске, быстро анализировать выдачу,
-            управлять доступом по подписке и постепенно подключать новые
-            инструменты для роста продаж на Авито.
-          </p>
-
-          <div className="flex flex-col gap-4 sm:flex-row">
-            <Link href="/pricing" className="btn-primary text-center">
-              Купить подписку Basic
-            </Link>
-            <Link href="/auth" className="btn-secondary text-center">
-              Войти в личный кабинет
-            </Link>
-          </div>
-
-          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="hero-stat p-5">
-              <div className="text-2xl font-extrabold sm:text-3xl">№ 1</div>
-              <div className="mt-2 text-sm text-gray-500">
-                по быстродействию и качеству парсинга Авито
-              </div>
+    <section className="section-space hero-first-section hero-section">
+      <div className="container-main">
+        <div className="hero-premium-grid">
+          <div className="reveal-on-scroll revealed">
+            <div className="badge-green mb-5">
+              Единая платформа для аналитики, управления доступом и роста продаж
             </div>
-            <div className="hero-stat p-5">
-              <div className="text-2xl font-extrabold sm:text-3xl">Гибкость</div>
-              <div className="mt-2 text-sm text-gray-500">
-                максимально обширный спектр услуг для развития
-              </div>
-            </div>
-            <div className="hero-stat p-5">
-              <div className="text-2xl font-extrabold sm:text-3xl">100%</div>
-              <div className="mt-2 text-sm text-gray-500">
-                гарантия поддержки всех сервисов Авитологии
-              </div>
+
+            <h1 className="hero-title max-w-4xl text-black">
+              HelpSell — это
+              <span className="text-[#03bd48]"> современный веб-сервис </span>
+              для продавцов, команд и сервисного бизнеса.
+            </h1>
+
+            <p className="hero-text mt-5 max-w-2xl">
+              Аналитика, отчёты, инструменты роста, рабочие сценарии и новые
+              модули в одной экосистеме. Сегодня — полезные инструменты для
+              продавцов, дальше — полноценная сервисная платформа.
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link href="/pricing" className="btn-primary btn-hero-primary">
+                Подключить сервис
+              </Link>
+              <Link href="/about" className="btn-secondary btn-hero-secondary">
+                О платформе
+              </Link>
             </div>
           </div>
-        </div>
 
-        <div className="green-3d-card p-6 text-white md:p-8">
-          <div className="mb-6 inline-flex rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-bold">
-            Основная услуга
-          </div>
+          <div className="reveal-on-scroll revealed">
+            <div className="hero-laptop-scene noise-overlay">
+              <div className="hero-glow hero-glow-a" />
+              <div className="hero-glow hero-glow-b" />
 
-          <h3 className="mb-4 text-2xl font-extrabold leading-tight sm:text-3xl">
-            Места в поиске Авито
-          </h3>
-
-          <p className="mb-6 text-sm leading-7 text-white/90 sm:text-base">
-            Веб-сервис и браузерное расширение помогают анализировать выдачу
-            Авито прямо на странице поиска: определять позиции объявлений,
-            видеть аккаунты продавцов, рейтинг, отзывы и удобно подсвечивать
-            нужные объявления в выдаче фирменным зеленым контуром.
-          </p>
-
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-white/20 bg-white/10 p-4">
-              <div className="text-sm font-bold uppercase tracking-wide text-white/75">
-                Для кого
+              <div className="hero-floating-chip chip-top-left animate-float-soft">
+                <span className="chip-dot" />
+                Рост +24%
               </div>
-              <div className="mt-2 text-base font-semibold sm:text-lg">
-                продавцы, команды, агентства, аналитики
-              </div>
-            </div>
 
-            <div className="rounded-2xl border border-white/20 bg-white/10 p-4">
-              <div className="text-sm font-bold uppercase tracking-wide text-white/75">
-                Результат
+              <div className="hero-floating-chip chip-top-right animate-float-soft delay-2">
+                <span className="chip-dot" />
+                Live analytics
               </div>
-              <div className="mt-2 text-base font-semibold sm:text-lg">
-                больше контроля над поисковой выдачей и продвижением
-              </div>
-            </div>
 
-            <div className="rounded-2xl border border-white/20 bg-white/10 p-4">
-              <div className="text-sm font-bold uppercase tracking-wide text-white/75">
-                Доступ
-              </div>
-              <div className="mt-2 text-base font-semibold sm:text-lg">
-                по подписке Basic через личный кабинет
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
+              <div className="hero-laptop-wrap">
+                <div className="hero-laptop animate-float-soft">
+                  <div className="hero-laptop-screen">
+                    <div className="hero-app-toolbar">
+                      <div className="hero-app-dots">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                      <div className="hero-app-title">HelpSell Workspace</div>
+                      <div className="hero-app-badge">Online</div>
+                    </div>
 
-function AboutSection() {
-  return (
-    <section id="about" className="section-space">
-      <div className="container-main grid-2 items-center gap-6">
-        <div className="white-card p-6 md:p-10">
-          <div className="badge-green mb-5">О платформе</div>
-          <h2 className="section-title mb-5">
-            HelpSell — единая среда для сервисов, которые помогают продавать на
-            Авито эффективнее
-          </h2>
-          <p className="section-text mb-4">
-            Не просто один инструмент, а платформа с понятной подписочной
-            моделью, личным кабинетом, доступами по ролям и расширяемой
-            архитектурой. Сегодня самая быстрорастущая платформа по своему
-            ассортименту и качеству услуг среди конкурентов.
-          </p>
-          <p className="section-text">
-            Удобный интерфейс, моментальная регистрация и простое управление
-            подпиской — всё для комфортной работы. Доступ к сервису через сайт и
-            расширение, все возможности — в одном личном кабинете.
-          </p>
-        </div>
+                    <div className="hero-app-layout">
+                      <aside className="hero-app-sidebar">
+                        <div className="hero-side-item active">Сводка</div>
+                        <div className="hero-side-item">Продажи</div>
+                        <div className="hero-side-item">Клиенты</div>
+                        <div className="hero-side-item">Отчёты</div>
+                      </aside>
 
-        <div className="soft-green-card p-6 md:p-10">
-          <h3 className="mb-6 text-2xl font-extrabold">
-            Почему это удобно уже на старте
-          </h3>
+                      <div className="hero-app-content">
+                        <div className="hero-metric-row">
+                          <div className="hero-metric-card dark-card">
+                            <div className="hero-metric-label">Оборот</div>
+                            <div className="hero-metric-value">+18.4%</div>
+                            <div className="hero-metric-note">Положительная динамика</div>
+                          </div>
+                          <div className="hero-mini-metric">
+                            <div className="hero-metric-label">Заявки</div>
+                            <div className="hero-mini-value">1 284</div>
+                          </div>
+                          <div className="hero-mini-metric success">
+                            <div className="hero-metric-label">Рост</div>
+                            <div className="hero-mini-value">7.9%</div>
+                          </div>
+                        </div>
 
-          <div className="space-y-5">
-            <div>
-              <div className="mb-1 text-lg font-bold">Одна учетная запись</div>
-              <div className="card-text">
-                Сервис построен на гибкой архитектуре, которая масштабируется под
-                растущие задачи. Единый аккаунт даёт доступ ко всем интерфейсам:
-                веб‑версии, личному кабинету и расширению.
-              </div>
-            </div>
+                        <div className="hero-chart-panel">
+                          <div className="hero-chart-header">
+                            <div>
+                              <div className="text-sm font-bold text-black">Общая динамика</div>
+                              <div className="text-xs text-black/45">Рост по ключевым метрикам</div>
+                            </div>
+                            <div className="hero-chart-pill">+12.8%</div>
+                          </div>
 
-            <div>
-              <div className="mb-1 text-lg font-bold">Простая подписка</div>
-              <div className="card-text">
-                Стартовые тарифы — Free и Basic, с возможностью дальнейшего
-                расширения возможностей.
-              </div>
-            </div>
+                          <div className="hero-chart-grid">
+                            <div className="hero-line-chart">
+                              <svg viewBox="0 0 420 180" className="hero-chart-svg" aria-hidden="true">
+                                <defs>
+                                  <linearGradient id="heroLineGreen" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stopColor="#03bd48" stopOpacity="0.5" />
+                                    <stop offset="100%" stopColor="#03bd48" stopOpacity="1" />
+                                  </linearGradient>
+                                  <linearGradient id="heroAreaGreen" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#03bd48" stopOpacity="0.22" />
+                                    <stop offset="100%" stopColor="#03bd48" stopOpacity="0" />
+                                  </linearGradient>
+                                </defs>
+                                <path d="M20 145 C70 138, 88 124, 122 118 S182 105, 214 98 S274 70, 312 58 S368 36, 400 22" fill="none" stroke="url(#heroLineGreen)" strokeWidth="6" strokeLinecap="round" className="path-animate" />
+                                <path d="M20 145 C70 138, 88 124, 122 118 S182 105, 214 98 S274 70, 312 58 S368 36, 400 22 L400 170 L20 170 Z" fill="url(#heroAreaGreen)" />
+                                <circle cx="312" cy="58" r="7" fill="#03bd48" className="pulse-point" />
+                                <circle cx="400" cy="22" r="8" fill="#03bd48" className="pulse-point delay-2" />
+                              </svg>
+                            </div>
 
-            <div>
-              <div className="mb-1 text-lg font-bold">Готовность к расширению</div>
-              <div className="card-text">
-                Гибкая архитектура адаптируется под ваши потребности.
-              </div>
-            </div>
+                            <div className="hero-bars">
+                              <div className="hero-bar"><span style={{ height: "40%" }} /></div>
+                              <div className="hero-bar"><span style={{ height: "58%" }} /></div>
+                              <div className="hero-bar"><span style={{ height: "64%" }} /></div>
+                              <div className="hero-bar"><span style={{ height: "79%" }} /></div>
+                              <div className="hero-bar"><span style={{ height: "92%" }} /></div>
+                            </div>
+                          </div>
+                        </div>
 
-            <div>
-              <div className="mb-1 text-lg font-bold">
-                Отзывчивая техническая поддержка
-              </div>
-              <div className="card-text">
-                При возникновении вопросов поможет отзывчивая техническая
-                поддержка.
+                        <div className="hero-bottom-grid">
+                          <div className="hero-data-card">
+                            <div className="hero-data-title">Сценарии</div>
+                            <div className="hero-data-text">Аналитика, отчёты, доступы и рабочие модули в одной системе.</div>
+                          </div>
+                          <div className="hero-data-card success-card">
+                            <div className="hero-data-title">Потенциал</div>
+                            <div className="hero-data-text">Платформа всегда обновляется и расширяется под новые сервисы и направления.</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="hero-laptop-base" />
+                </div>
               </div>
             </div>
           </div>
@@ -325,63 +279,54 @@ function AboutSection() {
   );
 }
 
-function FeaturesSection() {
+function Features() {
   const features = [
     {
-      icon: "🔎",
-      title: "Аналитика выдачи",
-      text: "Помогает видеть реальное положение объявлений в поиске и контролировать динамику.",
+      title: "Единая экосистема",
+      text: "Один веб-сервис для инструментов, модулей и повседневной работы команды.",
+      icon: "01",
     },
     {
-      icon: "🧩",
-      title: "Браузерное расширение",
-      text: "Инструменты работают прямо на страницах Авито без сложных действий для пользователя.",
+      title: "Отчёты и аналитика",
+      text: "Понятные данные, которые помогают принимать решения быстрее.",
+      icon: "02",
     },
     {
-      icon: "👤",
-      title: "Единая авторизация",
-      text: "Один аккаунт для сайта, личного кабинета и расширения с проверкой подписки.",
-    },
-    {
-      icon: "💳",
-      title: "Подписочная модель",
-      text: "Гибкие уровни доступа: free и basic с постоянно обновляющимся списком функций.",
-    },
-    {
-      icon: "📊",
-      title: "Наглядные таблицы",
-      text: "Понятные данные по аккаунтам, позициям, рейтингам и отзывам в удобном интерфейсе.",
-    },
-    {
-      icon: "⚙️",
-      title: "Техническая поддержка",
-      text: "Отзывчивая техническая поддержка, которая всегда на связи с пользователями.",
+      title: "Готовность к росту",
+      text: "Платформа масштабируется под новые функции, роли и сервисные сценарии.",
+      icon: "03",
     },
   ];
 
   return (
-    <section id="features" className="section-space">
+    <section id="features" className="section-space section-compact pt-0">
       <div className="container-main">
-        <div className="mb-12 max-w-3xl">
-          <div className="badge-green mb-5">Возможности платформы</div>
-          <h2 className="section-title mb-5">
-            Современный сервис для тех, кому нужна аналитика, контроль и рост
-            продаж на Авито
-          </h2>
-          <p className="section-text">
-            В основу создания сервиса лег современный подход, ориентированный на
-            пользователя: первый экран выполнен ярко и лаконично, ключевые
-            преимущества вынесены на первый план. Сервис работает по подписочной
-            модели, что обеспечивает предсказуемость и гибкость использования.
+        <div className="section-head reveal-on-scroll">
+          <div>
+            <div className="section-kicker">Возможности</div>
+            <h2 className="section-title mt-3 max-w-2xl">
+              Платформа, которая объединяет полезные сервисы в одной системе
+            </h2>
+          </div>
+          <p className="section-head-text">
+            Меньше разрозненных инструментов, больше понятной логики и удобной работы.
           </p>
         </div>
 
-        <div className="grid-3 gap-6">
-          {features.map((feature) => (
-            <div key={feature.title} className="white-card p-6 sm:p-7">
-              <div className="feature-icon mb-5">{feature.icon}</div>
-              <h3 className="card-title mb-3">{feature.title}</h3>
-              <p className="card-text">{feature.text}</p>
+        <div className="grid gap-4 md:grid-cols-3">
+          {features.map((item, index) => (
+            <div
+              key={item.title}
+              className="feature-premium-card reveal-on-scroll"
+              style={{ transitionDelay: `${index * 80}ms` }}
+            >
+              <div className="feature-premium-icon">{item.icon}</div>
+              <h3 className="text-xl font-extrabold tracking-[-0.03em] text-black">
+                {item.title}
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-black/58 sm:text-base">
+                {item.text}
+              </p>
             </div>
           ))}
         </div>
@@ -390,51 +335,36 @@ function FeaturesSection() {
   );
 }
 
-function HowItWorksSection() {
+function Workflow() {
   const steps = [
-    {
-      num: "01",
-      title: "Регистрация в HelpSell",
-      text: "Пользователь создает аккаунт через красивую форму регистрации и получает уровень free.",
-    },
-    {
-      num: "02",
-      title: "Покупка подписки Basic",
-      text: "После тестовой оплаты открывается доступ к инструментам сервиса.",
-    },
-    {
-      num: "03",
-      title: "Авторизация в расширении",
-      text: "Пользователь входит в расширение под тем же аккаунтом и получает доступ по своей подписке.",
-    },
-    {
-      num: "04",
-      title: "Работа прямо в выдаче Авито",
-      text: "Расширение показывает таблицу, позиции, рейтинг, отзывы и помогает работать с объявлениями, не отвлекаясь на сторонние раздражители.",
-    },
+    "Подключаете аккаунт и команду",
+    "Используете нужные модули в одном интерфейсе",
+    "Получаете аналитику и масштабируете процессы",
   ];
 
   return (
-    <section className="section-space">
+    <section id="workflow" className="section-space section-compact pt-0">
       <div className="container-main">
-        <div className="soft-green-card p-6 md:p-10">
-          <div className="mb-5 badge-green">Как это работает</div>
-          <h2 className="section-title mb-10">
-            Простая логика для пользователя и надежная основа для роста сервиса
-          </h2>
+        <div className="workflow-shell reveal-on-scroll">
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div>
+              <div className="section-kicker section-kicker-dark">Сценарии</div>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-[-0.04em] text-white sm:text-4xl">
+                От первого входа до ежедневной работы
+              </h2>
+              <p className="mt-4 max-w-lg text-sm leading-7 text-white/68 sm:text-base">
+                Быстрый старт, понятная логика и основа для дальнейшего роста платформы.
+              </p>
+            </div>
 
-          <div className="grid-2 gap-6">
-            {steps.map((step) => (
-              <div key={step.num} className="rounded-3xl bg-white p-6 shadow-sm">
-                <div className="mb-4 text-sm font-extrabold text-green-600">
-                  Шаг {step.num}
+            <div className="grid gap-4 sm:grid-cols-3">
+              {steps.map((step, index) => (
+                <div key={step} className="workflow-card reveal-on-scroll">
+                  <div className="text-sm font-bold text-[#03bd48]">0{index + 1}</div>
+                  <div className="mt-3 text-lg font-bold leading-7 text-white">{step}</div>
                 </div>
-                <h3 className="mb-3 text-xl font-extrabold sm:text-2xl">
-                  {step.title}
-                </h3>
-                <p className="card-text">{step.text}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -442,55 +372,46 @@ function HowItWorksSection() {
   );
 }
 
-function PricingSection() {
+function Pricing() {
   return (
-    <section id="pricing" className="section-space">
+    <section id="pricing" className="section-space section-compact pt-0">
       <div className="container-main">
-        <div className="mb-12 max-w-3xl">
-          <div className="badge-green mb-5">Подписка</div>
-          <h2 className="section-title mb-5">
-            Понятный тариф для доступа к основной услуге
-          </h2>
-        </div>
-
-        <div className="grid-2 gap-6">
-          <div className="white-card p-6 md:p-10">
-            <div className="mb-4 text-sm font-bold uppercase tracking-[0.2em] text-gray-500">
-              FREE
-            </div>
-            <div className="mb-4 text-4xl font-extrabold">0 ₽</div>
-            <div className="mb-6 text-gray-500">
-              Для знакомства с платформой и просмотром описания сервиса
-            </div>
-
-            <ul className="space-y-3 text-[15px] text-gray-700">
-              <li>• Доступ к главной странице</li>
-              <li>• Доступ к описанию сервиса</li>
-              <li>• Без доступа к парсеру мест</li>
-              <li>• Без доступа к расширению по подписке</li>
-            </ul>
+        <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="reveal-on-scroll">
+            <div className="section-kicker">Тарифы</div>
+            <h2 className="section-title mt-3">Один понятный вход в сервис и его будущие модули</h2>
+            <p className="mt-4 max-w-lg text-sm leading-7 text-black/55 sm:text-base">
+              Подписка открывает доступ к текущим инструментам и к дальнейшему развитию платформы.
+            </p>
           </div>
 
-          <div className="green-3d-card p-6 text-white md:p-10">
-            <div className="mb-4 inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold">
-              BASIC
-            </div>
-            <div className="mb-4 text-4xl font-extrabold">299 ₽ / месяц</div>
-            <div className="mb-6 text-white/90">
-              Основной доступ к инструменту “Места в поиске Авито”
+          <div className="pricing-panel reveal-on-scroll">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-sm font-bold uppercase tracking-[0.18em] text-[#03bd48]">
+                  Basic
+                </div>
+                <div className="mt-3 text-3xl font-extrabold tracking-[-0.04em] text-black sm:text-4xl">
+                  Доступ к платформе HelpSell
+                </div>
+              </div>
+              <Link href="/pricing" className="btn-primary">
+                Открыть тариф
+              </Link>
             </div>
 
-            <ul className="mb-8 space-y-3 text-[15px] text-white/95">
-              <li>• Доступ к личному кабинету</li>
-              <li>• Доступ к услуге “Места в поиске Авито”</li>
-              <li>• Доступ к скачиванию расширения</li>
-              <li>• Работа через сайт и расширение</li>
-              <li>• Возможность первыми получать расширение набора услуг</li>
-            </ul>
-
-            <Link href="/pricing" className="btn-secondary text-center">
-              Перейти к подписке
-            </Link>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              {[
+                "Личный кабинет и управление доступом",
+                "Веб-инструменты и аналитика",
+                "Экспорт и рабочие отчёты",
+                "Основа для новых функций сервиса",
+              ].map((item) => (
+                <div key={item} className="pricing-point">
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -498,78 +419,42 @@ function PricingSection() {
   );
 }
 
-function ExtensionSection() {
+function PlatformSection() {
   return (
-    <section id="extension" className="section-space">
+    <section id="platform" className="section-space section-compact pt-0">
       <div className="container-main">
-        <div className="white-card grid-2 gap-6 p-6 md:p-10">
-          <div>
-            <div className="badge-green mb-5">Расширение для браузера</div>
-            <h2 className="section-title mb-5">
-              Расширение HelpSell будет работать прямо на страницах Авито
-            </h2>
-            <p className="section-text mb-4">
-              После авторизации пользователь сможет открыть поиск Авито и
-              получить полноценную встроенную панель с таблицей данных по
-              объявлениям. В ней будут доступны отметки в выдаче, аккаунты,
-              позиции, рейтинг продавца и отзывы и остальные расширенные
-              функции.
-            </p>
-            <p className="section-text mb-8">
-              Интерфейс расширения HelpSell разработан по современным стандартам
-              UI/UX — он интуитивно понятен и приятен в использовании: все
-              нужные функции под рукой, а взаимодействие выстроено так, чтобы
-              экономить ваше время.
+        <div className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
+          <div className="platform-card reveal-on-scroll">
+            <div className="section-kicker">Платформа</div>
+            <h2 className="section-title mt-3">Не один инструмент, а растущая сервисная система</h2>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-black/55 sm:text-base">
+              HelpSell развивается как полноценный веб-сервис: от текущих решений для продавцов до новой линейки модулей, автоматизации и сервисных сценариев.
             </p>
 
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <Link href="/extension" className="btn-primary text-center">
-                Страница установки расширения
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <Link href="/about" className="btn-primary">
+                Узнать больше
               </Link>
-              <Link href="/auth" className="btn-secondary text-center">
-                Авторизоваться
+              <Link href="/extension" className="btn-secondary">
+                Расширение
               </Link>
             </div>
           </div>
 
-          <div className="soft-green-card p-6">
-            <div className="mb-4 text-lg font-extrabold">
-              Возможности расширения
+          <div className="platform-dark-card reveal-on-scroll">
+            <div className="text-sm font-bold uppercase tracking-[0.18em] text-[#03bd48]">
+              Направления
             </div>
-
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-green-100 bg-white p-4">
-                <div className="font-bold">Авторизация через аккаунт сайта</div>
-                <div className="card-text mt-1">
-                  Все функции доступны сразу после входа — права определяются
-                  вашим уровнем подписки.
+            <div className="mt-4 space-y-4">
+              {[
+                "Аналитика и визуализация данных",
+                "Рабочие инструменты для продавцов и команд",
+                "Новые модули внутри одной платформы",
+              ].map((item) => (
+                <div key={item} className="platform-dark-item">
+                  {item}
                 </div>
-              </div>
-
-              <div className="rounded-2xl border border-green-100 bg-white p-4">
-                <div className="font-bold">Таблица на странице выдачи</div>
-                <div className="card-text mt-1">
-                  Данные по объявлениям уже отображаются в удобном компактном
-                  интерфейсе — всё наглядно и под рукой.
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-green-100 bg-white p-4">
-                <div className="font-bold">Подсветка объявлений</div>
-                <div className="card-text mt-1">
-                  При отметке строки карточка объявления мгновенно выделяется
-                  зелёной рамкой — легко держать в фокусе важные предложения.
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-green-100 bg-white p-4">
-                <div className="font-bold">Гибкая архитектура сервиса</div>
-                <div className="card-text mt-1">
-                  Расширение построено на масштабируемой структуре — это не
-                  прототип, а полноценный многофункциональный инструмент,
-                  готовый к развитию.
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -580,34 +465,58 @@ function ExtensionSection() {
 
 function Footer() {
   return (
-    <footer className="footer-line">
-      <div className="container-main flex flex-col gap-4 py-8 text-center text-sm text-gray-500 md:flex-row md:items-center md:justify-between md:text-left">
-        <div>© 2026 HelpSell / Все права защищены.</div>
-        <div className="flex flex-wrap items-center justify-center gap-4 md:justify-end md:gap-5">
-          <a href="#about">О сервисе</a>
-  <a href="#pricing">Подписка</a>
-  <a href="#extension">Расширение</a>
-  <Link href="/about">О нас</Link>
-  <Link href="/privacy">Политика конфиденциальности</Link>
-  <Link href="/personal-data-consent">Согласие на обработку данных</Link>
-  <Link href="/support">Поддержка</Link>
+    <footer className="pb-8 pt-2">
+      <div className="container-main">
+        <div className="footer-shell reveal-on-scroll revealed">
+          <div className="footer-top-row">
+            <div className="footer-brand-block">
+              <div className="footer-brand-title">HelpSell</div>
+              <div className="footer-brand-text">
+                Современный веб-сервис для продавцов, команд и сервисного бизнеса
+              </div>
+            </div>
+
+            <div className="footer-columns">
+              <div className="footer-column">
+                <div className="footer-column-title">Сервис</div>
+                <Link href="/about" className="footer-link">О нас</Link>
+                <Link href="/pricing" className="footer-link">Тарифы</Link>
+                <Link href="/extension" className="footer-link">Расширение</Link>
+              </div>
+
+              <div className="footer-column">
+                <div className="footer-column-title">Поддержка</div>
+                <Link href="/support" className="footer-link">Поддержка</Link>
+                <Link href="/auth" className="footer-link">Вход</Link>
+                <Link href="/dashboard" className="footer-link">Кабинет</Link>
+              </div>
+
+              <div className="footer-column">
+                <div className="footer-column-title">Документы</div>
+                <Link href="/privacy" className="footer-link">Политика</Link>
+                <Link href="/personal-data-consent" className="footer-link">Согласие на обработку данных</Link>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </footer>
   );
 }
 
-export default function Home() {
+export default async function HomePage() {
   return (
-    <main className="overflow-x-hidden">
+    <>
+      <ScrollReveal />
       <Header />
-      <Hero />
-      <AboutSection />
-      <FeaturesSection />
-      <HowItWorksSection />
-      <PricingSection />
-      <ExtensionSection />
+      <main>
+        <Hero />
+        <Features />
+        <Workflow />
+        <Pricing />
+        <PlatformSection />
+      </main>
       <Footer />
-    </main>
+    </>
   );
 }
