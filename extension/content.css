@@ -1,119 +1,165 @@
+/* HelpSell extension — black / white / green interface */
+:root {
+  --hs-black: #101010;
+  --hs-ink: #171717;
+  --hs-muted: #687078;
+  --hs-line: #e8ebed;
+  --hs-soft: #f6f7f7;
+  --hs-green: #03bd48;
+  --hs-green-dark: #028c36;
+  --hs-green-soft: rgba(3, 189, 72, 0.09);
+  --hs-radius: 18px;
+}
+
 #helpsell-panel {
   position: fixed;
-  top: 90px;
+  top: 88px;
   right: 20px;
-  width: 420px;
-  max-height: 75vh;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 112px);
   overflow: auto;
   z-index: 999999;
-  background: #ffffff;
-  border: 1px solid #d9f3e4;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid rgba(16, 16, 16, 0.1);
   border-radius: 24px;
-  box-shadow: 0 20px 50px rgba(16, 24, 40, 0.15);
+  box-shadow: 0 24px 64px rgba(16, 24, 40, 0.2);
+  color: var(--hs-ink);
   font-family: Arial, Helvetica, sans-serif;
 }
 
 .helpsell-panel-header {
-  padding: 18px 18px 12px;
-  border-bottom: 1px solid #edf2f7;
-  background: linear-gradient(180deg, #f7fff9 0%, #ffffff 100%);
+  padding: 20px;
+  background: var(--hs-black);
+  border-radius: 23px 23px 0 0;
+  color: #fff;
 }
 
-.helpsell-panel-title {
-  font-size: 22px;
+.helpsell-panel-title,
+.helpsell-inline-title {
+  font-size: 24px;
   font-weight: 800;
-  color: #101828;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
 }
 
-.helpsell-panel-subtitle {
+.helpsell-panel-title { color: #fff; }
+
+.helpsell-panel-subtitle,
+.helpsell-inline-subtitle {
+  margin-top: 5px;
   font-size: 13px;
-  color: #667085;
-  margin-top: 4px;
+  line-height: 1.45;
 }
 
-.helpsell-panel-content {
-  padding: 16px 18px 18px;
-}
+.helpsell-panel-subtitle { color: rgba(255, 255, 255, 0.6); }
+.helpsell-inline-subtitle { color: var(--hs-muted); }
+
+.helpsell-panel-content { padding: 16px; }
 
 .helpsell-status {
+  position: relative;
+  margin-bottom: 14px;
+  padding: 13px 14px 13px 17px;
+  border: 1px solid var(--hs-line);
   border-radius: 16px;
-  padding: 12px 14px;
-  margin-bottom: 14px;
   font-size: 14px;
+  font-weight: 600;
   line-height: 1.5;
+  overflow: hidden;
 }
 
-.helpsell-status.success {
-  background: #ecfff3;
-  border: 1px solid #c9f4d8;
-  color: #067a33;
+.helpsell-status::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: currentColor;
 }
 
-.helpsell-status.warning {
-  background: #fff8e8;
-  border: 1px solid #f7df9a;
-  color: #8a6512;
-}
+.helpsell-status.success { background: var(--hs-green-soft); border-color: rgba(3, 189, 72, 0.24); color: var(--hs-green-dark); }
+.helpsell-status.warning { background: #fff9eb; border-color: #f4dfa5; color: #8a6512; }
+.helpsell-status.error { background: #fff3f2; border-color: #f3cecb; color: #b42318; }
 
-.helpsell-status.error {
-  background: #fff1f1;
-  border: 1px solid #f3cccc;
-  color: #b42318;
-}
-
-.helpsell-actions {
+.helpsell-actions,
+.helpsell-toolbar,
+.helpsell-tabs {
   display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
 }
 
-.helpsell-btn {
-  border: none;
-  border-radius: 14px;
+.helpsell-actions { margin-bottom: 2px; }
+.helpsell-tabs { margin-bottom: 14px; }
+.helpsell-toolbar { margin-bottom: 14px; }
+
+.helpsell-btn,
+.helpsell-tab,
+.helpsell-extra-toggle,
+.helpsell-toolbar-btn,
+.helpsell-table-expand-btn {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  min-height: 42px;
   padding: 10px 14px;
-  font-size: 14px;
+  box-sizing: border-box;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1.15;
   cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
 }
 
-.helpsell-btn.primary {
-  background: linear-gradient(180deg, #10d95c 0%, #03bd48 100%);
-  color: white;
+.helpsell-btn:hover,
+.helpsell-tab:hover,
+.helpsell-extra-toggle:hover,
+.helpsell-toolbar-btn:hover,
+.helpsell-table-expand-btn:hover { transform: translateY(-1px); }
+
+.helpsell-btn.primary,
+.helpsell-toolbar-btn:not(.secondary) {
+  background: var(--hs-green);
+  border-color: var(--hs-green);
+  color: #fff;
   box-shadow: 0 10px 20px rgba(3, 189, 72, 0.2);
 }
 
-.helpsell-btn.secondary {
-  background: white;
-  color: #101828;
-  border: 1px solid #dce5ea;
+.helpsell-btn.primary:hover,
+.helpsell-toolbar-btn:not(.secondary):hover { background: var(--hs-green-dark); }
+
+.helpsell-btn.secondary,
+.helpsell-toolbar-btn.secondary,
+.helpsell-extra-toggle,
+.helpsell-table-expand-btn {
+  background: #fff;
+  border-color: rgba(16, 16, 16, 0.12);
+  color: var(--hs-ink);
 }
+
+.helpsell-btn.secondary:hover,
+.helpsell-toolbar-btn.secondary:hover,
+.helpsell-extra-toggle:hover,
+.helpsell-table-expand-btn:hover { border-color: var(--hs-green); color: var(--hs-green-dark); }
 
 .helpsell-checkbox,
-.helpsell-seller-checkbox {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
+.helpsell-seller-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--hs-green); }
 
-.helpsell-highlighted {
-  outline: 3px solid #03bd48 !important;
-  outline-offset: 2px !important;
-  border-radius: 12px !important;
-}
+.helpsell-highlighted { outline: 3px solid var(--hs-green) !important; outline-offset: 2px !important; border-radius: 12px !important; }
 
-#helpsell-inline-container {
-  width: 100%;
-  margin: 16px 0 24px;
-  box-sizing: border-box;
-}
+#helpsell-inline-container { width: 100%; margin: 16px 0 24px; box-sizing: border-box; }
 
 .helpsell-inline-box {
-  background: #ffffff;
-  border: 1px solid #d9f3e4;
-  border-radius: 24px;
-  box-shadow: 0 20px 50px rgba(16, 24, 40, 0.08);
-  padding: 20px;
   box-sizing: border-box;
+  padding: 22px;
+  background: #fff;
+  border: 1px solid rgba(16, 16, 16, 0.1);
+  border-radius: 26px;
+  box-shadow: 0 20px 50px rgba(16, 24, 40, 0.1);
+  color: var(--hs-ink);
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 .helpsell-inline-header {
@@ -121,189 +167,89 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 12px;
+  margin: -22px -22px 18px;
+  padding: 22px;
+  background: var(--hs-black);
+  border-radius: 25px 25px 0 0;
 }
+
+.helpsell-inline-header .helpsell-inline-title { color: #fff; }
+.helpsell-inline-header .helpsell-inline-subtitle { color: rgba(255,255,255,.58); }
 
 .helpsell-brand-card {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex: 0 0 auto;
+  gap: 9px;
+  min-width: 168px;
+  padding: 8px 10px;
+  box-sizing: border-box;
   text-decoration: none;
-  background: linear-gradient(180deg, #f7fff9 0%, #ffffff 100%);
-  border: 1px solid #d9f3e4;
-  border-radius: 16px;
-  padding: 10px 12px;
-  box-shadow: 0 8px 20px rgba(16, 24, 40, 0.06);
-  color: #101828;
-  min-width: 180px;
+  color: #fff;
+  background: rgba(255,255,255,.09);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 15px;
+  transition: background .18s ease, transform .18s ease;
 }
-
-.helpsell-brand-card:hover {
-  opacity: 0.96;
-}
-
-.helpsell-brand-logo {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.helpsell-brand-title {
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.helpsell-brand-link {
-  font-size: 12px;
-  color: #667085;
-  margin-top: 2px;
-}
-
-.helpsell-inline-title {
-  font-size: 24px;
-  font-weight: 800;
-  color: #101828;
-}
-
-.helpsell-inline-subtitle {
-  font-size: 13px;
-  color: #667085;
-  margin-top: 4px;
-}
+.helpsell-brand-card:hover { background: rgba(255,255,255,.15); transform: translateY(-1px); }
+.helpsell-brand-logo { width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; object-fit: cover; }
+.helpsell-brand-title { font-size: 14px; font-weight: 800; line-height: 1.2; }
+.helpsell-brand-link { margin-top: 2px; font-size: 11px; color: rgba(255,255,255,.58); }
 
 .helpsell-inline-summary {
-  border-radius: 14px;
-  background: #f7fff9;
-  border: 1px solid #d9f3e4;
-  color: #067647;
-  padding: 12px 14px;
   margin-bottom: 14px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.helpsell-tabs {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
+  padding: 13px 14px;
+  color: var(--hs-green-dark);
+  background: var(--hs-green-soft);
+  border: 1px solid rgba(3, 189, 72, 0.22);
+  border-radius: 15px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .helpsell-tab {
-  border: 1px solid #dce5ea;
-  background: #fff;
-  color: #101828;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: 0.2s ease;
+  min-height: 40px;
+  background: var(--hs-soft);
+  border-color: transparent;
+  color: rgba(16,16,16,.6);
 }
+.helpsell-tab.active { background: var(--hs-black); border-color: var(--hs-black); color: #fff; box-shadow: 0 8px 18px rgba(16,16,16,.16); }
 
-.helpsell-tab.active {
-  background: linear-gradient(180deg, #10d95c 0%, #03bd48 100%);
-  color: #fff;
-  border-color: #03bd48;
-  box-shadow: 0 10px 20px rgba(3, 189, 72, 0.18);
-}
-
-.helpsell-tab:hover {
-  opacity: 0.95;
-}
-
-.helpsell-extra-wrap {
-  margin-bottom: 14px;
-}
-
-.helpsell-extra-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #dce5ea;
-  background: #fff;
-  color: #101828;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.helpsell-extra-toggle:hover {
-  opacity: 0.96;
-}
-
-.helpsell-extra-panel {
-  margin-top: 12px;
-}
-
-.helpsell-toolbar {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-bottom: 14px;
-}
+.helpsell-extra-wrap { margin-bottom: 14px; }
+.helpsell-extra-panel { margin-top: 10px; padding: 12px; background: var(--hs-soft); border: 1px solid var(--hs-line); border-radius: 16px; }
 
 .helpsell-toolbar-input,
 .helpsell-toolbar-select {
-  border: 1px solid #dce5ea;
-  background: #fff;
-  color: #101828;
+  min-height: 42px;
+  box-sizing: border-box;
+  border: 1px solid rgba(16,16,16,.12);
   border-radius: 12px;
+  background: #fff;
+  color: var(--hs-ink);
   padding: 10px 12px;
-  font-size: 14px;
   outline: none;
+  font: 600 13px Arial, Helvetica, sans-serif;
+  transition: border-color .18s ease, box-shadow .18s ease;
 }
-
-.helpsell-toolbar-input {
-  min-width: 220px;
-  flex: 1 1 220px;
-}
-
-.helpsell-toolbar-select {
-  min-width: 170px;
-}
-
-.helpsell-toolbar-btn {
-  border: 1px solid #03bd48;
-  background: linear-gradient(180deg, #10d95c 0%, #03bd48 100%);
-  color: #fff;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.helpsell-toolbar-btn.secondary {
-  border: 1px solid #dce5ea;
-  background: #fff;
-  color: #101828;
-}
+.helpsell-toolbar-input:focus,
+.helpsell-toolbar-select:focus { border-color: var(--hs-green); box-shadow: 0 0 0 3px rgba(3,189,72,.12); }
+.helpsell-toolbar-input { min-width: 220px; flex: 1 1 220px; }
+.helpsell-toolbar-select { min-width: 155px; }
 
 .helpsell-checkbox-label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid #dce5ea;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid rgba(16,16,16,.1);
   border-radius: 12px;
   background: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  color: #101828;
-}
-
-.helpsell-toolbar-btn:hover,
-.helpsell-toolbar-input:hover,
-.helpsell-toolbar-select:hover,
-.helpsell-checkbox-label:hover {
-  opacity: 0.96;
+  color: var(--hs-ink);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .helpsell-inline-table-scroll {
@@ -471,10 +417,6 @@
   opacity: 0.92;
 }
 
-#helpsell-toggle-btn:hover {
-  opacity: 0.95;
-}
-
 .helpsell-position-badge-row {
   display: flex;
   align-items: center;
@@ -524,69 +466,23 @@
   display: inline-block;
 }
 
+#helpsell-inline-loading-container { margin-bottom: 20px; }
+.helpsell-inline-loading-box { padding: 20px 22px; border: 1px solid rgba(16,16,16,.1); border-radius: 20px; background: var(--hs-black); box-shadow: 0 16px 36px rgba(16,24,40,.15); }
+.helpsell-inline-loading-inner { display: flex; align-items: center; gap: 14px; min-height: 58px; }
+.helpsell-inline-loading-logo { width: 42px; height: 42px; flex-shrink: 0; object-fit: contain; }
+.helpsell-inline-loading-texts { display: flex; flex-direction: column; gap: 4px; }
+.helpsell-inline-loading-title { color: #fff; font-size: 16px; font-weight: 800; }
+.helpsell-inline-loading-subtitle { color: rgba(255,255,255,.58); font-size: 13px; }
+.helpsell-inline-loading-spinner { width: 22px; height: 22px; margin-left: auto; border: 3px solid rgba(255,255,255,.18); border-top-color: var(--hs-green); border-radius: 50%; animation: helpsell-spin .8s linear infinite; }
 
+@keyframes helpsell-spin { to { transform: rotate(360deg); } }
 
-
-
-
-#helpsell-inline-loading-container {
-  margin-bottom: 20px;
-}
-
-.helpsell-inline-loading-box {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
-  box-shadow: 0 12px 30px rgba(16, 24, 40, 0.08);
-  padding: 22px 24px;
-}
-
-.helpsell-inline-loading-inner {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-height: 72px;
-}
-
-.helpsell-inline-loading-logo {
-  width: 46px;
-  height: 46px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.helpsell-inline-loading-texts {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.helpsell-inline-loading-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #111827;
-}
-
-.helpsell-inline-loading-subtitle {
-  font-size: 13px;
-  color: #6b7280;
-}
-
-.helpsell-inline-loading-spinner {
-  margin-left: auto;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 3px solid #d1d5db;
-  border-top-color: #03bd48;
-  animation: helpsell-spin 0.8s linear infinite;
-}
-
-@keyframes helpsell-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+@media (max-width: 640px) {
+  #helpsell-panel { top: 16px; right: 16px; max-height: calc(100vh - 32px); }
+  .helpsell-inline-box { padding: 16px; border-radius: 20px; }
+  .helpsell-inline-header { flex-direction: column; margin: -16px -16px 16px; padding: 17px; border-radius: 19px 19px 0 0; }
+  .helpsell-brand-card { min-width: 0; }
+  .helpsell-inline-title,.helpsell-panel-title { font-size: 21px; }
+  .helpsell-toolbar-input,.helpsell-toolbar-select { width: 100%; min-width: 0; flex-basis: 100%; }
+  .helpsell-toolbar-btn { flex: 1 1 calc(50% - 5px); }
 }

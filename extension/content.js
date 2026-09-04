@@ -195,7 +195,7 @@ function ensureToggleButton() {
   avitologyToggleBtn.style.right = "20px";
   avitologyToggleBtn.style.bottom = "20px";
   avitologyToggleBtn.style.zIndex = "999999";
-  avitologyToggleBtn.style.background = "linear-gradient(180deg, #10d95c 0%, #03bd48 100%)";
+  avitologyToggleBtn.style.background = "#101010";
   avitologyToggleBtn.style.color = "#fff";
   avitologyToggleBtn.style.border = "none";
   avitologyToggleBtn.style.borderRadius = "14px";
@@ -203,7 +203,7 @@ function ensureToggleButton() {
   avitologyToggleBtn.style.fontSize = "14px";
   avitologyToggleBtn.style.fontWeight = "700";
   avitologyToggleBtn.style.cursor = "pointer";
-  avitologyToggleBtn.style.boxShadow = "0 12px 20px rgba(3, 189, 72, 0.22)";
+  avitologyToggleBtn.style.boxShadow = "0 12px 22px rgba(16, 16, 16, 0.22)";
   avitologyToggleBtn.style.display = "flex";
 
   avitologyToggleBtn.addEventListener("click", () => {

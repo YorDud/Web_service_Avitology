@@ -144,7 +144,7 @@ function Hero() {
             <h1 className="hero-title max-w-4xl text-black">
               HelpSell — это
               <span className="text-[#03bd48]"> современный веб-сервис </span>
-              для продавцов, команд и сервисного бизнеса.
+              для продавцов, команд и бизнеса.
             </h1>
 
             <p className="hero-text mt-5 max-w-2xl">

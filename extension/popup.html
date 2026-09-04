@@ -7,43 +7,38 @@
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <div class="popup">
-    <div class="popup-header">
-      <img src="icons/icon48.png" alt="HelpSell" class="logo" />
-      <div>
-        <div class="brand-title">HelpSell</div>
-        <div class="brand-subtitle">HelpSell Extension</div>
+  <main class="popup">
+    <header class="popup-header">
+      <div class="brand-row">
+        <div class="logo-frame">
+          <img src="icons/icon48.png" alt="HelpSell" class="logo" />
+        </div>
+        <div>
+          <div class="brand-kicker">HelpSell Extension</div>
+          <div class="brand-title">Панель доступа</div>
+        </div>
       </div>
-    </div>
+      <div class="header-glow" aria-hidden="true"></div>
+    </header>
 
-    <div id="versionCard" class="version-card" style="display: none;"></div>
+    <section class="popup-content">
+      <div id="versionCard" class="version-card" style="display: none;"></div>
 
-    <div id="statusCard" class="status-card">
-      <div class="status-title">Проверка доступа...</div>
-      <div class="status-text">
-        Подождите, выполняется проверка статуса доступа к сервису.
+      <div id="statusCard" class="status-card">
+        <div class="status-title">Проверка доступа...</div>
+        <div class="status-text">Подождите, выполняется проверка статуса доступа к сервису.</div>
       </div>
-    </div>
 
-    <div class="actions">
-      <button id="openSiteBtn" class="btn btn-secondary">
-        Открыть сайт
-      </button>
-      <button id="refreshBtn" class="btn btn-primary">
-        Обновить статус
-      </button>
-    </div>
+      <div class="actions">
+        <button id="openSiteBtn" class="btn btn-secondary">Открыть сайт</button>
+        <button id="refreshBtn" class="btn btn-primary">Обновить статус</button>
+      </div>
 
-    <div class="hint">
-      Для работы расширения необходимо войти в аккаунт HelpSell на сайте
-      и иметь активный доступ к сервису.
-    </div>
+      <div class="hint">Для работы расширения войдите в аккаунт HelpSell на сайте и убедитесь, что доступ к сервису активен.</div>
 
-    <div class="info-note">
-      После активации подписки доступ к расширению обычно обновляется
-      автоматически. В отдельных случаях это может занять до 15 минут.
-    </div>
-  </div>
+      <div class="info-note">После активации подписки доступ к расширению обычно обновляется автоматически. В отдельных случаях это может занять до 15 минут.</div>
+    </section>
+  </main>
 
   <script src="ext-api.js"></script>
   <script src="popup.js"></script>
