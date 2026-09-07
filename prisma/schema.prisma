@@ -42,7 +42,11 @@ model User {
   isActive             Boolean           @default(true)
   notes                String?
 
+  extensionApiToken    String?           @unique
+
   payments             Payment[]
+  financialRecords     FinancialRecord[]
+  avitoSearchAnalyses  AvitoSearchAnalysis[]
 }
 
 model ServiceSettings {
@@ -80,4 +84,53 @@ model Payment {
 
   @@index([userId])
   @@index([status])
+}
+
+model FinancialRecord {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  recordDate String
+  income     Int      @default(0)
+  expense    Int      @default(0)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, recordDate])
+  @@index([userId, recordDate])
+}
+
+model AvitoSearchAnalysis {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  searchQuery String   @default("")
+  searchUrl   String?
+  city        String?
+  source      String   @default("extension")
+  itemsCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  items       AvitoSearchAnalysisItem[]
+
+  @@index([userId, createdAt])
+}
+
+model AvitoSearchAnalysisItem {
+  id            Int                 @id @default(autoincrement())
+  analysisId    Int
+  analysis      AvitoSearchAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  sellerName    String
+  firstPosition Int?
+  positionsJson String              @default("[]")
+  adsCount      Int                 @default(0)
+  rating        String?
+  reviews       String?
+  adsJson       String              @default("[]")
+  rawData       String?
+  createdAt     DateTime            @default(now())
+
+  @@index([analysisId, firstPosition])
 }

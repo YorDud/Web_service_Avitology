@@ -36,6 +36,11 @@ async function getVersionUrl() {
   return `${siteUrl}/api/extension/version`;
 }
 
+async function getTokenUrl() {
+  const siteUrl = await getSiteUrl();
+  return `${siteUrl}/api/extension/token`;
+}
+
 async function saveAccessState(data) {
   if (!globalThis.extApi) return;
 
@@ -202,6 +207,25 @@ async function checkVersion() {
   }
 }
 
+async function updateExtensionToken() {
+  try {
+    const tokenUrl = await getTokenUrl();
+    const tokenResponse = await fetch(tokenUrl, {
+      credentials: "include",
+    });
+
+    const tokenData = await tokenResponse.json().catch(() => null);
+
+    if (tokenResponse.ok && tokenData?.token) {
+      await globalThis.extApi?.storage?.local.set({
+        helpsellExtensionApiToken: tokenData.token,
+      });
+    }
+  } catch (tokenError) {
+    console.error("Could not update extension save token:", tokenError);
+  }
+}
+
 async function checkAccess() {
   try {
     const accessUrl = await getAccessUrl();
@@ -234,6 +258,10 @@ async function checkAccess() {
       return;
     }
 
+    if (data.authenticated && data.access) {
+      await updateExtensionToken();
+    }
+
     renderStatus(data);
     await saveAccessState(data);
   } catch (error) {
@@ -256,6 +284,10 @@ async function checkAccess() {
         const savedState = await loadSavedState();
         renderStatus(savedState);
         return;
+      }
+
+      if (data.authenticated && data.access) {
+        await updateExtensionToken();
       }
 
       renderStatus(data);

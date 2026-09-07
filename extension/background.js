@@ -1,23 +1,16 @@
 importScripts("ext-api.js");
 
-const SITE_URL =
-  "https://helpsell.ru";
-
-const DEV_SITE_URL =
-  "http://localhost:3000";
-
-const EXTENSION_VERSION_URL = `${SITE_URL}/api/extension/version`;
-const DEV_EXTENSION_VERSION_URL = `${DEV_SITE_URL}/api/extension/version`;
-
-const ACCESS_URL =
-  `${SITE_URL}/api/extension/access`;
-
-const DEV_ACCESS_URL =
-  `${DEV_SITE_URL}/api/extension/access`;
+const SITE_URL = "https://helpsell.ru";
+const DEV_SITE_URL = "http://localhost:3000";
 
 const CHECK_INTERVAL_MINUTES = 5;
 
-async function getAccessUrl() {
+const WEBSTORE_URL =
+  "https://chromewebstore.google.com/detail/avitology/oigdilhkhidoinkpkfchkdpbkaobfhng";
+
+const rawApi = globalThis.extApi?.raw;
+
+async function getSiteUrl() {
   try {
     const result = await globalThis.extApi?.storage?.local.get([
       "helpsellSiteUrl",
@@ -26,13 +19,13 @@ async function getAccessUrl() {
     const customUrl = result?.helpsellSiteUrl;
 
     if (customUrl && typeof customUrl === "string") {
-      return `${customUrl.replace(/\/$/, "")}/api/extension/access`;
+      return customUrl.replace(/\/$/, "");
     }
   } catch (error) {
-    console.error("Failed to read custom site url:", error);
+    console.error("Failed to read custom site URL:", error);
   }
 
-  return ACCESS_URL;
+  return SITE_URL;
 }
 
 function compareVersions(a, b) {
@@ -43,6 +36,7 @@ function compareVersions(a, b) {
   for (let i = 0; i < len; i++) {
     const av = pa[i] || 0;
     const bv = pb[i] || 0;
+
     if (av > bv) return 1;
     if (av < bv) return -1;
   }
@@ -50,46 +44,8 @@ function compareVersions(a, b) {
   return 0;
 }
 
-async function checkExtensionVersion() {
-  try {
-    const currentVersion =
-      rawApi?.runtime?.getManifest?.()?.version || null;
-
-    if (!currentVersion) return;
-
-    let response;
-    let data = null;
-
-    try {
-      response = await fetch(EXTENSION_VERSION_URL, { credentials: "omit" });
-      data = await response.json();
-    } catch {
-      response = await fetch(DEV_EXTENSION_VERSION_URL, { credentials: "omit" });
-      data = await response.json();
-    }
-
-    if (!response?.ok || !data?.version) return;
-
-    const isOutdated = compareVersions(currentVersion, data.version) < 0;
-
-    await globalThis.extApi.storage.local.set({
-      helpsellVersionState: {
-        currentVersion,
-        latestVersion: data.version,
-        isOutdated,
-        updateUrl:
-          data.updateUrl ||
-          "https://chromewebstore.google.com/detail/avitology/oigdilhkhidoinkpkfchkdpbkaobfhng",
-        checkedAt: Date.now(),
-      },
-    });
-  } catch (error) {
-    console.error("Failed to check extension version:", error);
-  }
-}
-
 async function saveAccessState(data) {
-  if (!globalThis.extApi) return;
+  if (!globalThis.extApi?.storage?.local) return;
 
   await globalThis.extApi.storage.local.set({
     helpsellAccessState: {
@@ -101,23 +57,62 @@ async function saveAccessState(data) {
   });
 }
 
+async function saveVersionState(data) {
+  if (!globalThis.extApi?.storage?.local) return;
+
+  await globalThis.extApi.storage.local.set({
+    helpsellVersionState: {
+      currentVersion: data.currentVersion || null,
+      latestVersion: data.latestVersion || null,
+      isOutdated: !!data.isOutdated,
+      updateUrl: data.updateUrl || WEBSTORE_URL,
+      checkedAt: Date.now(),
+    },
+  });
+}
+
+async function fetchJsonWithFallback(primaryUrl, fallbackUrl, options = {}) {
+  try {
+    const response = await fetch(primaryUrl, options);
+    const data = await response.json().catch(() => null);
+
+    return {
+      response,
+      data,
+    };
+  } catch (error) {
+    console.warn("Primary request failed:", primaryUrl, error);
+
+    const response = await fetch(fallbackUrl, options);
+    const data = await response.json().catch(() => null);
+
+    return {
+      response,
+      data,
+    };
+  }
+}
+
 async function checkAccessInBackground() {
   try {
-    const url = await getAccessUrl();
+    const siteUrl = await getSiteUrl();
 
-    const response = await fetch(url, {
-      credentials: "include",
-    });
+    const primaryUrl = `${siteUrl}/api/extension/access`;
+    const fallbackUrl = `${DEV_SITE_URL}/api/extension/access`;
 
-    let data = null;
+    const { response, data } = await fetchJsonWithFallback(
+      primaryUrl,
+      fallbackUrl,
+      {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      }
+    );
 
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
-
-    if (!response.ok || !data) {
+    if (!response?.ok || !data) {
       await saveAccessState({
         authenticated: false,
         access: false,
@@ -130,48 +125,67 @@ async function checkAccessInBackground() {
   } catch (error) {
     console.error("HelpSell background access check failed:", error);
 
-    try {
-      const response = await fetch(DEV_ACCESS_URL, {
-        credentials: "include",
-      });
-
-      let data = null;
-
-      try {
-        data = await response.json();
-      } catch {
-        data = null;
-      }
-
-      if (!response.ok || !data) {
-        await saveAccessState({
-          authenticated: false,
-          access: false,
-          subscriptionLevel: null,
-        });
-        return;
-      }
-
-      await saveAccessState(data);
-    } catch (devError) {
-      console.error("HelpSell dev fallback access check failed:", devError);
-    }
+    await saveAccessState({
+      authenticated: false,
+      access: false,
+      subscriptionLevel: null,
+    });
   }
 }
 
-const rawApi = globalThis.extApi?.raw;
+async function checkExtensionVersion() {
+  try {
+    const currentVersion =
+      rawApi?.runtime?.getManifest?.()?.version || null;
+
+    if (!currentVersion) return;
+
+    const siteUrl = await getSiteUrl();
+
+    const primaryUrl = `${siteUrl}/api/extension/version`;
+    const fallbackUrl = `${DEV_SITE_URL}/api/extension/version`;
+
+    const { response, data } = await fetchJsonWithFallback(
+      primaryUrl,
+      fallbackUrl,
+      {
+        method: "GET",
+        credentials: "omit",
+        headers: {
+          Accept: "application/json",
+        },
+      }
+    );
+
+    if (!response?.ok || !data?.version) return;
+
+    await saveVersionState({
+      currentVersion,
+      latestVersion: data.version,
+      isOutdated: compareVersions(currentVersion, data.version) < 0,
+      updateUrl: data.updateUrl || WEBSTORE_URL,
+    });
+  } catch (error) {
+    console.error("Failed to check extension version:", error);
+  }
+}
+
+async function runBackgroundChecks() {
+  await Promise.allSettled([
+    checkAccessInBackground(),
+    checkExtensionVersion(),
+  ]);
+}
 
 if (rawApi?.runtime?.onInstalled) {
   rawApi.runtime.onInstalled.addListener(() => {
-    checkAccessInBackground();
-    checkExtensionVersion();
+    runBackgroundChecks();
   });
 }
 
 if (rawApi?.runtime?.onStartup) {
   rawApi.runtime.onStartup.addListener(() => {
-    checkAccessInBackground();
-    checkExtensionVersion();
+    runBackgroundChecks();
   });
 }
 
@@ -182,8 +196,9 @@ if (rawApi?.alarms) {
 
   rawApi.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === "helpsell_access_check") {
-      checkAccessInBackground();
-      checkExtensionVersion();
+      runBackgroundChecks();
     }
   });
 }
+
+runBackgroundChecks();

@@ -25,6 +25,9 @@ let isBuildingHelpSell = false;
 let hasBuiltTableForThisPage = false;
 let initialLoadingVisible = false;
 
+const HELLPSELL_SITE_URL = "https://helpsell.ru";
+const HELLPSELL_DEV_SITE_URL = "http://localhost:3000";
+
 let filters = {
   positions: {
     search: "",
@@ -41,11 +44,98 @@ let filters = {
 };
 
 const AVITO_PROMO_ICONS = {
-  promoted: "https://avito.st/static/ims/6ba093ad-c4a4-4287-bcea-6a820b9112f1_cpx_promo_common.svg",
-  placement: "https://www.avito.st/s/common/components/monetization/icons/web/bbip.svg",
-  highlight: "https://www.avito.st/s/common/components/monetization/icons/web/highlight.svg",
-  xl: "https://www.avito.st/s/common/components/monetization/icons/web/xl.svg"
+  promoted:
+    "https://avito.st/static/ims/6ba093ad-c4a4-4287-bcea-6a820b9112f1_cpx_promo_common.svg",
+  placement:
+    "https://www.avito.st/s/common/components/monetization/icons/web/bbip.svg",
+  highlight:
+    "https://www.avito.st/s/common/components/monetization/icons/web/highlight.svg",
+  xl:
+    "https://www.avito.st/s/common/components/monetization/icons/web/xl.svg"
 };
+
+async function getHelpSellSiteUrl() {
+  try {
+    const result = await globalThis.extApi?.storage?.local.get([
+      "helpsellSiteUrl"
+    ]);
+    const customUrl = result?.helpsellSiteUrl;
+
+    if (typeof customUrl === "string" && customUrl.trim()) {
+      return customUrl.replace(/\/$/, "");
+    }
+  } catch (error) {
+    console.error("HelpSell site URL error:", error);
+  }
+
+  return HELLPSELL_SITE_URL;
+}
+
+async function saveSellerAnalysisToDashboard() {
+  const button = document.querySelector("#helpsell-save-analysis-btn");
+  if (!button) return;
+
+  if (!currentSellerRows.length) {
+    alert("Сначала дождитесь построения таблицы «По продавцам».");
+    return;
+  }
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Сохранение...";
+
+  try {
+    const siteUrl = await getHelpSellSiteUrl();
+    const stored = await globalThis.extApi?.storage?.local.get([
+      "helpsellExtensionApiToken"
+    ]);
+    const token = stored?.helpsellExtensionApiToken;
+
+    const response = await fetch(`${siteUrl}/api/extension/avito-search-analyses`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        searchQuery: getSearchQueryFromUrl(),
+        searchUrl: location.href,
+        city: "",
+        items: currentSellerRows.map((row) => ({
+          seller: row.seller,
+          firstPosition: row.firstPosition,
+          positions: row.positions,
+          count: row.count,
+          rating: row.rating,
+          reviews: row.reviews,
+          ads: row.ads
+        }))
+      })
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(data?.error || "Не удалось сохранить анализ");
+    }
+
+    button.textContent = "Сохранено ✓";
+    setTimeout(() => {
+      button.textContent = originalText;
+      button.disabled = false;
+    }, 2200);
+  } catch (error) {
+    console.error("Save seller analysis error:", error);
+    alert(
+      error instanceof Error
+        ? error.message
+        : "Не удалось сохранить анализ в личный кабинет"
+    );
+    button.textContent = originalText;
+    button.disabled = false;
+  }
+}
 
 function isSearchPage() {
   const url = location.href;
@@ -293,7 +383,7 @@ function getAvitoCards() {
       ) {
         return false;
       }
-      
+
       return isLikelyAdCard(el);
     });
 
@@ -465,7 +555,9 @@ function extractRating(root) {
   }
 
   const allText = normalizeWhitespace(root.textContent || "");
-  const pairMatch = allText.match(/(\d+[.,]\d+)\s*[·•]?\s*(\d[\d\s]*)\s*(отзыв|отзыва|отзывов)/i);
+  const pairMatch = allText.match(
+    /(\d+[.,]\d+)\s*[·•]?\s*(\d[\d\s]*)\s*(отзыв|отзыва|отзывов)/i
+  );
 
   if (pairMatch) {
     const value = pairMatch[1].replace(",", ".");
@@ -498,7 +590,9 @@ function extractReviews(root) {
   }
 
   const allText = normalizeWhitespace(root.textContent || "");
-  const pairMatch = allText.match(/(\d+[.,]\d+)\s*[·•]?\s*(\d[\d\s]*)\s*(отзыв|отзыва|отзывов)/i);
+  const pairMatch = allText.match(
+    /(\d+[.,]\d+)\s*[·•]?\s*(\d[\d\s]*)\s*(отзыв|отзыва|отзывов)/i
+  );
   if (pairMatch) {
     return pairMatch[2].replace(/\s+/g, "");
   }
@@ -721,17 +815,9 @@ function detectPromotionIconsFromCard(card) {
     !!card.querySelector('[class*="yellowHighlight"]') ||
     !!card.querySelector('[class*="highlight"]');
 
-  if (hasPromoted) {
-    icons.push(AVITO_PROMO_ICONS.promoted);
-  }
-
-  if (hasHighlight) {
-    icons.push(AVITO_PROMO_ICONS.highlight);
-  }
-
-  if (hasXL) {
-    icons.push(AVITO_PROMO_ICONS.xl);
-  }
+  if (hasPromoted) icons.push(AVITO_PROMO_ICONS.promoted);
+  if (hasHighlight) icons.push(AVITO_PROMO_ICONS.highlight);
+  if (hasXL) icons.push(AVITO_PROMO_ICONS.xl);
 
   return {
     icons,
@@ -742,14 +828,8 @@ function detectPromotionIconsFromCard(card) {
 function getPageOffset() {
   try {
     const url = new URL(location.href);
-
-    const pageParam =
-      url.searchParams.get("p") ||
-      url.searchParams.get("page") ||
-      "1";
-
+    const pageParam = url.searchParams.get("p") || url.searchParams.get("page") || "1";
     const page = Math.max(1, Number(pageParam) || 1);
-
     return (page - 1) * 50;
   } catch {
     return 0;
@@ -803,6 +883,7 @@ function buildRows(cards) {
     ) {
       return false;
     }
+
     const title = normalizeWhitespace(row.title || "");
     const price = normalizeWhitespace(row.price || "");
     const seller = normalizeWhitespace(row.seller || "");
@@ -855,7 +936,7 @@ function buildRows(cards) {
     ...row,
     id: `row-${pageOffset + index + 1}`,
     position: pageOffset + index + 1
-}));
+  }));
 }
 
 function buildSellerRows(rows) {
@@ -958,7 +1039,7 @@ function getSellerKey(value) {
 }
 
 function getPageStateKey() {
-  return `avitology_state_${location.pathname}${location.search}`;
+  return `helpsell_state_${location.pathname}${location.search}`;
 }
 
 async function saveExtensionState() {
@@ -1051,7 +1132,7 @@ function ensureInlineContainer() {
       <div class="helpsell-inline-header">
         <div>
           <div class="helpsell-inline-title">HelpSell — результаты анализа</div>
-          <div class="helpsell-inline-subtitle">Поиск, сортировка, фильтры и экспорт</div>
+          <div class="helpsell-inline-subtitle">Поиск, сортировка, фильтры, экспорт и сохранение</div>
         </div>
 
         <a
@@ -1078,10 +1159,20 @@ function ensureInlineContainer() {
       </div>
 
       <div class="helpsell-extra-wrap">
-        <button id="helpsell-extra-toggle" class="helpsell-extra-toggle" type="button">
-          <span id="helpsell-extra-arrow">▼</span>
-          <span>Дополнительно</span>
-        </button>
+        <div class="helpsell-extra-actions">
+          <button id="helpsell-extra-toggle" class="helpsell-extra-toggle" type="button">
+            <span id="helpsell-extra-arrow">▼</span>
+            <span>Дополнительно</span>
+          </button>
+
+          <button
+            id="helpsell-save-analysis-btn"
+            class="helpsell-save-analysis-btn"
+            type="button"
+          >
+            Сохранить анализ в личный кабинет
+          </button>
+        </div>
 
         <div id="helpsell-extra-panel" class="helpsell-extra-panel" style="display: none;">
           <div class="helpsell-toolbar">
@@ -1209,10 +1300,17 @@ function bindToolbarEvents() {
   const clearBtn = document.querySelector("#helpsell-clear-btn");
   const resetStateBtn = document.querySelector("#helpsell-reset-state-btn");
   const extraToggleBtn = document.querySelector("#helpsell-extra-toggle");
+  const saveAnalysisBtn = document.querySelector("#helpsell-save-analysis-btn");
 
   if (extraToggleBtn) {
     extraToggleBtn.addEventListener("click", () => {
       toggleExtraPanel();
+    });
+  }
+
+  if (saveAnalysisBtn) {
+    saveAnalysisBtn.addEventListener("click", () => {
+      saveSellerAnalysisToDashboard();
     });
   }
 
@@ -1885,7 +1983,7 @@ function clearAllMarks() {
   highlightedAccounts.clear();
 
   currentRows.forEach((row) => {
-    if (!row.card) row.card.classList.remove("helpsell-highlighted");
+    if (row.card) row.card.classList.remove("helpsell-highlighted");
   });
 
   currentSellerRows.forEach((row) => {
@@ -2081,7 +2179,8 @@ async function buildTableOnceForCurrentPage({ auto = false } = {}) {
     if (!rows.length) {
       if (statusEl) {
         statusEl.className = "helpsell-status warning";
-        statusEl.textContent = "Объявления ещё не появились. Ожидаем загрузку выдачи...";
+        statusEl.textContent =
+          "Объявления ещё не появились. Ожидаем загрузку выдачи...";
       }
       return;
     }

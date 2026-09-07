@@ -13,6 +13,13 @@ export default async function DashboardPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: sessionUser.id },
+    include: {
+      financialRecords: {
+        orderBy: {
+          recordDate: "desc",
+        },
+      },
+    },
   });
 
   if (!user) {
@@ -35,5 +42,17 @@ export default async function DashboardPage() {
     subscriptionEndsAt: formatRuDateTime(user.subscriptionEndsAt) || "—",
   };
 
-  return <DashboardClientPage user={dashboardUser} />;
+  const financialRecords = user.financialRecords.map((record) => ({
+    id: record.id,
+    recordDate: record.recordDate,
+    income: record.income,
+    expense: record.expense,
+  }));
+
+  return (
+    <DashboardClientPage
+      user={dashboardUser}
+      initialFinancialRecords={financialRecords}
+    />
+  );
 }
