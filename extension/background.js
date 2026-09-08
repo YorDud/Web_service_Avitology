@@ -28,6 +28,19 @@ async function getSiteUrl() {
   return SITE_URL;
 }
 
+async function getExtensionToken() {
+  try {
+    const result = await globalThis.extApi?.storage?.local.get([
+      "helpsellExtensionApiToken",
+    ]);
+
+    return result?.helpsellExtensionApiToken || null;
+  } catch (error) {
+    console.error("Failed to read extension token:", error);
+    return null;
+  }
+}
+
 function compareVersions(a, b) {
   const pa = String(a || "").split(".").map(Number);
   const pb = String(b || "").split(".").map(Number);
@@ -79,6 +92,7 @@ async function fetchJsonWithFallback(primaryUrl, fallbackUrl, options = {}) {
     return {
       response,
       data,
+      usedUrl: primaryUrl,
     };
   } catch (error) {
     console.warn("Primary request failed:", primaryUrl, error);
@@ -89,6 +103,7 @@ async function fetchJsonWithFallback(primaryUrl, fallbackUrl, options = {}) {
     return {
       response,
       data,
+      usedUrl: fallbackUrl,
     };
   }
 }
@@ -135,8 +150,7 @@ async function checkAccessInBackground() {
 
 async function checkExtensionVersion() {
   try {
-    const currentVersion =
-      rawApi?.runtime?.getManifest?.()?.version || null;
+    const currentVersion = rawApi?.runtime?.getManifest?.()?.version || null;
 
     if (!currentVersion) return;
 
@@ -170,12 +184,96 @@ async function checkExtensionVersion() {
   }
 }
 
-async function runBackgroundChecks() {
-  await Promise.allSettled([
-    checkAccessInBackground(),
-    checkExtensionVersion(),
-  ]);
+async function saveAnalysisInBackground(payload) {
+  const siteUrl = await getSiteUrl();
+  const token = await getExtensionToken();
+
+  if (!token) {
+    return {
+      ok: false,
+      error:
+        "Не найден токен расширения. Откройте popup расширения и нажмите «Обновить статус».",
+    };
+  }
+
+  const primaryUrl = `${siteUrl}/api/extension/avito-search-analyses`;
+  const fallbackUrl = `${DEV_SITE_URL}/api/extension/avito-search-analyses`;
+
+  try {
+    const { response, data, usedUrl } = await fetchJsonWithFallback(
+      primaryUrl,
+      fallbackUrl,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!response?.ok) {
+      return {
+        ok: false,
+        error: data?.error || `Ошибка сохранения (${response?.status || "unknown"})`,
+        status: response?.status || null,
+        usedUrl,
+      };
+    }
+
+    return {
+      ok: true,
+      data,
+      usedUrl,
+    };
+  } catch (error) {
+    console.error("HelpSell background save failed:", error);
+
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Не удалось выполнить запрос на сохранение",
+    };
+  }
 }
+
+function setupMessageListener() {
+  if (!rawApi?.runtime?.onMessage) return;
+
+  rawApi.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || typeof message !== "object") return;
+
+    if (message.type === "helpsell_save_analysis") {
+      saveAnalysisInBackground(message.payload)
+        .then((result) => {
+          sendResponse(result);
+        })
+        .catch((error) => {
+          console.error("Message save handler failed:", error);
+          sendResponse({
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Неизвестная ошибка сохранения",
+          });
+        });
+
+      return true;
+    }
+  });
+}
+
+async function runBackgroundChecks() {
+  await Promise.allSettled([checkAccessInBackground(), checkExtensionVersion()]);
+}
+
+setupMessageListener();
 
 if (rawApi?.runtime?.onInstalled) {
   rawApi.runtime.onInstalled.addListener(() => {

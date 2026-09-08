@@ -25,8 +25,8 @@ let isBuildingHelpSell = false;
 let hasBuiltTableForThisPage = false;
 let initialLoadingVisible = false;
 
-const HELLPSELL_SITE_URL = "https://helpsell.ru";
-const HELLPSELL_DEV_SITE_URL = "http://localhost:3000";
+const SITE_URL = "https://helpsell.ru";
+const DEV_SITE_URL = "http://localhost:3000";
 
 let filters = {
   positions: {
@@ -44,14 +44,10 @@ let filters = {
 };
 
 const AVITO_PROMO_ICONS = {
-  promoted:
-    "https://avito.st/static/ims/6ba093ad-c4a4-4287-bcea-6a820b9112f1_cpx_promo_common.svg",
-  placement:
-    "https://www.avito.st/s/common/components/monetization/icons/web/bbip.svg",
-  highlight:
-    "https://www.avito.st/s/common/components/monetization/icons/web/highlight.svg",
-  xl:
-    "https://www.avito.st/s/common/components/monetization/icons/web/xl.svg"
+  promoted: "https://avito.st/static/ims/6ba093ad-c4a4-4287-bcea-6a820b9112f1_cpx_promo_common.svg",
+  placement: "https://www.avito.st/s/common/components/monetization/icons/web/bbip.svg",
+  highlight: "https://www.avito.st/s/common/components/monetization/icons/web/highlight.svg",
+  xl: "https://www.avito.st/s/common/components/monetization/icons/web/xl.svg"
 };
 
 async function getHelpSellSiteUrl() {
@@ -59,8 +55,8 @@ async function getHelpSellSiteUrl() {
     const result = await globalThis.extApi?.storage?.local.get([
       "helpsellSiteUrl"
     ]);
-    const customUrl = result?.helpsellSiteUrl;
 
+    const customUrl = result?.helpsellSiteUrl;
     if (typeof customUrl === "string" && customUrl.trim()) {
       return customUrl.replace(/\/$/, "");
     }
@@ -68,7 +64,7 @@ async function getHelpSellSiteUrl() {
     console.error("HelpSell site URL error:", error);
   }
 
-  return HELLPSELL_SITE_URL;
+  return SITE_URL;
 }
 
 async function saveSellerAnalysisToDashboard() {
@@ -76,7 +72,14 @@ async function saveSellerAnalysisToDashboard() {
   if (!button) return;
 
   if (!currentSellerRows.length) {
-    alert("Сначала дождитесь построения таблицы «По продавцам».");
+    alert("Нет данных по продавцам для сохранения.");
+    return;
+  }
+
+  const runtime = globalThis.extApi?.raw?.runtime;
+
+  if (!runtime?.sendMessage) {
+    alert("Расширение не поддерживает обмен сообщениями с фоновым процессом.");
     return;
   }
 
@@ -85,53 +88,63 @@ async function saveSellerAnalysisToDashboard() {
   button.textContent = "Сохранение...";
 
   try {
-    const siteUrl = await getHelpSellSiteUrl();
-    const stored = await globalThis.extApi?.storage?.local.get([
-      "helpsellExtensionApiToken"
-    ]);
-    const token = stored?.helpsellExtensionApiToken;
+    const payload = {
+      searchQuery: getSearchQueryFromUrl(),
+      searchUrl: location.href,
+      city: "",
+      items: currentSellerRows.map((row) => ({
+        seller: row.seller,
+        firstPosition: row.firstPosition,
+        positions: row.positions,
+        count: row.count,
+        rating: row.rating,
+        reviews: row.reviews,
+        ads: row.ads
+      }))
+    };
 
-    const response = await fetch(`${siteUrl}/api/extension/avito-search-analyses`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({
-        searchQuery: getSearchQueryFromUrl(),
-        searchUrl: location.href,
-        city: "",
-        items: currentSellerRows.map((row) => ({
-          seller: row.seller,
-          firstPosition: row.firstPosition,
-          positions: row.positions,
-          count: row.count,
-          rating: row.rating,
-          reviews: row.reviews,
-          ads: row.ads
-        }))
-      })
+    const result = await new Promise((resolve, reject) => {
+      try {
+        runtime.sendMessage(
+          {
+            type: "helpsell_save_analysis",
+            payload
+          },
+          (response) => {
+            const lastError = runtime.lastError;
+
+            if (lastError) {
+              reject(new Error(lastError.message || "Ошибка связи с background.js"));
+              return;
+            }
+
+            resolve(response);
+          }
+        );
+      } catch (error) {
+        reject(error);
+      }
     });
 
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      throw new Error(data?.error || "Не удалось сохранить анализ");
+    if (!result || !result.ok) {
+      throw new Error(result?.error || "Не удалось сохранить анализ");
     }
 
     button.textContent = "Сохранено ✓";
+
     setTimeout(() => {
       button.textContent = originalText;
       button.disabled = false;
     }, 2200);
   } catch (error) {
     console.error("Save seller analysis error:", error);
+
     alert(
       error instanceof Error
         ? error.message
         : "Не удалось сохранить анализ в личный кабинет"
     );
+
     button.textContent = originalText;
     button.disabled = false;
   }
@@ -405,14 +418,16 @@ function extractText(selectors, root) {
 }
 
 function extractLink(root) {
-  const linkEl =
-    root.querySelector('a[href*="/item"]') ||
+  const primary =
+    root.querySelector('[data-marker="item-title"] a[href]') ||
+    root.querySelector('h3 a[href]') ||
     root.querySelector('a[itemprop="url"]') ||
+    root.querySelector('a[href*="/item/"]') ||
     root.querySelector("a[href]");
 
-  if (!linkEl) return "";
+  if (!primary) return "";
 
-  const href = linkEl.getAttribute("href") || "";
+  const href = primary.getAttribute("href") || "";
   if (!href) return "";
 
   if (href.startsWith("http")) return href;
@@ -555,9 +570,7 @@ function extractRating(root) {
   }
 
   const allText = normalizeWhitespace(root.textContent || "");
-  const pairMatch = allText.match(
-    /(\d+[.,]\d+)\s*[·•]?\s*(\d[\d\s]*)\s*(отзыв|отзыва|отзывов)/i
-  );
+  const pairMatch = allText.match(/(\d+[.,]\d+)\s*[·•]?\s*(\d[\d\s]*)\s*(отзыв|отзыва|отзывов)/i);
 
   if (pairMatch) {
     const value = pairMatch[1].replace(",", ".");
@@ -590,9 +603,7 @@ function extractReviews(root) {
   }
 
   const allText = normalizeWhitespace(root.textContent || "");
-  const pairMatch = allText.match(
-    /(\d+[.,]\d+)\s*[·•]?\s*(\d[\d\s]*)\s*(отзыв|отзыва|отзывов)/i
-  );
+  const pairMatch = allText.match(/(\d+[.,]\d+)\s*[·•]?\s*(\d[\d\s]*)\s*(отзыв|отзыва|отзывов)/i);
   if (pairMatch) {
     return pairMatch[2].replace(/\s+/g, "");
   }
@@ -815,9 +826,17 @@ function detectPromotionIconsFromCard(card) {
     !!card.querySelector('[class*="yellowHighlight"]') ||
     !!card.querySelector('[class*="highlight"]');
 
-  if (hasPromoted) icons.push(AVITO_PROMO_ICONS.promoted);
-  if (hasHighlight) icons.push(AVITO_PROMO_ICONS.highlight);
-  if (hasXL) icons.push(AVITO_PROMO_ICONS.xl);
+  if (hasPromoted) {
+    icons.push(AVITO_PROMO_ICONS.promoted);
+  }
+
+  if (hasHighlight) {
+    icons.push(AVITO_PROMO_ICONS.highlight);
+  }
+
+  if (hasXL) {
+    icons.push(AVITO_PROMO_ICONS.xl);
+  }
 
   return {
     icons,
@@ -828,8 +847,14 @@ function detectPromotionIconsFromCard(card) {
 function getPageOffset() {
   try {
     const url = new URL(location.href);
-    const pageParam = url.searchParams.get("p") || url.searchParams.get("page") || "1";
+
+    const pageParam =
+      url.searchParams.get("p") ||
+      url.searchParams.get("page") ||
+      "1";
+
     const page = Math.max(1, Number(pageParam) || 1);
+
     return (page - 1) * 50;
   } catch {
     return 0;
@@ -1165,11 +1190,7 @@ function ensureInlineContainer() {
             <span>Дополнительно</span>
           </button>
 
-          <button
-            id="helpsell-save-analysis-btn"
-            class="helpsell-save-analysis-btn"
-            type="button"
-          >
+          <button id="helpsell-save-analysis-btn" class="helpsell-save-analysis-btn" type="button">
             Сохранить анализ в личный кабинет
           </button>
         </div>
@@ -2179,8 +2200,7 @@ async function buildTableOnceForCurrentPage({ auto = false } = {}) {
     if (!rows.length) {
       if (statusEl) {
         statusEl.className = "helpsell-status warning";
-        statusEl.textContent =
-          "Объявления ещё не появились. Ожидаем загрузку выдачи...";
+        statusEl.textContent = "Объявления ещё не появились. Ожидаем загрузку выдачи...";
       }
       return;
     }
@@ -2202,6 +2222,16 @@ async function buildTableOnceForCurrentPage({ auto = false } = {}) {
       statusEl.className = "helpsell-status success";
       statusEl.textContent = `Найдено карточек: ${rows.length}, продавцов: ${currentSellerRows.length}.`;
     }
+  } catch (error) {
+    console.error("HelpSell build table error:", error);
+
+    const statusEl = getStatusEl();
+    if (statusEl) {
+      statusEl.className = "helpsell-status error";
+      statusEl.textContent = "Ошибка анализа страницы. Откройте консоль и обновите страницу.";
+    }
+
+    hideInitialLoading();
   } finally {
     isBuildingHelpSell = false;
   }

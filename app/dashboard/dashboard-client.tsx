@@ -270,9 +270,7 @@ function FullscreenChartButton({
       title={expanded ? "Вернуть обычный размер" : "Развернуть график на весь экран"}
       aria-label={expanded ? "Вернуть обычный размер графика" : "Развернуть график на весь экран"}
     >
-      <span className="hidden sm:inline">
-        {expanded ? "Свернуть график" : "Развернуть"}
-      </span>
+      
       <svg
         viewBox="0 0 24 24"
         fill="none"
@@ -347,12 +345,7 @@ function IncomeChart({
     <div className={expanded ? "flex min-h-0 flex-1 flex-col" : "min-w-0"}>
       {!expanded && (
         <div className="mb-4">
-          <div className="text-xl font-extrabold tracking-[-0.03em] text-black">
-            Динамика доходов
-          </div>
-          <div className="mt-1 text-sm text-black/45">
-            Наведите курсор или нажмите на точку, чтобы посмотреть прибыль за день.
-          </div>
+                   
         </div>
       )}
       <div
@@ -362,7 +355,7 @@ function IncomeChart({
       >
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className={`block h-auto w-full ${expanded ? "min-w-[1800px]" : "min-w-[1180px]"}`}
+          className={`block h-auto w-full ${expanded ? "min-w-[2100px]" : "min-w-[1380px]"}`}
           role="img"
           aria-label="График доходов за выбранный период"
           onMouseLeave={() => setActiveIndex(null)}
@@ -396,8 +389,8 @@ function IncomeChart({
                   x={paddingX}
                   y={y - 10}
                   fill="rgba(16,16,16,0.46)"
-                  fontSize={11 * scale}
-                  fontWeight="700"
+                  fontSize={14 * scale}
+                  fontWeight="800"
                 >
                   {formatMoney(Math.round(maxValue * position))} ₽
                 </text>
@@ -439,7 +432,7 @@ function IncomeChart({
                   x={16 * scale}
                   y={25 * scale}
                   fill="rgba(255,255,255,0.55)"
-                  fontSize={10 * scale}
+                  fontSize={15 * scale}
                   fontWeight="800"
                   letterSpacing="1"
                 >
@@ -449,7 +442,7 @@ function IncomeChart({
                   x={16 * scale}
                   y={53 * scale}
                   fill="#ffffff"
-                  fontSize={13 * scale}
+                  fontSize={15 * scale}
                   fontWeight="700"
                 >
                   Доход: {formatMoney(activeItem.income)} ₽
@@ -458,7 +451,7 @@ function IncomeChart({
                   x={16 * scale}
                   y={77 * scale}
                   fill="rgba(255,255,255,0.62)"
-                  fontSize={12 * scale}
+                  fontSize={14 * scale}
                   fontWeight="600"
                 >
                   Расход: {formatMoney(activeItem.expense)} ₽
@@ -467,7 +460,7 @@ function IncomeChart({
                   x={16 * scale}
                   y={105 * scale}
                   fill={activeProfit >= 0 ? "#03bd48" : "#f87171"}
-                  fontSize={14 * scale}
+                  fontSize={15 * scale}
                   fontWeight="800"
                 >
                   Прибыль: {activeProfit > 0 ? "+" : ""}
@@ -510,8 +503,8 @@ function IncomeChart({
                   y={height - 24}
                   textAnchor="middle"
                   fill={isActive ? "#028c36" : "rgba(16,16,16,0.58)"}
-                  fontSize={12 * scale}
-                  fontWeight={isActive ? "800" : "700"}
+                  fontSize={19 * scale}
+                  fontWeight={isActive ? "900" : "800"}
                 >
                   {item.date.slice(8, 10)}.{item.date.slice(5, 7)}
                 </text>
@@ -531,7 +524,7 @@ export default function DashboardClientPage({
   const [activeSection, setActiveSection] = useState<DashboardSection>("profile");
   const [financialRecords, setFinancialRecords] =
     useState<FinancialRecord[]>(initialFinancialRecords);
-  const [periodStart, setPeriodStart] = useState(getDateBefore(13));
+  const [periodStart, setPeriodStart] = useState(getDateBefore(6));
   const [periodEnd, setPeriodEnd] = useState(getTodayDate());
   const [tablePeriodStart, setTablePeriodStart] = useState(getDateBefore(29));
   const [tablePeriodEnd, setTablePeriodEnd] = useState(getTodayDate());
@@ -557,7 +550,10 @@ export default function DashboardClientPage({
   const [avitoAnalysisLoading, setAvitoAnalysisLoading] = useState(false);
   const [avitoAnalyticsError, setAvitoAnalyticsError] = useState("");
   const [avitoSearch, setAvitoSearch] = useState("");
-  const [selectedAvitoRowId, setSelectedAvitoRowId] = useState<number | null>(null);
+  const [selectedAvitoRowIds, setSelectedAvitoRowIds] = useState<Set<number>>(
+  new Set()
+);
+const [avitoOnlySelected, setAvitoOnlySelected] = useState(false);
 
   const subscriptionLevel = user.subscriptionLevel.toLowerCase();
   const hasAccess = subscriptionLevel === "basic" || subscriptionLevel === "admin";
@@ -567,12 +563,13 @@ export default function DashboardClientPage({
     setActiveSection((current) => (current === section ? null : section));
 
   const menuItems: {
-    id: Exclude<DashboardSection, null>;
-    index: string;
-    title: string;
-    description: string;
-    available: boolean;
-  }[] = [
+  id: Exclude<DashboardSection, null>;
+  index: string;
+  title: string;
+  description: string;
+  available: boolean;
+  inDevelopment?: boolean;
+}[] = [
     {
       id: "profile",
       index: "01",
@@ -600,6 +597,7 @@ export default function DashboardClientPage({
       title: "Запросы по популярности Авито",
       description: hasAccess ? "Подбор популярных запросов" : "Доступно с подпиской Basic",
       available: hasAccess,
+      inDevelopment: true,
     },
   ];
 
@@ -632,23 +630,33 @@ export default function DashboardClientPage({
   }, [popularQuery]);
 
   const filteredAvitoItems = useMemo(() => {
-    const q = avitoSearch.trim().toLowerCase();
-    const items = selectedAvitoAnalysis?.items || [];
-    return q
-      ? items.filter((i) =>
-          [
-            i.sellerName,
-            i.positions.join(" "),
-            i.rating,
-            i.reviews,
-            ...i.ads.map((ad) => `${ad.title || ""} ${ad.price || ""}`),
-          ]
-            .join(" ")
-            .toLowerCase()
-            .includes(q)
-        )
-      : items;
-  }, [selectedAvitoAnalysis, avitoSearch]);
+  const q = avitoSearch.trim().toLowerCase();
+  const items = selectedAvitoAnalysis?.items || [];
+
+  const searchedItems = q
+    ? items.filter((item) =>
+        [
+          item.sellerName,
+          item.positions.join(" "),
+          item.rating,
+          item.reviews,
+          ...item.ads.map((ad) => `${ad.title || ""} ${ad.price || ""}`),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q)
+      )
+    : items;
+
+  return avitoOnlySelected
+    ? searchedItems.filter((item) => selectedAvitoRowIds.has(item.id))
+    : searchedItems;
+}, [
+  selectedAvitoAnalysis,
+  avitoSearch,
+  avitoOnlySelected,
+  selectedAvitoRowIds,
+]);
 
   function startFinancialEditing() {
     setFinancialDrafts(tableRecordsInPeriod.map((record) => ({ ...record })));
@@ -766,7 +774,8 @@ export default function DashboardClientPage({
     setAvitoAnalysisLoading(true);
     setAvitoAnalyticsError("");
     setSelectedAvitoAnalysisId(id);
-    setSelectedAvitoRowId(null);
+setSelectedAvitoRowIds(new Set());
+setAvitoOnlySelected(false);
 
     try {
       const response = await fetch(`/api/avito-search-analyses/${id}`);
@@ -833,6 +842,8 @@ export default function DashboardClientPage({
       setAvitoAnalyses((items) => items.filter((item) => item.id !== id));
       setSelectedAvitoAnalysis(null);
       setSelectedAvitoAnalysisId(null);
+      setSelectedAvitoRowIds(new Set());
+      setAvitoOnlySelected(false);
     }
   }
 
@@ -902,7 +913,21 @@ export default function DashboardClientPage({
                         {item.index}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-extrabold">{item.title}</span>
+                        <span className="flex flex-wrap items-center gap-2 text-sm font-extrabold">
+  <span>{item.title}</span>
+
+  {item.inDevelopment && (
+    <span
+      className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] ${
+        isActive
+          ? "border-amber-100/45 bg-amber-200/20 text-amber-50"
+          : "border-amber-300/30 bg-amber-300/10 text-amber-200"
+      }`}
+    >
+      В разработке
+    </span>
+  )}
+</span>
                         <span className="mt-1 block text-xs leading-5 text-white/32">
                           {item.description}
                         </span>
@@ -931,7 +956,15 @@ export default function DashboardClientPage({
                       {item.index}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-extrabold">{item.title}</span>
+                      <span className="flex flex-wrap items-center gap-2 text-sm font-extrabold">
+  <span>{item.title}</span>
+
+  {item.inDevelopment && (
+    <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-amber-200/70">
+      В разработке
+    </span>
+  )}
+</span>
                       <span
                         className={`mt-1 block text-xs leading-5 ${
                           isActive ? "text-white/78" : "text-white/42"
@@ -1102,12 +1135,34 @@ export default function DashboardClientPage({
                         продавцов по датам в личном кабинете.
                       </p>
                     </div>
-                    <div className="rounded-2xl bg-[#03bd48] px-5 py-4 text-white">
-                      <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70">
-                        Статус услуги
-                      </div>
-                      <div className="mt-1 text-lg font-extrabold">Доступ активен</div>
-                    </div>
+                    <div className="rounded-2xl bg-[#03bd48] px-5 py-4 text-white shadow-[0_12px_25px_rgba(3,189,72,0.22)]">
+  <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70">
+    Статус услуги
+  </div>
+
+  <div className="mt-1 text-lg font-extrabold">Доступ активен</div>
+
+  <a
+    href="https://helpsell.ru/extension"
+    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/25 bg-black/20 px-3 py-2.5 text-xs font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-black/35"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 21h14" />
+    </svg>
+    Скачать расширение
+  </a>
+</div>
                   </div>
                 </section>
 
@@ -1125,21 +1180,31 @@ export default function DashboardClientPage({
                     </div>
 
                     <button
-                      type="button"
-                      onClick={toggleAvitoAnalytics}
-                      className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-black px-5 py-4 text-sm font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-[#03bd48]"
-                    >
-                      <span>
-                        {isAvitoAnalyticsOpen ? "Закрыть аналитику" : "Открыть аналитику"}
-                      </span>
-                      <span
-                        className={`text-lg transition-transform ${
-                          isAvitoAnalyticsOpen ? "rotate-180" : ""
-                        }`}
-                      >
-                        ↓
-                      </span>
-                    </button>
+  type="button"
+  onClick={toggleAvitoAnalytics}
+  className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-black px-5 py-4 text-sm font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-[#03bd48]"
+>
+  <span>
+    {isAvitoAnalyticsOpen ? "Закрыть аналитику" : "Открыть аналитику"}
+  </span>
+  <span
+    className={`flex h-6 w-6 items-center justify-center rounded-lg transition-transform duration-300 ${
+      isAvitoAnalyticsOpen ? "rotate-180" : "rotate-0"
+    }`}
+  >
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  </span>
+</button>
+
                   </div>
 
                   <CollapsibleContent isOpen={isAvitoAnalyticsOpen}>
@@ -1260,96 +1325,263 @@ export default function DashboardClientPage({
                                   </button>
                                 </div>
 
-                                <input
-                                  value={avitoSearch}
-                                  onChange={(event) => setAvitoSearch(event.target.value)}
-                                  placeholder="Поиск по продавцу, позиции, объявлению или цене..."
-                                  className="mt-5 w-full rounded-2xl border border-black/10 bg-black/[0.02] px-4 py-3.5 text-sm font-semibold outline-none focus:border-[#03bd48]"
-                                />
+                                <div className="mt-5 rounded-3xl border border-black/[0.07] bg-[linear-gradient(135deg,rgba(3,189,72,0.07),rgba(255,255,255,0.96))] p-3 sm:p-4">
+  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+    <label className="relative block min-w-0 flex-1">
+      <span className="sr-only">
+        Поиск по продавцу, позиции, объявлению или цене
+      </span>
 
-                                <div className="mt-5 overflow-x-auto rounded-2xl border border-black/[0.08]">
-                                  <table className="min-w-[800px] w-full border-collapse text-left">
-                                    <thead className="bg-[#101010]">
-                                      <tr className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-white/60">
-                                        <th className="px-4 py-4">Позиция</th>
-                                        <th className="px-4 py-4">Продавец</th>
-                                        <th className="px-4 py-4">Объявлений</th>
-                                        <th className="px-4 py-4">Рейтинг</th>
-                                        <th className="px-4 py-4">Отзывы</th>
-                                        <th className="px-4 py-4">Первое объявление</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {filteredAvitoItems.map((item) => {
-                                        const ad = item.ads[0];
-                                        const active = selectedAvitoRowId === item.id;
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35"
+        aria-hidden="true"
+      >
+        <circle cx="11" cy="11" r="6" />
+        <path d="m16 16 4 4" />
+      </svg>
 
-                                        return (
-                                          <tr
-                                            key={item.id}
-                                            onClick={() => setSelectedAvitoRowId(item.id)}
-                                            className={`cursor-pointer border-b border-black/[0.06] text-sm transition ${
-                                              active
-                                                ? "bg-[#03bd48]/10 shadow-[inset_4px_0_0_#03bd48]"
-                                                : "bg-white hover:bg-[#03bd48]/[0.035]"
-                                            }`}
-                                          >
-                                            <td className="px-4 py-4 font-extrabold text-[#028c36]">
-                                              {item.positions.length
-                                                ? item.positions.join(", ")
-                                                : item.firstPosition ?? "—"}
-                                            </td>
-                                            <td className="px-4 py-4 font-extrabold text-black">
-                                              {item.sellerName}
-                                              {active && (
-                                                <div className="mt-1 text-xs text-[#028c36]">
-                                                  Строка выбрана
-                                                </div>
-                                              )}
-                                            </td>
-                                            <td className="px-4 py-4 font-bold">
-                                              {item.adsCount}
-                                            </td>
-                                            <td className="px-4 py-4 font-bold">
-                                              {item.rating || "—"}
-                                            </td>
-                                            <td className="px-4 py-4 font-bold">
-                                              {item.reviews || "—"}
-                                            </td>
-                                            <td className="px-4 py-4">
-                                              {ad?.link ? (
-                                                <a
-                                                  href={ad.link}
-                                                  target="_blank"
-                                                  rel="noreferrer"
-                                                  onClick={(e) => e.stopPropagation()}
-                                                  className="font-bold text-[#028c36] hover:underline"
-                                                >
-                                                  {ad.title || "Открыть"}
-                                                </a>
-                                              ) : (
-                                                ad?.title || "—"
-                                              )}
-                                              <div className="mt-1 text-xs text-black/45">
-                                                {ad?.price || ""}
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                      {filteredAvitoItems.length === 0 && (
-                                        <tr>
-                                          <td
-                                            colSpan={6}
-                                            className="px-5 py-14 text-center text-sm text-black/48"
-                                          >
-                                            По вашему поиску ничего не найдено.
-                                          </td>
-                                        </tr>
-                                      )}
-                                    </tbody>
-                                  </table>
-                                </div>
+      <input
+        value={avitoSearch}
+        onChange={(event) => setAvitoSearch(event.target.value)}
+        placeholder="Поиск по продавцу, позиции, объявлению или цене..."
+        className="w-full rounded-2xl border border-black/10 bg-white py-3.5 pl-11 pr-4 text-sm font-semibold text-black outline-none transition placeholder:text-black/35 focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+      />
+    </label>
+
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04]">
+        <input
+          type="checkbox"
+          checked={avitoOnlySelected}
+          onChange={(event) => setAvitoOnlySelected(event.target.checked)}
+          className="h-4 w-4 rounded border-black/25 accent-[#03bd48]"
+        />
+        Оставить только выделенные
+      </label>
+
+      {selectedAvitoRowIds.size > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedAvitoRowIds(new Set());
+            setAvitoOnlySelected(false);
+          }}
+          className="rounded-xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-3 py-3 text-xs font-extrabold text-[#028c36] transition hover:bg-[#03bd48]/20"
+        >
+          Снять выделение ({selectedAvitoRowIds.size})
+        </button>
+      )}
+    </div>
+  </div>
+
+  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+    <span className="rounded-full bg-black/[0.06] px-3 py-1.5 font-bold text-black/55">
+      В таблице: {filteredAvitoItems.length}
+    </span>
+
+    <span className="rounded-full bg-[#03bd48]/10 px-3 py-1.5 font-extrabold text-[#028c36]">
+      Выбрано: {selectedAvitoRowIds.size}
+    </span>
+
+    {avitoOnlySelected && (
+      <span className="rounded-full bg-amber-100 px-3 py-1.5 font-extrabold text-amber-800">
+        Показаны только выделенные
+      </span>
+    )}
+  </div>
+</div>
+
+<div className="mt-5 overflow-hidden rounded-3xl border border-black/[0.08] bg-white shadow-[0_12px_28px_rgba(16,24,40,0.05)]">
+  <div className="max-h-[650px] overflow-auto">
+    <table className="w-full min-w-[920px] table-fixed border-collapse text-left">
+      <thead className="sticky top-0 z-10 bg-[#101010] shadow-[0_2px_0_rgba(255,255,255,0.08)]">
+        <tr className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-white/65">
+          <th className="w-[62px] px-4 py-4 text-center">
+            <input
+              type="checkbox"
+              aria-label="Выбрать все отображаемые строки"
+              checked={
+                filteredAvitoItems.length > 0 &&
+                filteredAvitoItems.every((item) => selectedAvitoRowIds.has(item.id))
+              }
+              onChange={(event) => {
+                const checked = event.target.checked;
+
+                setSelectedAvitoRowIds((current) => {
+                  const next = new Set(current);
+
+                  filteredAvitoItems.forEach((item) => {
+                    if (checked) {
+                      next.add(item.id);
+                    } else {
+                      next.delete(item.id);
+                    }
+                  });
+
+                  return next;
+                });
+              }}
+              className="h-4 w-4 cursor-pointer rounded border-white/30 accent-[#03bd48]"
+            />
+          </th>
+          <th className="w-[150px] px-4 py-4">Позиции</th>
+          <th className="w-[190px] px-4 py-4">Продавец</th>
+          <th className="w-[110px] px-4 py-4 text-center">Объявлений</th>
+          <th className="w-[100px] px-4 py-4 text-center">Рейтинг</th>
+          <th className="w-[100px] px-4 py-4 text-center">Отзывы</th>
+          <th className="px-4 py-4">Первое объявление</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {filteredAvitoItems.map((item) => {
+          const ad = item.ads[0];
+          const isSelected = selectedAvitoRowIds.has(item.id);
+          const positions = item.positions.length
+            ? item.positions.join(", ")
+            : item.firstPosition ?? "—";
+
+          return (
+            <tr
+              key={item.id}
+              onClick={() => {
+                setSelectedAvitoRowIds((current) => {
+                  const next = new Set(current);
+
+                  if (next.has(item.id)) {
+                    next.delete(item.id);
+                  } else {
+                    next.add(item.id);
+                  }
+
+                  return next;
+                });
+              }}
+              className={`cursor-pointer border-b border-black/[0.06] text-sm transition last:border-b-0 ${
+                isSelected
+                  ? "bg-[#03bd48]/[0.12] shadow-[inset_4px_0_0_#03bd48]"
+                  : "bg-white hover:bg-[#03bd48]/[0.035]"
+              }`}
+            >
+              <td className="px-4 py-4 text-center">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  aria-label={`Выбрать продавца ${item.sellerName}`}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={() => {
+                    setSelectedAvitoRowIds((current) => {
+                      const next = new Set(current);
+
+                      if (next.has(item.id)) {
+                        next.delete(item.id);
+                      } else {
+                        next.add(item.id);
+                      }
+
+                      return next;
+                    });
+                  }}
+                  className="h-4 w-4 cursor-pointer rounded border-black/25 accent-[#03bd48]"
+                />
+              </td>
+
+              <td className="px-4 py-4 align-top">
+                <span
+                  className={`inline-flex rounded-xl px-2.5 py-1.5 text-xs font-extrabold ${
+                    isSelected
+                      ? "bg-[#03bd48] text-white"
+                      : "bg-[#03bd48]/10 text-[#028c36]"
+                  }`}
+                >
+                  {positions}
+                </span>
+              </td>
+
+              <td className="px-4 py-4 align-top">
+                <div className="truncate font-extrabold text-black" title={item.sellerName}>
+                  {item.sellerName}
+                </div>
+
+                {isSelected && (
+                  <div className="mt-1 text-[11px] font-extrabold text-[#028c36]">
+                    Выбрано для сравнения
+                  </div>
+                )}
+              </td>
+
+              <td className="px-4 py-4 text-center align-top">
+                <span className="inline-flex min-w-9 justify-center rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-extrabold text-black/70">
+                  {item.adsCount}
+                </span>
+              </td>
+
+              <td className="px-4 py-4 text-center align-top">
+                <span className="font-extrabold text-black">
+                  {item.rating || "—"}
+                </span>
+              </td>
+
+              <td className="px-4 py-4 text-center align-top">
+                <span className="font-extrabold text-black">
+                  {item.reviews || "—"}
+                </span>
+              </td>
+
+              <td className="px-4 py-4 align-top">
+                {ad?.link ? (
+                  <a
+                    href={ad.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                    className="block truncate font-extrabold text-[#028c36] transition hover:text-[#016f2b] hover:underline"
+                    title={ad.title || "Открыть объявление"}
+                  >
+                    {ad.title || "Открыть объявление"}
+                  </a>
+                ) : (
+                  <div className="truncate font-bold text-black/65">
+                    {ad?.title || "—"}
+                  </div>
+                )}
+
+                {ad?.price && (
+                  <div className="mt-1 text-xs font-bold text-black/45">
+                    {ad.price}
+                  </div>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+
+        {filteredAvitoItems.length === 0 && (
+          <tr>
+            <td colSpan={7} className="px-5 py-16 text-center">
+              <div className="mx-auto max-w-sm">
+                <div className="text-base font-extrabold text-black">
+                  {avitoOnlySelected
+                    ? "Нет выбранных строк для отображения"
+                    : "По вашему поиску ничего не найдено"}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-black/45">
+                  {avitoOnlySelected
+                    ? "Снимите фильтр «Оставить только выделенные» или выберите строки в таблице."
+                    : "Измените поисковый запрос или выберите другой сохранённый анализ."}
+                </p>
+              </div>
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
                               </>
                             )}
                           </div>
@@ -1392,63 +1624,79 @@ export default function DashboardClientPage({
                   </div>
 
                   <CollapsibleContent isOpen={isFinancialHeroOpen}>
-                    <div className="relative grid gap-3 border-t border-white/10 p-6 pt-5 sm:grid-cols-2 md:p-8 md:pt-5">
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-5 backdrop-blur-sm transition hover:border-[#03bd48]/40 hover:bg-white/[0.08]">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/45">
-                              Указан период
-                            </div>
-                            <div className="mt-2 text-2xl font-extrabold tracking-[-0.05em] text-white md:text-3xl">
-                              {formatRecordDate(periodStart)} — {formatRecordDate(periodEnd)}
-                            </div>
-                          </div>
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-[#03bd48]">
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2.2"
-                              className="h-5 w-5"
-                            >
-                              <path d="M4 19V5" />
-                              <path d="M4 19h16" />
-                              <path d="m7 15 4-4 3 2 5-6" />
-                            </svg>
-                          </div>
-                        </div>
-                        <div className="mt-3 text-xs font-semibold text-white/42">
-                          За текущий период аналитики
-                        </div>
-                      </div>
+  <div className="relative grid gap-3 border-t border-white/10 p-6 pt-5 sm:grid-cols-2 md:p-8 md:pt-5">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-5 backdrop-blur-sm transition hover:border-[#03bd48]/40 hover:bg-white/[0.08]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/45">
+            Указан период
+          </div>
 
-                      <div className="rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/[0.12] p-5 backdrop-blur-sm transition hover:border-[#03bd48]/55 hover:bg-[#03bd48]/[0.16]">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/55">
-                              Чистая прибыль
-                            </div>
-                            <div
-                              className={`mt-2 text-4xl font-extrabold tracking-[-0.05em] ${
-                                analytics.netProfit >= 0 ? "text-[#03bd48]" : "text-red-400"
-                              }`}
-                            >
-                              {analytics.netProfit > 0 ? "+" : ""}
-                              {formatMoney(analytics.netProfit)} ₽
-                            </div>
-                          </div>
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#03bd48] text-white shadow-[0_8px_20px_rgba(3,189,72,0.3)]">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#03bd48] text-lg font-extrabold text-white shadow-[0_9px_18px_rgba(3,189,72,0.28)]">
-                              ₽
-                            </div>
-                          </div>
-                        </div>
-                        <div className="mt-3 text-xs font-semibold text-white/52">
-                          Доходы за вычетом расходов
-                        </div>
-                      </div>
-                    </div>
-                  </CollapsibleContent>
+          <div className="mt-2 text-base font-extrabold tracking-[-0.035em] text-white md:text-xl">
+            {formatRecordDate(periodStart)} — {formatRecordDate(periodEnd)}
+          </div>
+        </div>
+
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-[#03bd48] shadow-[0_9px_18px_rgba(0,0,0,0.16)]">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-5 w-5"
+            aria-hidden="true"
+          >
+            <path d="M4 19V5" />
+            <path d="M4 19h16" />
+            <path d="m7 15 4-4 3 2 5-6" />
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div className="rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/[0.12] p-5 backdrop-blur-sm transition hover:border-[#03bd48]/55 hover:bg-[#03bd48]/[0.16]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/55">
+            Чистая прибыль
+          </div>
+
+          <div
+            className={`mt-2 text-4xl font-extrabold tracking-[-0.05em] ${
+              analytics.netProfit >= 0 ? "text-[#03bd48]" : "text-red-400"
+            }`}
+          >
+            {analytics.netProfit > 0 ? "+" : ""}
+            {formatMoney(analytics.netProfit)} ₽
+          </div>
+        </div>
+
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#03bd48] text-white shadow-[0_9px_18px_rgba(3,189,72,0.28)]">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-6 w-6"
+            aria-hidden="true"
+          >
+            <rect x="3" y="7" width="18" height="11" rx="2" />
+            <path d="M5 9h14" />
+            <path d="M5 16h14" />
+            <circle cx="12" cy="12.5" r="2.3" />
+            <path d="M12 10.8v3.4" />
+            <path d="M10.9 11.6c.25-.45.7-.7 1.2-.7.75 0 1.35.45 1.35 1.05 0 1.3-2.55.7-2.55 2.05 0 .6.62 1.05 1.4 1.05.55 0 1.04-.25 1.3-.7" />
+            <path d="M6 5h12" opacity="0.8" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</CollapsibleContent>
                 </section>
 
                 <section className="overflow-hidden rounded-[32px] border border-black/[0.07] bg-white p-5 shadow-[0_18px_45px_rgba(16,24,40,0.07)] md:p-8">
@@ -1485,9 +1733,7 @@ export default function DashboardClientPage({
                               <div className="mt-3 text-3xl font-extrabold tracking-[-0.055em] text-[#028c36]">
                                 {formatMoney(analytics.income)} ₽
                               </div>
-                              <div className="mt-2 text-xs font-semibold text-black/45">
-                                За выбранный период
-                              </div>
+                              
                             </div>
                             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#03bd48] text-lg font-extrabold text-white shadow-[0_9px_18px_rgba(3,189,72,0.28)]">
                               ₽
@@ -1505,9 +1751,7 @@ export default function DashboardClientPage({
                               <div className="mt-3 text-3xl font-extrabold tracking-[-0.055em] text-red-600">
                                 {formatMoney(analytics.expense)} ₽
                               </div>
-                              <div className="mt-2 text-xs font-semibold text-black/45">
-                                За выбранный период
-                              </div>
+                              
                             </div>
                             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-500 text-xl font-extrabold text-white shadow-[0_9px_18px_rgba(239,68,68,0.22)]">
                               −
@@ -1546,13 +1790,7 @@ export default function DashboardClientPage({
                                 {analytics.netProfit > 0 ? "+" : ""}
                                 {formatMoney(analytics.netProfit)} ₽
                               </div>
-                              <div
-                                className={`mt-2 text-xs font-semibold ${
-                                  analytics.netProfit >= 0 ? "text-white/48" : "text-black/45"
-                                }`}
-                              >
-                                Доходы минус расходы
-                              </div>
+                              
                             </div>
                             <div
                               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl font-extrabold ${
@@ -1610,7 +1848,7 @@ export default function DashboardClientPage({
                               Период аналитики
                             </div>
                             <p className="mt-1 text-sm text-black/48">
-                              По умолчанию отображаются последние 14 дней, включая текущую дату.
+                              По умолчанию отображаются последние 7 дней.
                             </p>
                           </div>
                           <div className="grid gap-3 sm:grid-cols-2">
@@ -1656,8 +1894,7 @@ export default function DashboardClientPage({
                         Доходы и расходы
                       </h2>
                       <p className="mt-2 max-w-2xl text-sm leading-7 text-black/50">
-                        Вносите данные за день. Чистая прибыль рассчитывается автоматически:
-                        доходы минус расходы.
+                        Вносите данные за день. Чистая прибыль рассчитывается автоматически.
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
