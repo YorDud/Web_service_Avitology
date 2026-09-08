@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function PersonalDataConsentPage() {
   return (
     <main className="min-h-screen bg-white">
-      <section className="section-space">
+      <section className="internal-page-shell section-space">
         <div className="container-main max-w-4xl">
           <div className="mb-6">
             <Link

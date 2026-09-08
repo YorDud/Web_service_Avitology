@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 const supportLinks = {
-  telegram: "https://t.me/your_support_username",
+  telegram: "https://t.me/manager_andreytgg",
   max: "https://max.ru/u/f9LHodD0cOLQhj1ORGcTK_PXXtBYr2fb_KRkNVZaHCCClz_o8ETjP4uQIPM",
   email: "mailto:avitology.help@yandex.ru",
 };
@@ -9,7 +9,7 @@ const supportLinks = {
 export default function SupportPage() {
   return (
     <main className="min-h-screen bg-white">
-      <div className="container-main page-shell max-w-6xl">
+      <div className="internal-page-shell container-main page-shell max-w-6xl">
         <div className="page-header">
           <div className="page-header-row">
             <div className="brand-badge">
