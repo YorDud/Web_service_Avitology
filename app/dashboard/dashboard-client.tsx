@@ -109,7 +109,9 @@ function getDateRange(start: string, end: string) {
 
   while (current <= last) {
     const offset = current.getTimezoneOffset() * 60 * 1000;
-    result.push(new Date(current.getTime() - offset).toISOString().slice(0, 10));
+    result.push(
+      new Date(current.getTime() - offset).toISOString().slice(0, 10),
+    );
     current.setDate(current.getDate() + 1);
   }
 
@@ -267,10 +269,15 @@ function FullscreenChartButton({
       type="button"
       onClick={onClick}
       className="group inline-flex h-10 items-center gap-2 rounded-xl border border-black/10 bg-black/[0.025] px-3 text-xs font-extrabold text-black transition-all duration-300 hover:-translate-y-0.5 hover:border-[#03bd48]/50 hover:bg-[#03bd48]/[0.07] hover:text-[#028c36]"
-      title={expanded ? "Вернуть обычный размер" : "Развернуть график на весь экран"}
-      aria-label={expanded ? "Вернуть обычный размер графика" : "Развернуть график на весь экран"}
+      title={
+        expanded ? "Вернуть обычный размер" : "Развернуть график на весь экран"
+      }
+      aria-label={
+        expanded
+          ? "Вернуть обычный размер графика"
+          : "Развернуть график на весь экран"
+      }
     >
-      
       <svg
         viewBox="0 0 24 24"
         fill="none"
@@ -309,16 +316,24 @@ function IncomeChart({
   expanded?: boolean;
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const width = Math.max(expanded ? 1800 : 1180, data.length * (expanded ? 128 : 92));
+  const width = Math.max(
+    expanded ? 1800 : 1180,
+    data.length * (expanded ? 128 : 92),
+  );
   const height = expanded ? 820 : 430;
   const paddingTop = expanded ? 100 : 58;
   const paddingBottom = expanded ? 116 : 78;
   const paddingX = expanded ? 112 : 64;
-  const maxValue = Math.max(...data.map((item) => Math.max(item.income, item.expense)), 1);
+  const maxValue = Math.max(
+    ...data.map((item) => Math.max(item.income, item.expense)),
+    1,
+  );
   const chartHeight = height - paddingTop - paddingBottom;
   const chartWidth = width - paddingX * 2;
   const getX = (index: number) =>
-    data.length <= 1 ? width / 2 : paddingX + (index / (data.length - 1)) * chartWidth;
+    data.length <= 1
+      ? width / 2
+      : paddingX + (index / (data.length - 1)) * chartWidth;
   const getY = (value: number) =>
     paddingTop + chartHeight - (value / maxValue) * chartHeight;
   const areaPath = [
@@ -334,7 +349,10 @@ function IncomeChart({
   const tooltipX =
     activeIndex === null
       ? 0
-      : Math.min(Math.max(getX(activeIndex) - tooltipWidth / 2, 8), width - tooltipWidth - 8);
+      : Math.min(
+          Math.max(getX(activeIndex) - tooltipWidth / 2, 8),
+          width - tooltipWidth - 8,
+        );
   const tooltipY =
     activeIndex === null
       ? 0
@@ -343,19 +361,15 @@ function IncomeChart({
 
   return (
     <div className={expanded ? "flex min-h-0 flex-1 flex-col" : "min-w-0"}>
-      {!expanded && (
-        <div className="mb-4">
-                   
-        </div>
-      )}
+      {!expanded && <div className="mb-4"></div>}
       <div
-        className={`overflow-x-auto rounded-2xl border border-black/7 bg-black/[0.015] p-3 sm:p-5 ${
+        className={`-mx-1 overflow-x-auto rounded-2xl border border-black/7 bg-black/[0.015] p-2 sm:mx-0 sm:p-5 ${
           expanded ? "min-h-0 flex-1" : ""
         }`}
       >
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className={`block h-auto w-full ${expanded ? "min-w-[2100px]" : "min-w-[1380px]"}`}
+          className={`block h-auto w-full ${expanded ? "min-w-[2100px]" : "min-w-[1080px] sm:min-w-[1380px]"}`}
           role="img"
           aria-label="График доходов за выбранный период"
           onMouseLeave={() => setActiveIndex(null)}
@@ -363,7 +377,9 @@ function IncomeChart({
         >
           <defs>
             <linearGradient
-              id={expanded ? "income-area-gradient-full" : "income-area-gradient"}
+              id={
+                expanded ? "income-area-gradient-full" : "income-area-gradient"
+              }
               x1="0"
               y1="0"
               x2="0"
@@ -427,7 +443,12 @@ function IncomeChart({
                 strokeDasharray="4 5"
               />
               <g transform={`translate(${tooltipX}, ${tooltipY})`}>
-                <rect width={tooltipWidth} height={tooltipHeight} rx={16 * scale} fill="#101010" />
+                <rect
+                  width={tooltipWidth}
+                  height={tooltipHeight}
+                  rx={16 * scale}
+                  fill="#101010"
+                />
                 <text
                   x={16 * scale}
                   y={25 * scale}
@@ -471,7 +492,8 @@ function IncomeChart({
           )}
           {data.map((item, index) => {
             const previousIncome = data[index - 1]?.income ?? item.income;
-            const pointColor = item.income >= previousIncome ? "#03bd48" : "#ef4444";
+            const pointColor =
+              item.income >= previousIncome ? "#03bd48" : "#ef4444";
             const isActive = activeIndex === index;
             return (
               <g
@@ -521,9 +543,11 @@ export default function DashboardClientPage({
   user,
   initialFinancialRecords,
 }: DashboardPageProps) {
-  const [activeSection, setActiveSection] = useState<DashboardSection>("profile");
-  const [financialRecords, setFinancialRecords] =
-    useState<FinancialRecord[]>(initialFinancialRecords);
+  const [activeSection, setActiveSection] =
+    useState<DashboardSection>("profile");
+  const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>(
+    initialFinancialRecords,
+  );
   const [periodStart, setPeriodStart] = useState(getDateBefore(6));
   const [periodEnd, setPeriodEnd] = useState(getTodayDate());
   const [tablePeriodStart, setTablePeriodStart] = useState(getDateBefore(29));
@@ -537,13 +561,18 @@ export default function DashboardClientPage({
   const [popularQuery, setPopularQuery] = useState("");
   const [startedPopularSearch, setStartedPopularSearch] = useState(false);
   const [isFinancialHeroOpen, setIsFinancialHeroOpen] = useState(true);
-  const [isFinancialAnalyticsOpen, setIsFinancialAnalyticsOpen] = useState(true);
+  const [isFinancialAnalyticsOpen, setIsFinancialAnalyticsOpen] =
+    useState(true);
   const [isFinancialTableOpen, setIsFinancialTableOpen] = useState(true);
   const [isChartFullscreen, setIsChartFullscreen] = useState(false);
 
   const [isAvitoAnalyticsOpen, setIsAvitoAnalyticsOpen] = useState(false);
-  const [avitoAnalyses, setAvitoAnalyses] = useState<AvitoAnalysisSummary[]>([]);
-  const [selectedAvitoAnalysisId, setSelectedAvitoAnalysisId] = useState<number | null>(null);
+  const [avitoAnalyses, setAvitoAnalyses] = useState<AvitoAnalysisSummary[]>(
+    [],
+  );
+  const [selectedAvitoAnalysisId, setSelectedAvitoAnalysisId] = useState<
+    number | null
+  >(null);
   const [selectedAvitoAnalysis, setSelectedAvitoAnalysis] =
     useState<AvitoAnalysisDetails | null>(null);
   const [avitoAnalysesLoading, setAvitoAnalysesLoading] = useState(false);
@@ -551,26 +580,27 @@ export default function DashboardClientPage({
   const [avitoAnalyticsError, setAvitoAnalyticsError] = useState("");
   const [avitoSearch, setAvitoSearch] = useState("");
   const [selectedAvitoRowIds, setSelectedAvitoRowIds] = useState<Set<number>>(
-  new Set()
-);
-const [avitoOnlySelected, setAvitoOnlySelected] = useState(false);
-const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
+    new Set(),
+  );
+  const [avitoOnlySelected, setAvitoOnlySelected] = useState(false);
+  const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
 
   const subscriptionLevel = user.subscriptionLevel.toLowerCase();
-  const hasAccess = subscriptionLevel === "basic" || subscriptionLevel === "admin";
+  const hasAccess =
+    subscriptionLevel === "basic" || subscriptionLevel === "admin";
   const isAdmin = subscriptionLevel === "admin";
 
   const toggleSection = (section: Exclude<DashboardSection, null>) =>
     setActiveSection((current) => (current === section ? null : section));
 
   const menuItems: {
-  id: Exclude<DashboardSection, null>;
-  index: string;
-  title: string;
-  description: string;
-  available: boolean;
-  inDevelopment?: boolean;
-}[] = [
+    id: Exclude<DashboardSection, null>;
+    index: string;
+    title: string;
+    description: string;
+    available: boolean;
+    inDevelopment?: boolean;
+  }[] = [
     {
       id: "profile",
       index: "01",
@@ -582,21 +612,27 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
       id: "avito",
       index: "02",
       title: "Места в поиске Авито",
-      description: hasAccess ? "Аналитика поисковых позиций" : "Доступно с подпиской Basic",
+      description: hasAccess
+        ? "Аналитика поисковых позиций"
+        : "Доступно с подпиской Basic",
       available: hasAccess,
     },
     {
       id: "financial",
       index: "03",
       title: "Финансовый анализ",
-      description: hasAccess ? "Доходы, расходы и прибыль" : "Доступно с подпиской Basic",
+      description: hasAccess
+        ? "Доходы, расходы и прибыль"
+        : "Доступно с подпиской Basic",
       available: hasAccess,
     },
     {
       id: "popular-queries",
       index: "04",
       title: "Запросы по популярности Авито",
-      description: hasAccess ? "Подбор популярных запросов" : "Доступно с подпиской Basic",
+      description: hasAccess
+        ? "Подбор популярных запросов"
+        : "Доступно с подпиской Basic",
       available: hasAccess,
       inDevelopment: true,
     },
@@ -606,13 +642,16 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
     return financialRecords
       .filter(
         (record) =>
-          record.recordDate >= tablePeriodStart && record.recordDate <= tablePeriodEnd
+          record.recordDate >= tablePeriodStart &&
+          record.recordDate <= tablePeriodEnd,
       )
       .sort((a, b) => b.recordDate.localeCompare(a.recordDate));
   }, [financialRecords, tablePeriodStart, tablePeriodEnd]);
 
   const analytics = useMemo(() => {
-    const recordByDate = new Map(financialRecords.map((record) => [record.recordDate, record]));
+    const recordByDate = new Map(
+      financialRecords.map((record) => [record.recordDate, record]),
+    );
     const chartData = getDateRange(periodStart, periodEnd).map((date) => ({
       date,
       income: recordByDate.get(date)?.income ?? 0,
@@ -626,38 +665,44 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
   const popularQueryResults = useMemo(() => {
     const query = popularQuery.trim();
     return query
-      ? [query, `${query} купить`, `${query} цена`, `${query} недорого`, `${query} с доставкой`]
+      ? [
+          query,
+          `${query} купить`,
+          `${query} цена`,
+          `${query} недорого`,
+          `${query} с доставкой`,
+        ]
       : [];
   }, [popularQuery]);
 
   const filteredAvitoItems = useMemo(() => {
-  const q = avitoSearch.trim().toLowerCase();
-  const items = selectedAvitoAnalysis?.items || [];
+    const q = avitoSearch.trim().toLowerCase();
+    const items = selectedAvitoAnalysis?.items || [];
 
-  const searchedItems = q
-    ? items.filter((item) =>
-        [
-          item.sellerName,
-          item.positions.join(" "),
-          item.rating,
-          item.reviews,
-          ...item.ads.map((ad) => `${ad.title || ""} ${ad.price || ""}`),
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(q)
-      )
-    : items;
+    const searchedItems = q
+      ? items.filter((item) =>
+          [
+            item.sellerName,
+            item.positions.join(" "),
+            item.rating,
+            item.reviews,
+            ...item.ads.map((ad) => `${ad.title || ""} ${ad.price || ""}`),
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+        )
+      : items;
 
-  return avitoOnlySelected
-    ? searchedItems.filter((item) => selectedAvitoRowIds.has(item.id))
-    : searchedItems;
-}, [
-  selectedAvitoAnalysis,
-  avitoSearch,
-  avitoOnlySelected,
-  selectedAvitoRowIds,
-]);
+    return avitoOnlySelected
+      ? searchedItems.filter((item) => selectedAvitoRowIds.has(item.id))
+      : searchedItems;
+  }, [
+    selectedAvitoAnalysis,
+    avitoSearch,
+    avitoOnlySelected,
+    selectedAvitoRowIds,
+  ]);
 
   function startFinancialEditing() {
     setFinancialDrafts(tableRecordsInPeriod.map((record) => ({ ...record })));
@@ -690,7 +735,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
   function updateFinancialDraft(
     id: number,
     field: "recordDate" | "income" | "expense",
-    value: string
+    value: string,
   ) {
     setFinancialDrafts((current) =>
       current.map((record) => {
@@ -698,13 +743,16 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
         return field === "recordDate"
           ? { ...record, recordDate: value }
           : { ...record, [field]: Math.max(0, Number(value) || 0) };
-      })
+      }),
     );
   }
 
   function removeFinancialDraft(record: FinancialDraft) {
-    if (!record.isNew) setDeletedRecordIds((current) => [...current, record.id]);
-    setFinancialDrafts((current) => current.filter((item) => item.id !== record.id));
+    if (!record.isNew)
+      setDeletedRecordIds((current) => [...current, record.id]);
+    setFinancialDrafts((current) =>
+      current.filter((item) => item.id !== record.id),
+    );
   }
 
   async function saveFinancialChanges() {
@@ -720,7 +768,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
     }
 
     if (new Set(dates).size !== dates.length) {
-      setFinancialError("В таблице не может быть нескольких строк с одинаковой датой.");
+      setFinancialError(
+        "В таблице не может быть нескольких строк с одинаковой датой.",
+      );
       setFinancialSaving(false);
       return;
     }
@@ -728,25 +778,32 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
     try {
       const responses = await Promise.all([
         ...deletedRecordIds.map((id) =>
-          fetch(`/api/financial-records/${id}`, { method: "DELETE" })
+          fetch(`/api/financial-records/${id}`, { method: "DELETE" }),
         ),
         ...financialDrafts.map((record) =>
-          fetch(record.isNew ? "/api/financial-records" : `/api/financial-records/${record.id}`, {
-            method: record.isNew ? "POST" : "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              recordDate: record.recordDate,
-              income: Math.max(0, Math.round(record.income)),
-              expense: Math.max(0, Math.round(record.expense)),
-            }),
-          })
+          fetch(
+            record.isNew
+              ? "/api/financial-records"
+              : `/api/financial-records/${record.id}`,
+            {
+              method: record.isNew ? "POST" : "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                recordDate: record.recordDate,
+                income: Math.max(0, Math.round(record.income)),
+                expense: Math.max(0, Math.round(record.expense)),
+              }),
+            },
+          ),
         ),
       ]);
 
       const failed = responses.find((response) => !response.ok);
       if (failed) {
         const data = await failed.json().catch(() => null);
-        setFinancialError(data?.error || "Не удалось сохранить изменения в таблице.");
+        setFinancialError(
+          data?.error || "Не удалось сохранить изменения в таблице.",
+        );
         return;
       }
 
@@ -754,7 +811,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
       const data = await response.json();
 
       if (!response.ok) {
-        setFinancialError(data?.error || "Не удалось обновить данные финансового анализа.");
+        setFinancialError(
+          data?.error || "Не удалось обновить данные финансового анализа.",
+        );
         return;
       }
 
@@ -772,13 +831,13 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
   }
 
   async function loadAvitoAnalysis(id: number) {
-  if (id === selectedAvitoAnalysisId || avitoAnalysisLoading) return;
+    if (id === selectedAvitoAnalysisId || avitoAnalysisLoading) return;
 
-  setAvitoAnalysisLoading(true);
-  setAvitoAnalyticsError("");
-  setSelectedAvitoAnalysisId(id);
-  setSelectedAvitoRowIds(new Set());
-  setAvitoOnlySelected(false);
+    setAvitoAnalysisLoading(true);
+    setAvitoAnalyticsError("");
+    setSelectedAvitoAnalysisId(id);
+    setSelectedAvitoRowIds(new Set());
+    setAvitoOnlySelected(false);
 
     try {
       const response = await fetch(`/api/avito-search-analyses/${id}`);
@@ -791,7 +850,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
       setSelectedAvitoAnalysis(data.analysis);
     } catch (error) {
       setAvitoAnalyticsError(
-        error instanceof Error ? error.message : "Не удалось загрузить анализ"
+        error instanceof Error ? error.message : "Не удалось загрузить анализ",
       );
     } finally {
       setAvitoAnalysisLoading(false);
@@ -818,7 +877,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
       }
     } catch (error) {
       setAvitoAnalyticsError(
-        error instanceof Error ? error.message : "Не удалось загрузить анализы"
+        error instanceof Error ? error.message : "Не удалось загрузить анализы",
       );
     } finally {
       setAvitoAnalysesLoading(false);
@@ -917,20 +976,20 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-2 text-sm font-extrabold">
-  <span>{item.title}</span>
+                          <span>{item.title}</span>
 
-  {item.inDevelopment && (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] ${
-        isActive
-          ? "border-amber-100/45 bg-amber-200/20 text-amber-50"
-          : "border-amber-300/30 bg-amber-300/10 text-amber-200"
-      }`}
-    >
-      В разработке
-    </span>
-  )}
-</span>
+                          {item.inDevelopment && (
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] ${
+                                isActive
+                                  ? "border-amber-100/45 bg-amber-200/20 text-amber-50"
+                                  : "border-amber-300/30 bg-amber-300/10 text-amber-200"
+                              }`}
+                            >
+                              В разработке
+                            </span>
+                          )}
+                        </span>
                         <span className="mt-1 block text-xs leading-5 text-white/32">
                           {item.description}
                         </span>
@@ -953,21 +1012,23 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                   >
                     <span
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-extrabold ${
-                        isActive ? "bg-black/20 text-white" : "bg-white/10 text-white/65"
+                        isActive
+                          ? "bg-black/20 text-white"
+                          : "bg-white/10 text-white/65"
                       }`}
                     >
                       {item.index}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2 text-sm font-extrabold">
-  <span>{item.title}</span>
+                        <span>{item.title}</span>
 
-  {item.inDevelopment && (
-    <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-amber-200/70">
-      В разработке
-    </span>
-  )}
-</span>
+                        {item.inDevelopment && (
+                          <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-amber-200/70">
+                            В разработке
+                          </span>
+                        )}
+                      </span>
                       <span
                         className={`mt-1 block text-xs leading-5 ${
                           isActive ? "text-white/78" : "text-white/42"
@@ -976,7 +1037,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         {item.description}
                       </span>
                     </span>
-                    <span className="text-lg font-light">{isActive ? "−" : "+"}</span>
+                    <span className="text-lg font-light">
+                      {isActive ? "−" : "+"}
+                    </span>
                   </button>
                 );
               })}
@@ -1013,8 +1076,8 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                     Раздел закрыт
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-white/60">
-                    Выберите раздел слева, чтобы посмотреть данные профиля или перейти к
-                    доступным инструментам HelpSell.
+                    Выберите раздел слева, чтобы посмотреть данные профиля или
+                    перейти к доступным инструментам HelpSell.
                   </p>
                 </div>
               </div>
@@ -1022,7 +1085,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
 
             {activeSection === "profile" && (
               <div className="space-y-6">
-                <section className="overflow-hidden rounded-[30px] bg-black p-6 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] md:p-8">
+                <section className="overflow-hidden rounded-[30px] bg-black p-4 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] sm:p-6 md:p-8">
                   <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
                     <div className="min-w-0">
                       <div className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold">
@@ -1031,25 +1094,32 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                       <h2 className="truncate text-3xl font-extrabold tracking-[-0.05em] md:text-4xl">
                         {user.name}
                       </h2>
-                      <p className="mt-3 break-all text-sm text-white/60">{user.email}</p>
+                      <p className="mt-3 break-all text-sm text-white/60">
+                        {user.email}
+                      </p>
                     </div>
                     <div className="rounded-2xl bg-[#03bd48] px-5 py-4 text-white">
                       <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70">
                         Public ID
                       </div>
-                      <div className="mt-1 text-2xl font-extrabold">{user.publicId}</div>
+                      <div className="mt-1 text-2xl font-extrabold">
+                        {user.publicId}
+                      </div>
                     </div>
                   </div>
                 </section>
 
                 <section className="white-card min-w-0 p-6 md:p-8">
                   <div className="mb-7">
-                    <div className="badge-green mb-3">Информация о подписке</div>
+                    <div className="badge-green mb-3">
+                      Информация о подписке
+                    </div>
                     <h2 className="text-3xl font-extrabold tracking-[-0.04em] text-black">
                       Ваши данные
                     </h2>
                     <p className="mt-2 text-sm leading-7 text-black/50">
-                      Здесь отображается актуальная информация по вашему аккаунту и доступу к сервису.
+                      Здесь отображается актуальная информация по вашему
+                      аккаунту и доступу к сервису.
                     </p>
                   </div>
 
@@ -1062,7 +1132,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                     <InfoCard title="Уровень подписки">
                       <span
                         className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-extrabold uppercase ${getSubscriptionStyle(
-                          user.subscriptionLevel
+                          user.subscriptionLevel,
                         )}`}
                       >
                         {user.subscriptionLevel}
@@ -1089,7 +1159,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                           hasAccess ? "text-[#028c36]" : "text-black/55"
                         }`}
                       >
-                        {hasAccess ? "Доступ к сервисам активен" : "Требуется подписка Basic"}
+                        {hasAccess
+                          ? "Доступ к сервисам активен"
+                          : "Требуется подписка Basic"}
                       </div>
                     </InfoCard>
                   </div>
@@ -1106,8 +1178,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                           Подключите Basic
                         </h2>
                         <p className="mt-3 max-w-2xl text-sm leading-7 text-white/85">
-                          Подписка Basic откроет доступ к аналитике мест в поиске Авито,
-                          финансовому анализу и рабочим инструментам платформы.
+                          Подписка Basic откроет доступ к аналитике мест в
+                          поиске Авито, финансовому анализу и рабочим
+                          инструментам платформы.
                         </p>
                       </div>
                       <Link
@@ -1124,48 +1197,52 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
 
             {activeSection === "avito" && hasAccess && (
               <div className="space-y-6">
-                <section className="overflow-hidden rounded-[30px] bg-black p-6 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] md:p-8">
-                  <div className="grid gap-7 lg:grid-cols-[1fr_auto] lg:items-end">
+                <section className="overflow-hidden rounded-[30px] bg-black p-4 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] sm:p-6 md:p-8">
+                  <div className="grid gap-5 sm:gap-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                     <div>
                       <div className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold">
                         Инструменты HelpSell
                       </div>
-                      <h2 className="text-3xl font-extrabold tracking-[-0.05em] md:text-4xl">
-                        Места в поиске<span className="text-[#03bd48]"> Авито</span>
+                      <h2 className="text-[30px] font-extrabold leading-[1.05] tracking-[-0.05em] sm:text-3xl md:text-4xl">
+                        Места в поиске
+                        <span className="text-[#03bd48]"> Авито</span>
                       </h2>
                       <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62">
-                        Сохраняйте результаты анализа из расширения и сравнивайте позиции
-                        продавцов по датам в личном кабинете.
+                        Сохраняйте результаты анализа из расширения и
+                        сравнивайте позиции продавцов по датам в личном
+                        кабинете.
                       </p>
                     </div>
-                    <div className="rounded-2xl bg-[#03bd48] px-5 py-4 text-white shadow-[0_12px_25px_rgba(3,189,72,0.22)]">
-  <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70">
-    Статус услуги
-  </div>
+                    <div className="w-full rounded-2xl bg-[#03bd48] px-4 py-4 text-white shadow-[0_12px_25px_rgba(3,189,72,0.22)] sm:w-auto sm:min-w-[220px] sm:px-5">
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70">
+                        Статус услуги
+                      </div>
 
-  <div className="mt-1 text-lg font-extrabold">Доступ активен</div>
+                      <div className="mt-1 text-lg font-extrabold">
+                        Доступ активен
+                      </div>
 
-  <a
-    href="https://helpsell.ru/extension"
-    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/25 bg-black/20 px-3 py-2.5 text-xs font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-black/35"
-  >
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-4 w-4"
-      aria-hidden="true"
-    >
-      <path d="M12 3v12" />
-      <path d="m7 10 5 5 5-5" />
-      <path d="M5 21h14" />
-    </svg>
-    Скачать расширение
-  </a>
-</div>
+                      <a
+                        href="https://helpsell.ru/extension"
+                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/25 bg-black/20 px-3 py-2.5 text-xs font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-black/35"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 3v12" />
+                          <path d="m7 10 5 5 5-5" />
+                          <path d="M5 21h14" />
+                        </svg>
+                        Скачать расширение
+                      </a>
+                    </div>
                   </div>
                 </section>
 
@@ -1177,37 +1254,38 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         Отслеживайте позиции
                       </h3>
                       <p className="mt-3 max-w-2xl text-sm leading-7 text-black/50">
-                        Проверяйте сохранённые результаты парсинга: продавцов, позиции,
-                        объявления, рейтинг и отзывы.
+                        Проверяйте сохранённые результаты парсинга: продавцов,
+                        позиции, объявления, рейтинг и отзывы.
                       </p>
                     </div>
 
                     <button
-  type="button"
-  onClick={toggleAvitoAnalytics}
-  className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-black px-5 py-4 text-sm font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-[#03bd48]"
->
-  <span>
-    {isAvitoAnalyticsOpen ? "Закрыть аналитику" : "Открыть аналитику"}
-  </span>
-  <span
-    className={`flex h-6 w-6 items-center justify-center rounded-lg transition-transform duration-300 ${
-      isAvitoAnalyticsOpen ? "rotate-180" : "rotate-0"
-    }`}
-  >
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      className="h-4 w-4"
-      aria-hidden="true"
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  </span>
-</button>
-
+                      type="button"
+                      onClick={toggleAvitoAnalytics}
+                      className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-black px-5 py-4 text-sm font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-[#03bd48] sm:w-auto sm:shrink-0"
+                    >
+                      <span>
+                        {isAvitoAnalyticsOpen
+                          ? "Закрыть аналитику"
+                          : "Открыть аналитику"}
+                      </span>
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center rounded-lg transition-transform duration-300 ${
+                          isAvitoAnalyticsOpen ? "rotate-180" : "rotate-0"
+                        }`}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          className="h-4 w-4"
+                          aria-hidden="true"
+                        >
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </span>
+                    </button>
                   </div>
 
                   <CollapsibleContent isOpen={isAvitoAnalyticsOpen}>
@@ -1218,7 +1296,8 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                             Аналитика мест в поиске
                           </h4>
                           <p className="mt-1 text-sm text-black/48">
-                            Выберите сохранение по дате и запросу, чтобы открыть подробную таблицу.
+                            Выберите сохранение по дате и запросу, чтобы открыть
+                            подробную таблицу.
                           </p>
                         </div>
                         <button
@@ -1252,448 +1331,641 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                             Пока нет сохранённых анализов
                           </h4>
                           <p className="mx-auto mt-2 max-w-lg text-sm leading-7 text-black/50">
-                            Откройте поиск Авито, запустите расширение и во вкладке
-                            «По продавцам» нажмите «Сохранить анализ в личный кабинет».
+                            Откройте поиск Авито, запустите расширение и во
+                            вкладке «По продавцам» нажмите «Сохранить анализ в
+                            личный кабинет».
                           </p>
                         </div>
                       )}
 
                       {avitoAnalyses.length > 0 && (
-  <div className="space-y-5">
-    <div className="rounded-3xl border border-black/[0.07] bg-[linear-gradient(135deg,rgba(3,189,72,0.07),rgba(255,255,255,0.98))] p-3 shadow-[0_10px_28px_rgba(16,24,40,0.04)] sm:p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
-            Сохранённые анализы
-          </div>
-          <div className="mt-1 text-sm font-extrabold text-black">
-            Выберите дату и поисковый запрос
-          </div>
-        </div>
+                        <div className="space-y-5">
+                          <div className="rounded-3xl border border-black/[0.07] bg-[linear-gradient(135deg,rgba(3,189,72,0.07),rgba(255,255,255,0.98))] p-3 shadow-[0_10px_28px_rgba(16,24,40,0.04)] sm:p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
+                                  Сохранённые анализы
+                                </div>
+                                <div className="mt-1 text-sm font-extrabold text-black">
+                                  Выберите дату и поисковый запрос
+                                </div>
+                              </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              avitoAnalysesScrollRef.current?.scrollBy({
-                left: -340,
-                behavior: "smooth",
-              });
-            }}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white text-black transition hover:border-[#03bd48]/45 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36]"
-            aria-label="Показать предыдущие анализы"
-            title="Предыдущие анализы"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-4 w-4"
-              aria-hidden="true"
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-          </button>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    avitoAnalysesScrollRef.current?.scrollBy({
+                                      left: -340,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white text-black transition hover:border-[#03bd48]/45 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36]"
+                                  aria-label="Показать предыдущие анализы"
+                                  title="Предыдущие анализы"
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.4"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="m15 18-6-6 6-6" />
+                                  </svg>
+                                </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              avitoAnalysesScrollRef.current?.scrollBy({
-                left: 340,
-                behavior: "smooth",
-              });
-            }}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white text-black transition hover:border-[#03bd48]/45 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36]"
-            aria-label="Показать следующие анализы"
-            title="Следующие анализы"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-4 w-4"
-              aria-hidden="true"
-            >
-              <path d="m9 18 6-6-6-6" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <div
-        ref={avitoAnalysesScrollRef}
-        className="mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]"
-      >
-        {avitoAnalyses.map((analysis) => {
-          const isActive = selectedAvitoAnalysisId === analysis.id;
-
-          return (
-            <button
-              key={analysis.id}
-              type="button"
-              onClick={() => loadAvitoAnalysis(analysis.id)}
-              className={`w-[215px] shrink-0 snap-start rounded-2xl border p-3.5 text-left transition-all duration-200 ${
-                isActive
-                  ? "border-[#03bd48] bg-[#03bd48]/10 shadow-[0_8px_20px_rgba(3,189,72,0.12)]"
-                  : "border-black/[0.08] bg-white hover:-translate-y-0.5 hover:border-[#03bd48]/45 hover:bg-[#03bd48]/[0.035]"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="text-[11px] font-extrabold text-black/65">
-                  {new Intl.DateTimeFormat("ru-RU", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }).format(new Date(analysis.createdAt))}
-                </div>
-
-                <span
-                  className={`rounded-full px-2 py-1 text-[10px] font-extrabold ${
-                    isActive
-                      ? "bg-[#03bd48] text-white"
-                      : "bg-black/[0.06] text-black/55"
-                  }`}
-                >
-                  {analysis.itemsCount}
-                </span>
-              </div>
-
-              <div
-                className={`mt-2 truncate text-sm font-extrabold ${
-                  isActive ? "text-[#028c36]" : "text-black"
-                }`}
-                title={analysis.searchQuery || "Запрос не указан"}
-              >
-                {analysis.searchQuery || "Запрос не указан"}
-              </div>
-
-              <div className="mt-1 text-xs font-semibold text-black/42">
-                Продавцов: {analysis.itemsCount}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-
-    <div className="relative min-w-0 rounded-3xl border border-black/[0.07] bg-white p-4 shadow-[0_14px_35px_rgba(16,24,40,0.06)] md:p-5">
-      {avitoAnalysisLoading && selectedAvitoAnalysis && (
-        <div className="absolute inset-x-4 top-4 z-20 flex items-center justify-center gap-2 rounded-xl border border-[#03bd48]/25 bg-white/95 px-4 py-2.5 text-xs font-extrabold text-[#028c36] shadow-[0_8px_22px_rgba(16,24,40,0.1)] backdrop-blur md:inset-x-5 md:top-5">
-          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#03bd48]/25 border-t-[#03bd48]" />
-          Обновляем выбранный анализ…
-        </div>
-      )}
-
-      {!selectedAvitoAnalysis && avitoAnalysisLoading && (
-        <div className="py-16 text-center text-sm font-semibold text-black/50">
-          Загружаем выбранный анализ...
-        </div>
-      )}
-
-      {selectedAvitoAnalysis && (
-        <>
-          <div className="flex flex-col gap-4 border-b border-black/[0.07] pb-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
-                Выбранный анализ
-              </div>
-
-              <h4 className="mt-2 truncate text-2xl font-extrabold tracking-[-0.04em] text-black">
-                {selectedAvitoAnalysis.searchQuery || "Поисковый запрос"}
-              </h4>
-
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-black/48">
-                <span>
-                  {new Intl.DateTimeFormat("ru-RU", {
-                    dateStyle: "long",
-                    timeStyle: "short",
-                  }).format(new Date(selectedAvitoAnalysis.createdAt))}
-                </span>
-
-                <span className="h-1 w-1 rounded-full bg-black/25" />
-
-                <span className="font-bold text-[#028c36]">
-                  {selectedAvitoAnalysis.itemsCount} продавцов
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => deleteAvitoAnalysis(selectedAvitoAnalysis.id)}
-              className="h-fit shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
-            >
-              Удалить
-            </button>
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-black/[0.07] bg-black/[0.018] p-3 sm:p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <label className="relative block min-w-0 flex-1">
-                <span className="sr-only">
-                  Поиск по продавцу, позиции, объявлению или цене
-                </span>
-
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35"
-                  aria-hidden="true"
-                >
-                  <circle cx="11" cy="11" r="6" />
-                  <path d="m16 16 4 4" />
-                </svg>
-
-                <input
-                  value={avitoSearch}
-                  onChange={(event) => setAvitoSearch(event.target.value)}
-                  placeholder="Поиск по продавцу, позиции, объявлению или цене..."
-                  className="w-full rounded-xl border border-black/10 bg-white py-3 pl-11 pr-4 text-sm font-semibold text-black outline-none transition placeholder:text-black/35 focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
-                />
-              </label>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40">
-                  <input
-                    type="checkbox"
-                    checked={avitoOnlySelected}
-                    onChange={(event) => setAvitoOnlySelected(event.target.checked)}
-                    className="h-4 w-4 rounded border-black/25 accent-[#03bd48]"
-                  />
-                  Только выделенные
-                </label>
-
-                {selectedAvitoRowIds.size > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedAvitoRowIds(new Set());
-                      setAvitoOnlySelected(false);
-                    }}
-                    className="rounded-xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-3 py-3 text-xs font-extrabold text-[#028c36] transition hover:bg-[#03bd48]/20"
-                  >
-                    Снять: {selectedAvitoRowIds.size}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-black/[0.06] px-3 py-1.5 text-xs font-bold text-black/55">
-                В таблице: {filteredAvitoItems.length}
-              </span>
-
-              <span className="rounded-full bg-[#03bd48]/10 px-3 py-1.5 text-xs font-extrabold text-[#028c36]">
-                Выбрано: {selectedAvitoRowIds.size}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-5 overflow-hidden rounded-2xl border border-black/[0.08] bg-white">
-            <div className="max-h-[620px] overflow-y-auto">
-              <table className="w-full table-fixed border-collapse text-left">
-                <thead className="sticky top-0 z-10 bg-[#101010] shadow-[0_2px_0_rgba(255,255,255,0.08)]">
-                  <tr className="whitespace-nowrap text-[10px] font-extrabold uppercase tracking-[0.06em] text-white/65">
-                    <th className="w-[52px] px-3 py-4 text-center">
-                      <input
-                        type="checkbox"
-                        aria-label="Выбрать все строки"
-                        checked={
-                          filteredAvitoItems.length > 0 &&
-                          filteredAvitoItems.every((item) =>
-                            selectedAvitoRowIds.has(item.id)
-                          )
-                        }
-                        onChange={(event) => {
-                          const checked = event.target.checked;
-
-                          setSelectedAvitoRowIds((current) => {
-                            const next = new Set(current);
-
-                            filteredAvitoItems.forEach((item) => {
-                              if (checked) {
-                                next.add(item.id);
-                              } else {
-                                next.delete(item.id);
-                              }
-                            });
-
-                            return next;
-                          });
-                        }}
-                        className="h-4 w-4 cursor-pointer rounded border-white/30 accent-[#03bd48]"
-                      />
-                    </th>
-
-                    <th className="w-[13%] px-3 py-4">Позиции</th>
-<th className="w-[20%] px-3 py-4">Продавец</th>
-<th className="w-[11%] px-3 py-4 text-center">Объяв.</th>
-<th className="w-[10%] px-3 py-4 text-center">Рейтинг</th>
-<th className="w-[10%] px-3 py-4 text-center">Отзывы</th>
-<th className="px-3 py-4">Первое объявление</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredAvitoItems.map((item) => {
-                    const ad = item.ads[0];
-                    const isSelected = selectedAvitoRowIds.has(item.id);
-
-                    const positions = item.positions.length
-                      ? item.positions.join(", ")
-                      : item.firstPosition ?? "—";
-
-                    return (
-                      <tr
-                        key={item.id}
-                        onClick={() => {
-                          setSelectedAvitoRowIds((current) => {
-                            const next = new Set(current);
-
-                            if (next.has(item.id)) {
-                              next.delete(item.id);
-                            } else {
-                              next.add(item.id);
-                            }
-
-                            return next;
-                          });
-                        }}
-                        className={`cursor-pointer border-b border-black/[0.06] text-sm transition last:border-b-0 ${
-                          isSelected
-                            ? "bg-[#03bd48]/[0.12] shadow-[inset_4px_0_0_#03bd48]"
-                            : "bg-white hover:bg-[#03bd48]/[0.035]"
-                        }`}
-                      >
-                        <td className="px-3 py-3.5 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            aria-label={`Выбрать продавца ${item.sellerName}`}
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={() => {
-                              setSelectedAvitoRowIds((current) => {
-                                const next = new Set(current);
-
-                                if (next.has(item.id)) {
-                                  next.delete(item.id);
-                                } else {
-                                  next.add(item.id);
-                                }
-
-                                return next;
-                              });
-                            }}
-                            className="h-4 w-4 cursor-pointer rounded border-black/25 accent-[#03bd48]"
-                          />
-                        </td>
-
-                        <td className="px-3 py-3.5 align-top">
-                          <span
-                            className={`inline-flex max-w-full rounded-lg px-2 py-1 text-xs font-extrabold ${
-                              isSelected
-                                ? "bg-[#03bd48] text-white"
-                                : "bg-[#03bd48]/10 text-[#028c36]"
-                            }`}
-                          >
-                            <span className="break-words leading-5">{positions}</span>
-                          </span>
-                        </td>
-
-                        <td className="px-3 py-3.5 align-top">
-                          <div
-  className="break-words font-extrabold leading-5 text-black"
-  title={item.sellerName}
->
-  {item.sellerName}
-</div>
-
-                          {isSelected && (
-                            <div className="mt-1 text-[10px] font-extrabold text-[#028c36]">
-                              Выбрано
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    avitoAnalysesScrollRef.current?.scrollBy({
+                                      left: 340,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white text-black transition hover:border-[#03bd48]/45 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36]"
+                                  aria-label="Показать следующие анализы"
+                                  title="Следующие анализы"
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.4"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="m9 18 6-6-6-6" />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
-                          )}
-                        </td>
 
-                        <td className="px-3 py-3.5 text-center align-top">
-                          <span className="inline-flex min-w-8 justify-center rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-extrabold text-black/70">
-                            {item.adsCount}
-                          </span>
-                        </td>
+                            <div
+                              ref={avitoAnalysesScrollRef}
+                              className="mt-4 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-2 pr-2 [scrollbar-width:thin] sm:gap-3"
+                            >
+                              {avitoAnalyses.map((analysis) => {
+                                const isActive =
+                                  selectedAvitoAnalysisId === analysis.id;
 
-                        <td className="px-3 py-3.5 text-center align-top font-extrabold text-black">
-                          {item.rating || "—"}
-                        </td>
+                                return (
+                                  <button
+                                    key={analysis.id}
+                                    type="button"
+                                    onClick={() =>
+                                      loadAvitoAnalysis(analysis.id)
+                                    }
+                                    className={`w-[178px] shrink-0 snap-start rounded-2xl border p-3 text-left transition-all duration-200 sm:w-[215px] sm:p-3.5 ${
+                                      isActive
+                                        ? "border-[#03bd48] bg-[#03bd48]/10 shadow-[0_8px_20px_rgba(3,189,72,0.12)]"
+                                        : "border-black/[0.08] bg-white hover:-translate-y-0.5 hover:border-[#03bd48]/45 hover:bg-[#03bd48]/[0.035]"
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="text-[10px] font-extrabold leading-4 text-black/65 sm:text-[11px]">
+                                        {new Intl.DateTimeFormat("ru-RU", {
+                                          day: "numeric",
+                                          month: "short",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        }).format(new Date(analysis.createdAt))}
+                                      </div>
 
-                        <td className="px-3 py-3.5 text-center align-top font-extrabold text-black">
-                          {item.reviews || "—"}
-                        </td>
+                                      <span
+                                        className={`rounded-full px-2 py-1 text-[10px] font-extrabold ${
+                                          isActive
+                                            ? "bg-[#03bd48] text-white"
+                                            : "bg-black/[0.06] text-black/55"
+                                        }`}
+                                      >
+                                        {analysis.itemsCount}
+                                      </span>
+                                    </div>
 
-                        <td className="px-3 py-3.5 align-top">
-                          {ad?.link ? (
-                            <a
-  href={ad.link}
-  target="_blank"
-  rel="noreferrer"
-  onClick={(event) => event.stopPropagation()}
-  className="block break-words font-extrabold leading-5 text-[#028c36] hover:underline"
-  title={ad.title || "Открыть объявление"}
->
-  {ad.title || "Открыть объявление"}
-</a>
-                          ) : (
-                            <div className="break-words font-bold leading-5 text-black/65">
-  {ad?.title || "—"}
-</div>
-                          )}
+                                    <div
+                                      className={`mt-2 truncate text-sm font-extrabold ${
+                                        isActive
+                                          ? "text-[#028c36]"
+                                          : "text-black"
+                                      }`}
+                                      title={
+                                        analysis.searchQuery ||
+                                        "Запрос не указан"
+                                      }
+                                    >
+                                      {analysis.searchQuery ||
+                                        "Запрос не указан"}
+                                    </div>
 
-                          {ad?.price && (
-                            <div className="mt-1 whitespace-nowrap text-xs font-bold text-black/45">
-  {ad.price}
-</div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                                    <div className="mt-1 text-xs font-semibold text-black/42">
+                                      Продавцов: {analysis.itemsCount}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
 
-                  {filteredAvitoItems.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-5 py-16 text-center">
-                        <div className="text-base font-extrabold text-black">
-                          {avitoOnlySelected
-                            ? "Нет выбранных строк"
-                            : "По вашему поиску ничего не найдено"}
+                          <div className="relative min-w-0 rounded-3xl border border-black/[0.07] bg-white p-4 shadow-[0_14px_35px_rgba(16,24,40,0.06)] md:p-5">
+                            {avitoAnalysisLoading && selectedAvitoAnalysis && (
+                              <div className="absolute inset-x-4 top-4 z-20 flex items-center justify-center gap-2 rounded-xl border border-[#03bd48]/25 bg-white/95 px-4 py-2.5 text-xs font-extrabold text-[#028c36] shadow-[0_8px_22px_rgba(16,24,40,0.1)] backdrop-blur md:inset-x-5 md:top-5">
+                                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#03bd48]/25 border-t-[#03bd48]" />
+                                Обновляем выбранный анализ…
+                              </div>
+                            )}
+
+                            {!selectedAvitoAnalysis && avitoAnalysisLoading && (
+                              <div className="py-16 text-center text-sm font-semibold text-black/50">
+                                Загружаем выбранный анализ...
+                              </div>
+                            )}
+
+                            {selectedAvitoAnalysis && (
+                              <>
+                                <div className="flex flex-col gap-3 border-b border-black/[0.07] pb-5 sm:flex-row sm:items-start sm:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
+                                      Выбранный анализ
+                                    </div>
+
+                                    <h4 className="mt-2 break-words text-xl font-extrabold leading-tight tracking-[-0.04em] text-black sm:text-2xl">
+                                      {selectedAvitoAnalysis.searchQuery ||
+                                        "Поисковый запрос"}
+                                    </h4>
+
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-black/48">
+                                      <span>
+                                        {new Intl.DateTimeFormat("ru-RU", {
+                                          dateStyle: "long",
+                                          timeStyle: "short",
+                                        }).format(
+                                          new Date(
+                                            selectedAvitoAnalysis.createdAt,
+                                          ),
+                                        )}
+                                      </span>
+
+                                      <span className="h-1 w-1 rounded-full bg-black/25" />
+
+                                      <span className="font-bold text-[#028c36]">
+                                        {selectedAvitoAnalysis.itemsCount}{" "}
+                                        продавцов
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      deleteAvitoAnalysis(
+                                        selectedAvitoAnalysis.id,
+                                      )
+                                    }
+                                    className="h-fit w-full shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100 sm:w-auto"
+                                  >
+                                    Удалить
+                                  </button>
+                                </div>
+
+                                <div className="mt-5 rounded-2xl border border-black/[0.07] bg-black/[0.018] p-3 sm:p-4">
+                                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                    <label className="relative block min-w-0 flex-1">
+                                      <span className="sr-only">
+                                        Поиск по продавцу, позиции, объявлению
+                                        или цене
+                                      </span>
+
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35"
+                                        aria-hidden="true"
+                                      >
+                                        <circle cx="11" cy="11" r="6" />
+                                        <path d="m16 16 4 4" />
+                                      </svg>
+
+                                      <input
+                                        value={avitoSearch}
+                                        onChange={(event) =>
+                                          setAvitoSearch(event.target.value)
+                                        }
+                                        placeholder="Поиск по продавцу, позиции, объявлению или цене..."
+                                        className="w-full rounded-xl border border-black/10 bg-white py-3 pl-11 pr-4 text-sm font-semibold text-black outline-none transition placeholder:text-black/35 focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+                                      />
+                                    </label>
+
+                                    <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                                      <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 sm:w-auto">
+                                        <input
+                                          type="checkbox"
+                                          checked={avitoOnlySelected}
+                                          onChange={(event) =>
+                                            setAvitoOnlySelected(
+                                              event.target.checked,
+                                            )
+                                          }
+                                          className="h-4 w-4 rounded border-black/25 accent-[#03bd48]"
+                                        />
+                                        Только выделенные
+                                      </label>
+
+                                      {selectedAvitoRowIds.size > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedAvitoRowIds(new Set());
+                                            setAvitoOnlySelected(false);
+                                          }}
+                                          className="w-full rounded-xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-3 py-3 text-xs font-extrabold text-[#028c36] transition hover:bg-[#03bd48]/20 sm:w-auto"
+                                        >
+                                          Снять: {selectedAvitoRowIds.size}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <span className="rounded-full bg-black/[0.06] px-3 py-1.5 text-xs font-bold text-black/55">
+                                      В таблице: {filteredAvitoItems.length}
+                                    </span>
+
+                                    <span className="rounded-full bg-[#03bd48]/10 px-3 py-1.5 text-xs font-extrabold text-[#028c36]">
+                                      Выбрано: {selectedAvitoRowIds.size}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="mt-5 space-y-3 md:hidden">
+                                  {filteredAvitoItems.map((item) => {
+                                    const ad = item.ads[0];
+                                    const isSelected = selectedAvitoRowIds.has(
+                                      item.id,
+                                    );
+                                    const positions = item.positions.length
+                                      ? item.positions.join(", ")
+                                      : (item.firstPosition ?? "—");
+                                    return (
+                                      <article
+                                        key={item.id}
+                                        onClick={() =>
+                                          setSelectedAvitoRowIds((current) => {
+                                            const next = new Set(current);
+                                            if (next.has(item.id))
+                                              next.delete(item.id);
+                                            else next.add(item.id);
+                                            return next;
+                                          })
+                                        }
+                                        className={`cursor-pointer rounded-2xl border p-4 transition ${isSelected ? "border-[#03bd48]/50 bg-[#03bd48]/10 shadow-[inset_4px_0_0_#03bd48]" : "border-black/[0.08] bg-white"}`}
+                                      >
+                                        <div className="flex items-start gap-3">
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            aria-label={`Выбрать продавца ${item.sellerName}`}
+                                            onClick={(event) =>
+                                              event.stopPropagation()
+                                            }
+                                            onChange={() =>
+                                              setSelectedAvitoRowIds(
+                                                (current) => {
+                                                  const next = new Set(current);
+                                                  if (next.has(item.id))
+                                                    next.delete(item.id);
+                                                  else next.add(item.id);
+                                                  return next;
+                                                },
+                                              )
+                                            }
+                                            className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-black/25 accent-[#03bd48]"
+                                          />
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                              <div className="break-words text-base font-extrabold leading-5 text-black">
+                                                {item.sellerName}
+                                              </div>
+                                              <span
+                                                className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-extrabold ${isSelected ? "bg-[#03bd48] text-white" : "bg-[#03bd48]/10 text-[#028c36]"}`}
+                                              >
+                                                Поз.: {positions}
+                                              </span>
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-3 gap-2">
+                                              <div className="rounded-xl bg-black/[0.035] p-2">
+                                                <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                                  Объявл.
+                                                </div>
+                                                <div className="mt-1 text-sm font-extrabold text-black">
+                                                  {item.adsCount}
+                                                </div>
+                                              </div>
+                                              <div className="rounded-xl bg-black/[0.035] p-2">
+                                                <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                                  Рейтинг
+                                                </div>
+                                                <div className="mt-1 text-sm font-extrabold text-black">
+                                                  {item.rating || "—"}
+                                                </div>
+                                              </div>
+                                              <div className="rounded-xl bg-black/[0.035] p-2">
+                                                <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                                  Отзывы
+                                                </div>
+                                                <div className="mt-1 text-sm font-extrabold text-black">
+                                                  {item.reviews || "—"}
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <div className="mt-3 border-t border-black/[0.07] pt-3">
+                                              <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                                Первое объявление
+                                              </div>
+                                              {ad?.link ? (
+                                                <a
+                                                  href={ad.link}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  onClick={(event) =>
+                                                    event.stopPropagation()
+                                                  }
+                                                  className="mt-1 block break-words text-sm font-extrabold leading-5 text-[#028c36] hover:underline"
+                                                >
+                                                  {ad.title ||
+                                                    "Открыть объявление"}
+                                                </a>
+                                              ) : (
+                                                <div className="mt-1 break-words text-sm font-bold leading-5 text-black/65">
+                                                  {ad?.title || "—"}
+                                                </div>
+                                              )}
+                                              {ad?.price && (
+                                                <div className="mt-1 text-xs font-bold text-black/45">
+                                                  {ad.price}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </article>
+                                    );
+                                  })}
+                                  {filteredAvitoItems.length === 0 && (
+                                    <div className="rounded-2xl border border-dashed border-black/15 px-5 py-12 text-center text-sm text-black/48">
+                                      {avitoOnlySelected
+                                        ? "Нет выбранных строк"
+                                        : "По вашему поиску ничего не найдено"}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="mt-5 hidden overflow-hidden rounded-2xl border border-black/[0.08] bg-white md:block">
+                                  <div className="max-h-[620px] overflow-y-auto">
+                                    <table className="w-full table-fixed border-collapse text-left">
+                                      <thead className="sticky top-0 z-10 bg-[#101010] shadow-[0_2px_0_rgba(255,255,255,0.08)]">
+                                        <tr className="whitespace-nowrap text-[10px] font-extrabold uppercase tracking-[0.06em] text-white/65">
+                                          <th className="w-[52px] px-3 py-4 text-center">
+                                            <input
+                                              type="checkbox"
+                                              aria-label="Выбрать все строки"
+                                              checked={
+                                                filteredAvitoItems.length > 0 &&
+                                                filteredAvitoItems.every(
+                                                  (item) =>
+                                                    selectedAvitoRowIds.has(
+                                                      item.id,
+                                                    ),
+                                                )
+                                              }
+                                              onChange={(event) => {
+                                                const checked =
+                                                  event.target.checked;
+
+                                                setSelectedAvitoRowIds(
+                                                  (current) => {
+                                                    const next = new Set(
+                                                      current,
+                                                    );
+
+                                                    filteredAvitoItems.forEach(
+                                                      (item) => {
+                                                        if (checked) {
+                                                          next.add(item.id);
+                                                        } else {
+                                                          next.delete(item.id);
+                                                        }
+                                                      },
+                                                    );
+
+                                                    return next;
+                                                  },
+                                                );
+                                              }}
+                                              className="h-4 w-4 cursor-pointer rounded border-white/30 accent-[#03bd48]"
+                                            />
+                                          </th>
+
+                                          <th className="w-[13%] px-3 py-4">
+                                            Позиции
+                                          </th>
+                                          <th className="w-[20%] px-3 py-4">
+                                            Продавец
+                                          </th>
+                                          <th className="w-[11%] px-3 py-4 text-center">
+                                            Объяв.
+                                          </th>
+                                          <th className="w-[10%] px-3 py-4 text-center">
+                                            Рейтинг
+                                          </th>
+                                          <th className="w-[10%] px-3 py-4 text-center">
+                                            Отзывы
+                                          </th>
+                                          <th className="px-3 py-4">
+                                            Первое объявление
+                                          </th>
+                                        </tr>
+                                      </thead>
+
+                                      <tbody>
+                                        {filteredAvitoItems.map((item) => {
+                                          const ad = item.ads[0];
+                                          const isSelected =
+                                            selectedAvitoRowIds.has(item.id);
+
+                                          const positions = item.positions
+                                            .length
+                                            ? item.positions.join(", ")
+                                            : (item.firstPosition ?? "—");
+
+                                          return (
+                                            <tr
+                                              key={item.id}
+                                              onClick={() => {
+                                                setSelectedAvitoRowIds(
+                                                  (current) => {
+                                                    const next = new Set(
+                                                      current,
+                                                    );
+
+                                                    if (next.has(item.id)) {
+                                                      next.delete(item.id);
+                                                    } else {
+                                                      next.add(item.id);
+                                                    }
+
+                                                    return next;
+                                                  },
+                                                );
+                                              }}
+                                              className={`cursor-pointer border-b border-black/[0.06] text-sm transition last:border-b-0 ${
+                                                isSelected
+                                                  ? "bg-[#03bd48]/[0.12] shadow-[inset_4px_0_0_#03bd48]"
+                                                  : "bg-white hover:bg-[#03bd48]/[0.035]"
+                                              }`}
+                                            >
+                                              <td className="px-3 py-3.5 text-center">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={isSelected}
+                                                  aria-label={`Выбрать продавца ${item.sellerName}`}
+                                                  onClick={(event) =>
+                                                    event.stopPropagation()
+                                                  }
+                                                  onChange={() => {
+                                                    setSelectedAvitoRowIds(
+                                                      (current) => {
+                                                        const next = new Set(
+                                                          current,
+                                                        );
+
+                                                        if (next.has(item.id)) {
+                                                          next.delete(item.id);
+                                                        } else {
+                                                          next.add(item.id);
+                                                        }
+
+                                                        return next;
+                                                      },
+                                                    );
+                                                  }}
+                                                  className="h-4 w-4 cursor-pointer rounded border-black/25 accent-[#03bd48]"
+                                                />
+                                              </td>
+
+                                              <td className="px-3 py-3.5 align-top">
+                                                <span
+                                                  className={`inline-flex max-w-full rounded-lg px-2 py-1 text-xs font-extrabold ${
+                                                    isSelected
+                                                      ? "bg-[#03bd48] text-white"
+                                                      : "bg-[#03bd48]/10 text-[#028c36]"
+                                                  }`}
+                                                >
+                                                  <span className="break-words leading-5">
+                                                    {positions}
+                                                  </span>
+                                                </span>
+                                              </td>
+
+                                              <td className="px-3 py-3.5 align-top">
+                                                <div
+                                                  className="break-words font-extrabold leading-5 text-black"
+                                                  title={item.sellerName}
+                                                >
+                                                  {item.sellerName}
+                                                </div>
+
+                                                {isSelected && (
+                                                  <div className="mt-1 text-[10px] font-extrabold text-[#028c36]">
+                                                    Выбрано
+                                                  </div>
+                                                )}
+                                              </td>
+
+                                              <td className="px-3 py-3.5 text-center align-top">
+                                                <span className="inline-flex min-w-8 justify-center rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-extrabold text-black/70">
+                                                  {item.adsCount}
+                                                </span>
+                                              </td>
+
+                                              <td className="px-3 py-3.5 text-center align-top font-extrabold text-black">
+                                                {item.rating || "—"}
+                                              </td>
+
+                                              <td className="px-3 py-3.5 text-center align-top font-extrabold text-black">
+                                                {item.reviews || "—"}
+                                              </td>
+
+                                              <td className="px-3 py-3.5 align-top">
+                                                {ad?.link ? (
+                                                  <a
+                                                    href={ad.link}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    onClick={(event) =>
+                                                      event.stopPropagation()
+                                                    }
+                                                    className="block break-words font-extrabold leading-5 text-[#028c36] hover:underline"
+                                                    title={
+                                                      ad.title ||
+                                                      "Открыть объявление"
+                                                    }
+                                                  >
+                                                    {ad.title ||
+                                                      "Открыть объявление"}
+                                                  </a>
+                                                ) : (
+                                                  <div className="break-words font-bold leading-5 text-black/65">
+                                                    {ad?.title || "—"}
+                                                  </div>
+                                                )}
+
+                                                {ad?.price && (
+                                                  <div className="mt-1 whitespace-nowrap text-xs font-bold text-black/45">
+                                                    {ad.price}
+                                                  </div>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+
+                                        {filteredAvitoItems.length === 0 && (
+                                          <tr>
+                                            <td
+                                              colSpan={7}
+                                              className="px-5 py-16 text-center"
+                                            >
+                                              <div className="text-base font-extrabold text-black">
+                                                {avitoOnlySelected
+                                                  ? "Нет выбранных строк"
+                                                  : "По вашему поиску ничего не найдено"}
+                                              </div>
+
+                                              <p className="mt-2 text-sm text-black/45">
+                                                {avitoOnlySelected
+                                                  ? "Выберите строки или отключите фильтр «Только выделенные»."
+                                                  : "Измените запрос поиска или выберите другой анализ."}
+                                              </p>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
-
-                        <p className="mt-2 text-sm text-black/45">
-                          {avitoOnlySelected
-                            ? "Выберите строки или отключите фильтр «Только выделенные»."
-                            : "Измените запрос поиска или выберите другой анализ."}
-                        </p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  </div>
-)}
-                              
+                      )}
                     </div>
                   </CollapsibleContent>
                 </section>
@@ -1706,14 +1978,15 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                   <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#03bd48]/20 blur-3xl" />
                   <div className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-white/[0.035] blur-3xl" />
 
-                  <div className="relative flex items-start justify-between gap-5 p-6 md:p-8">
+                  <div className="relative flex items-start justify-between gap-3 p-4 sm:gap-5 sm:p-6 md:p-8">
                     <div className="min-w-0">
                       <div className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold">
                         Инструменты HelpSell
                       </div>
 
-                      <h2 className="text-3xl font-extrabold tracking-[-0.055em] md:text-5xl">
-                        Финансовый<span className="text-[#03bd48]"> анализ</span>
+                      <h2 className="text-[30px] font-extrabold leading-[1.03] tracking-[-0.055em] sm:text-3xl md:text-5xl">
+                        Финансовый
+                        <span className="text-[#03bd48]"> анализ</span>
                       </h2>
 
                       <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62 md:text-[15px]">
@@ -1724,89 +1997,94 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
 
                     <CollapseButton
                       isOpen={isFinancialHeroOpen}
-                      onClick={() => setIsFinancialHeroOpen((current) => !current)}
+                      onClick={() =>
+                        setIsFinancialHeroOpen((current) => !current)
+                      }
                       dark
                       label="Свернуть или раскрыть описание финансового анализа"
                     />
                   </div>
 
                   <CollapsibleContent isOpen={isFinancialHeroOpen}>
-  <div className="relative grid gap-3 border-t border-white/10 p-6 pt-5 sm:grid-cols-2 md:p-8 md:pt-5">
-    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-5 backdrop-blur-sm transition hover:border-[#03bd48]/40 hover:bg-white/[0.08]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/45">
-            Указан период
-          </div>
+                    <div className="relative grid gap-3 border-t border-white/10 p-4 pt-4 sm:grid-cols-2 sm:p-6 sm:pt-5 md:p-8 md:pt-5">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-5 backdrop-blur-sm transition hover:border-[#03bd48]/40 hover:bg-white/[0.08]">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/45">
+                              Указан период
+                            </div>
 
-          <div className="mt-2 text-base font-extrabold tracking-[-0.035em] text-white md:text-xl">
-            {formatRecordDate(periodStart)} — {formatRecordDate(periodEnd)}
-          </div>
-        </div>
+                            <div className="mt-2 text-sm font-extrabold leading-5 tracking-[-0.025em] text-white sm:text-base md:text-xl">
+                              {formatRecordDate(periodStart)} —{" "}
+                              {formatRecordDate(periodEnd)}
+                            </div>
+                          </div>
 
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-[#03bd48] shadow-[0_9px_18px_rgba(0,0,0,0.16)]">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-5 w-5"
-            aria-hidden="true"
-          >
-            <path d="M4 19V5" />
-            <path d="M4 19h16" />
-            <path d="m7 15 4-4 3 2 5-6" />
-          </svg>
-        </div>
-      </div>
-    </div>
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-[#03bd48] shadow-[0_9px_18px_rgba(0,0,0,0.16)]">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-5 w-5"
+                              aria-hidden="true"
+                            >
+                              <path d="M4 19V5" />
+                              <path d="M4 19h16" />
+                              <path d="m7 15 4-4 3 2 5-6" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
 
-    <div className="rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/[0.12] p-5 backdrop-blur-sm transition hover:border-[#03bd48]/55 hover:bg-[#03bd48]/[0.16]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/55">
-            Чистая прибыль
-          </div>
+                      <div className="rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/[0.12] p-5 backdrop-blur-sm transition hover:border-[#03bd48]/55 hover:bg-[#03bd48]/[0.16]">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/55">
+                              Чистая прибыль
+                            </div>
 
-          <div
-            className={`mt-2 text-4xl font-extrabold tracking-[-0.05em] ${
-              analytics.netProfit >= 0 ? "text-[#03bd48]" : "text-red-400"
-            }`}
-          >
-            {analytics.netProfit > 0 ? "+" : ""}
-            {formatMoney(analytics.netProfit)} ₽
-          </div>
-        </div>
+                            <div
+                              className={`mt-2 break-words text-3xl font-extrabold leading-none tracking-[-0.05em] sm:text-4xl ${
+                                analytics.netProfit >= 0
+                                  ? "text-[#03bd48]"
+                                  : "text-red-400"
+                              }`}
+                            >
+                              {analytics.netProfit > 0 ? "+" : ""}
+                              {formatMoney(analytics.netProfit)} ₽
+                            </div>
+                          </div>
 
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#03bd48] text-white shadow-[0_9px_18px_rgba(3,189,72,0.28)]">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.9"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-6 w-6"
-            aria-hidden="true"
-          >
-            <rect x="3" y="7" width="18" height="11" rx="2" />
-            <path d="M5 9h14" />
-            <path d="M5 16h14" />
-            <circle cx="12" cy="12.5" r="2.3" />
-            <path d="M12 10.8v3.4" />
-            <path d="M10.9 11.6c.25-.45.7-.7 1.2-.7.75 0 1.35.45 1.35 1.05 0 1.3-2.55.7-2.55 2.05 0 .6.62 1.05 1.4 1.05.55 0 1.04-.25 1.3-.7" />
-            <path d="M6 5h12" opacity="0.8" />
-          </svg>
-        </div>
-      </div>
-    </div>
-  </div>
-</CollapsibleContent>
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#03bd48] text-white shadow-[0_9px_18px_rgba(3,189,72,0.28)]">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-6 w-6"
+                              aria-hidden="true"
+                            >
+                              <rect x="3" y="7" width="18" height="11" rx="2" />
+                              <path d="M5 9h14" />
+                              <path d="M5 16h14" />
+                              <circle cx="12" cy="12.5" r="2.3" />
+                              <path d="M12 10.8v3.4" />
+                              <path d="M10.9 11.6c.25-.45.7-.7 1.2-.7.75 0 1.35.45 1.35 1.05 0 1.3-2.55.7-2.55 2.05 0 .6.62 1.05 1.4 1.05.55 0 1.04-.25 1.3-.7" />
+                              <path d="M6 5h12" opacity="0.8" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
                 </section>
 
-                <section className="overflow-hidden rounded-[32px] border border-black/[0.07] bg-white p-5 shadow-[0_18px_45px_rgba(16,24,40,0.07)] md:p-8">
+                <section className="overflow-hidden rounded-[32px] border border-black/[0.07] bg-white p-4 shadow-[0_18px_45px_rgba(16,24,40,0.07)] sm:p-5 md:p-8">
                   <div className="flex items-start justify-between gap-5">
                     <div className="min-w-0">
                       <div className="mb-3 inline-flex rounded-full bg-[#03bd48]/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#027a30]">
@@ -1816,20 +2094,22 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         Показатели за период
                       </h2>
                       <p className="mt-2 max-w-2xl text-sm leading-7 text-black/48">
-                        Все значения пересчитываются автоматически по данным из вашей
-                        таблицы доходов и расходов.
+                        Все значения пересчитываются автоматически по данным из
+                        вашей таблицы доходов и расходов.
                       </p>
                     </div>
                     <CollapseButton
                       isOpen={isFinancialAnalyticsOpen}
-                      onClick={() => setIsFinancialAnalyticsOpen((current) => !current)}
+                      onClick={() =>
+                        setIsFinancialAnalyticsOpen((current) => !current)
+                      }
                       label="Свернуть или раскрыть показатели за период"
                     />
                   </div>
 
                   <CollapsibleContent isOpen={isFinancialAnalyticsOpen}>
                     <div className="mt-7 space-y-5">
-                      <div className="grid gap-3 lg:grid-cols-3">
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <div className="group relative overflow-hidden rounded-3xl border border-[#03bd48]/25 bg-[linear-gradient(135deg,rgba(3,189,72,0.13),rgba(3,189,72,0.035))] p-5 transition duration-300 hover:-translate-y-1 hover:shadow-[0_16px_30px_rgba(3,189,72,0.13)]">
                           <div className="absolute -right-5 -top-7 h-24 w-24 rounded-full bg-[#03bd48]/10" />
                           <div className="relative flex items-start justify-between gap-4">
@@ -1840,7 +2120,6 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                               <div className="mt-3 text-3xl font-extrabold tracking-[-0.055em] text-[#028c36]">
                                 {formatMoney(analytics.income)} ₽
                               </div>
-                              
                             </div>
                             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#03bd48] text-lg font-extrabold text-white shadow-[0_9px_18px_rgba(3,189,72,0.28)]">
                               ₽
@@ -1858,7 +2137,6 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                               <div className="mt-3 text-3xl font-extrabold tracking-[-0.055em] text-red-600">
                                 {formatMoney(analytics.expense)} ₽
                               </div>
-                              
                             </div>
                             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-500 text-xl font-extrabold text-white shadow-[0_9px_18px_rgba(239,68,68,0.22)]">
                               −
@@ -1875,7 +2153,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         >
                           <div
                             className={`absolute -right-5 -top-7 h-24 w-24 rounded-full ${
-                              analytics.netProfit >= 0 ? "bg-[#03bd48]/20" : "bg-red-200/60"
+                              analytics.netProfit >= 0
+                                ? "bg-[#03bd48]/20"
+                                : "bg-red-200/60"
                             }`}
                           />
                           <div className="relative flex items-start justify-between gap-4">
@@ -1891,13 +2171,14 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                               </div>
                               <div
                                 className={`mt-3 text-3xl font-extrabold tracking-[-0.055em] ${
-                                  analytics.netProfit >= 0 ? "text-[#03bd48]" : "text-red-600"
+                                  analytics.netProfit >= 0
+                                    ? "text-[#03bd48]"
+                                    : "text-red-600"
                                 }`}
                               >
                                 {analytics.netProfit > 0 ? "+" : ""}
                                 {formatMoney(analytics.netProfit)} ₽
                               </div>
-                              
                             </div>
                             <div
                               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl font-extrabold ${
@@ -1916,7 +2197,11 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         <MetricCard
                           title="График доходов"
                           className="border-0 bg-transparent p-0 shadow-none"
-                          action={<FullscreenChartButton onClick={() => setIsChartFullscreen(true)} />}
+                          action={
+                            <FullscreenChartButton
+                              onClick={() => setIsChartFullscreen(true)}
+                            />
+                          }
                         >
                           <IncomeChart data={analytics.chartData} />
                         </MetricCard>
@@ -1933,8 +2218,8 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                     График доходов
                                   </div>
                                   <p className="mt-2 text-sm text-black/50">
-                                    Полноэкранный режим: все точки, даты и значения
-                                    увеличены пропорционально.
+                                    Полноэкранный режим: все точки, даты и
+                                    значения увеличены пропорционально.
                                   </p>
                                 </div>
                                 <FullscreenChartButton
@@ -1942,10 +2227,13 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                   onClick={() => setIsChartFullscreen(false)}
                                 />
                               </div>
-                              <IncomeChart data={analytics.chartData} expanded />
+                              <IncomeChart
+                                data={analytics.chartData}
+                                expanded
+                              />
                             </div>
                           </div>,
-                          document.body
+                          document.body,
                         )}
 
                       <div className="rounded-3xl border border-black/[0.07] bg-black/[0.018] p-4 md:p-5">
@@ -1958,8 +2246,8 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                               По умолчанию отображаются последние 7 дней.
                             </p>
                           </div>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="block">
+                          <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
+                            <label className="block min-w-0">
                               <span className="mb-2 block text-xs font-bold text-black/50">
                                 Начало периода
                               </span>
@@ -1967,11 +2255,13 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                 type="date"
                                 value={periodStart}
                                 max={periodEnd}
-                                onChange={(event) => setPeriodStart(event.target.value)}
+                                onChange={(event) =>
+                                  setPeriodStart(event.target.value)
+                                }
                                 className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
                               />
                             </label>
-                            <label className="block">
+                            <label className="block min-w-0">
                               <span className="mb-2 block text-xs font-bold text-black/50">
                                 Конец периода
                               </span>
@@ -1980,7 +2270,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                 value={periodEnd}
                                 min={periodStart}
                                 max={getTodayDate()}
-                                onChange={(event) => setPeriodEnd(event.target.value)}
+                                onChange={(event) =>
+                                  setPeriodEnd(event.target.value)
+                                }
                                 className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
                               />
                             </label>
@@ -1991,8 +2283,8 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                   </CollapsibleContent>
                 </section>
 
-                <section className="overflow-hidden rounded-[32px] border border-black/[0.07] bg-white p-5 shadow-[0_18px_45px_rgba(16,24,40,0.07)] md:p-8">
-                  <div className="flex items-start justify-between gap-5">
+                <section className="overflow-hidden rounded-[32px] border border-black/[0.07] bg-white p-4 shadow-[0_18px_45px_rgba(16,24,40,0.07)] sm:p-5 md:p-8">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="mb-3 inline-flex rounded-full bg-black/[0.045] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/55">
                         Учёт
@@ -2001,7 +2293,8 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         Доходы и расходы
                       </h2>
                       <p className="mt-2 max-w-2xl text-sm leading-7 text-black/50">
-                        Вносите данные за день. Чистая прибыль рассчитывается автоматически.
+                        Вносите данные за день. Чистая прибыль рассчитывается
+                        автоматически.
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
@@ -2009,14 +2302,16 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         <button
                           type="button"
                           onClick={startFinancialEditing}
-                          className="btn-primary shrink-0 shadow-[0_10px_22px_rgba(3,189,72,0.2)]"
+                          className="btn-primary flex-1 sm:flex-none shadow-[0_10px_22px_rgba(3,189,72,0.2)]"
                         >
                           Редактировать
                         </button>
                       )}
                       <CollapseButton
                         isOpen={isFinancialTableOpen}
-                        onClick={() => setIsFinancialTableOpen((current) => !current)}
+                        onClick={() =>
+                          setIsFinancialTableOpen((current) => !current)
+                        }
                         label="Свернуть или раскрыть таблицу доходов и расходов"
                       />
                     </div>
@@ -2034,8 +2329,8 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                               По умолчанию отображается последний месяц.
                             </p>
                           </div>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="block">
+                          <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
+                            <label className="block min-w-0">
                               <span className="mb-2 block text-xs font-bold text-black/50">
                                 Начало периода
                               </span>
@@ -2043,11 +2338,13 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                 type="date"
                                 value={tablePeriodStart}
                                 max={tablePeriodEnd}
-                                onChange={(event) => setTablePeriodStart(event.target.value)}
+                                onChange={(event) =>
+                                  setTablePeriodStart(event.target.value)
+                                }
                                 className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
                               />
                             </label>
-                            <label className="block">
+                            <label className="block min-w-0">
                               <span className="mb-2 block text-xs font-bold text-black/50">
                                 Конец периода
                               </span>
@@ -2056,7 +2353,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                 value={tablePeriodEnd}
                                 min={tablePeriodStart}
                                 max={getTodayDate()}
-                                onChange={(event) => setTablePeriodEnd(event.target.value)}
+                                onChange={(event) =>
+                                  setTablePeriodEnd(event.target.value)
+                                }
                                 className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
                               />
                             </label>
@@ -2087,7 +2386,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                             disabled={financialSaving}
                             className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {financialSaving ? "Сохранение..." : "Сохранить изменения"}
+                            {financialSaving
+                              ? "Сохранение..."
+                              : "Сохранить изменения"}
                           </button>
                         </div>
                       )}
@@ -2103,7 +2404,65 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         </div>
                       )}
 
-                      <div className="mt-6 overflow-x-auto rounded-3xl border border-black/[0.08] shadow-[0_10px_26px_rgba(16,24,40,0.04)]">
+                      <div className="mt-6 space-y-3 md:hidden">
+                        {!isEditingFinancials &&
+                          tableRecordsInPeriod.map((record, index) => {
+                            const profit = record.income - record.expense;
+                            return (
+                              <div
+                                key={record.id}
+                                className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-[0_8px_20px_rgba(16,24,40,0.04)]"
+                              >
+                                <div className="flex items-center justify-between gap-3 border-b border-black/[0.07] pb-3">
+                                  <span className="text-xs font-extrabold text-black/40">
+                                    Запись #{index + 1}
+                                  </span>
+                                  <span className="text-sm font-extrabold text-black">
+                                    {formatRecordDate(record.recordDate)}
+                                  </span>
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                  <div className="rounded-xl bg-[#03bd48]/[0.07] p-3">
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-[#027a30]/65">
+                                      Доходы
+                                    </div>
+                                    <div className="mt-1 text-base font-extrabold text-[#028c36]">
+                                      {formatMoney(record.income)} ₽
+                                    </div>
+                                  </div>
+                                  <div className="rounded-xl bg-red-50 p-3">
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-red-600/65">
+                                      Расходы
+                                    </div>
+                                    <div className="mt-1 text-base font-extrabold text-red-600">
+                                      {formatMoney(record.expense)} ₽
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mt-2 rounded-xl bg-black p-3">
+                                  <div className="text-[9px] font-extrabold uppercase tracking-wide text-white/45">
+                                    Чистая прибыль
+                                  </div>
+                                  <div
+                                    className={`mt-1 text-lg font-extrabold ${profit >= 0 ? "text-[#03bd48]" : "text-red-400"}`}
+                                  >
+                                    {profit > 0 ? "+" : ""}
+                                    {formatMoney(profit)} ₽
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        {!isEditingFinancials &&
+                          tableRecordsInPeriod.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-black/15 px-5 py-12 text-center text-sm text-black/48">
+                              В выбранном периоде пока нет данных.
+                            </div>
+                          )}
+                      </div>
+                      <div
+                        className={`mt-6 overflow-x-auto rounded-3xl border border-black/[0.08] shadow-[0_10px_26px_rgba(16,24,40,0.04)] ${isEditingFinancials ? "block" : "hidden md:block"}`}
+                      >
                         <table className="min-w-[760px] w-full border-collapse text-left">
                           <thead className="bg-[#101010]">
                             <tr className="text-[10px] font-extrabold uppercase tracking-[0.11em] text-white/58">
@@ -2113,7 +2472,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                               <th className="px-5 py-4">Расходы</th>
                               <th className="px-5 py-4">Чистая прибыль</th>
                               {isEditingFinancials && (
-                                <th className="w-[120px] px-5 py-4">Действие</th>
+                                <th className="w-[120px] px-5 py-4">
+                                  Действие
+                                </th>
                               )}
                             </tr>
                           </thead>
@@ -2140,7 +2501,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                     </td>
                                     <td
                                       className={`px-5 py-4 text-base font-extrabold ${getProfitClass(
-                                        profit
+                                        profit,
                                       )}`}
                                     >
                                       {profit > 0 ? "+" : ""}
@@ -2171,7 +2532,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                           updateFinancialDraft(
                                             record.id,
                                             "recordDate",
-                                            event.target.value
+                                            event.target.value,
                                           )
                                         }
                                         className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
@@ -2187,7 +2548,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                           updateFinancialDraft(
                                             record.id,
                                             "income",
-                                            event.target.value
+                                            event.target.value,
                                           )
                                         }
                                         className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-[#028c36] outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
@@ -2203,7 +2564,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                           updateFinancialDraft(
                                             record.id,
                                             "expense",
-                                            event.target.value
+                                            event.target.value,
                                           )
                                         }
                                         className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-red-600 outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
@@ -2211,7 +2572,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                     </td>
                                     <td
                                       className={`px-5 py-3 text-base font-extrabold ${getProfitClass(
-                                        profit
+                                        profit,
                                       )}`}
                                     >
                                       {profit > 0 ? "+" : ""}
@@ -2220,7 +2581,9 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                     <td className="px-5 py-3">
                                       <button
                                         type="button"
-                                        onClick={() => removeFinancialDraft(record)}
+                                        onClick={() =>
+                                          removeFinancialDraft(record)
+                                        }
                                         className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
                                       >
                                         Удалить
@@ -2230,29 +2593,32 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                 );
                               })}
 
-                            {!isEditingFinancials && tableRecordsInPeriod.length === 0 && (
-                              <tr>
-                                <td
-                                  colSpan={5}
-                                  className="px-5 py-14 text-center text-sm text-black/48"
-                                >
-                                  В выбранном периоде пока нет данных. Нажмите
-                                  «Редактировать», чтобы добавить первую запись.
-                                </td>
-                              </tr>
-                            )}
+                            {!isEditingFinancials &&
+                              tableRecordsInPeriod.length === 0 && (
+                                <tr>
+                                  <td
+                                    colSpan={5}
+                                    className="px-5 py-14 text-center text-sm text-black/48"
+                                  >
+                                    В выбранном периоде пока нет данных. Нажмите
+                                    «Редактировать», чтобы добавить первую
+                                    запись.
+                                  </td>
+                                </tr>
+                              )}
 
-                            {isEditingFinancials && financialDrafts.length === 0 && (
-                              <tr>
-                                <td
-                                  colSpan={6}
-                                  className="px-5 py-14 text-center text-sm text-black/48"
-                                >
-                                  В таблице нет строк. Нажмите «Добавить строку», чтобы
-                                  внести первую запись.
-                                </td>
-                              </tr>
-                            )}
+                            {isEditingFinancials &&
+                              financialDrafts.length === 0 && (
+                                <tr>
+                                  <td
+                                    colSpan={6}
+                                    className="px-5 py-14 text-center text-sm text-black/48"
+                                  >
+                                    В таблице нет строк. Нажмите «Добавить
+                                    строку», чтобы внести первую запись.
+                                  </td>
+                                </tr>
+                              )}
                           </tbody>
                         </table>
                       </div>
@@ -2264,17 +2630,19 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
 
             {activeSection === "popular-queries" && hasAccess && (
               <div className="space-y-6">
-                <section className="overflow-hidden rounded-[30px] bg-black p-6 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] md:p-8">
+                <section className="overflow-hidden rounded-[30px] bg-black p-4 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] sm:p-6 md:p-8">
                   <div className="grid gap-7 lg:grid-cols-[1fr_auto] lg:items-end">
                     <div>
                       <div className="mb-4 inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-sm font-bold text-amber-100">
                         В разработке
                       </div>
                       <h2 className="text-3xl font-extrabold tracking-[-0.05em] md:text-4xl">
-                        Запросы по популярности<span className="text-[#03bd48]"> Авито</span>
+                        Запросы по популярности
+                        <span className="text-[#03bd48]"> Авито</span>
                       </h2>
                       <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62">
-                        Тестовый подбор связанных поисковых вариантов для работы с запросами.
+                        Тестовый подбор связанных поисковых вариантов для работы
+                        с запросами.
                       </p>
                     </div>
                     <div className="rounded-2xl bg-amber-300/15 px-5 py-4 text-white">
@@ -2304,13 +2672,13 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                           Услуга находится на этапе разработки
                         </div>
                         <p className="mt-1 text-sm leading-6 text-amber-900/75">
-                          Полученные результаты выдачи «Запросы по популярности Авито»
-                          могут быть недостоверными, неправильными, неполными или не
-                          соответствовать действительности.
+                          Полученные результаты выдачи «Запросы по популярности
+                          Авито» могут быть недостоверными, неправильными,
+                          неполными или не соответствовать действительности.
                         </p>
                         <p className="mt-2 text-sm font-bold text-amber-900">
-                          Советуем дождаться окончания разработки данной услуги перед
-                          принятием решений на основании результатов.
+                          Советуем дождаться окончания разработки данной услуги
+                          перед принятием решений на основании результатов.
                         </p>
                       </div>
                     </div>
@@ -2348,7 +2716,8 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         Введите поисковый запрос
                       </h3>
                       <p className="mx-auto mt-2 max-w-md text-sm leading-7 text-black/50">
-                        После запуска появятся пять тестовых вариантов с дополнительными словами.
+                        После запуска появятся пять тестовых вариантов с
+                        дополнительными словами.
                       </p>
                     </div>
                   )}
