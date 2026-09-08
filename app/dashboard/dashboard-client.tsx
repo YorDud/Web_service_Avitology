@@ -1503,7 +1503,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
             <div className="max-h-[620px] overflow-y-auto">
               <table className="w-full table-fixed border-collapse text-left">
                 <thead className="sticky top-0 z-10 bg-[#101010] shadow-[0_2px_0_rgba(255,255,255,0.08)]">
-                  <tr className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-white/65">
+                  <tr className="whitespace-nowrap text-[10px] font-extrabold uppercase tracking-[0.06em] text-white/65">
                     <th className="w-[52px] px-3 py-4 text-center">
                       <input
                         type="checkbox"
@@ -1535,12 +1535,12 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                       />
                     </th>
 
-                    <th className="w-[12%] px-3 py-4">Позиции</th>
-                    <th className="w-[19%] px-3 py-4">Продавец</th>
-                    <th className="w-[10%] px-3 py-4 text-center">Объявл.</th>
-                    <th className="w-[9%] px-3 py-4 text-center">Рейтинг</th>
-                    <th className="w-[9%] px-3 py-4 text-center">Отзывы</th>
-                    <th className="px-3 py-4">Первое объявление</th>
+                    <th className="w-[13%] px-3 py-4">Позиции</th>
+<th className="w-[20%] px-3 py-4">Продавец</th>
+<th className="w-[11%] px-3 py-4 text-center">Объявлений</th>
+<th className="w-[10%] px-3 py-4 text-center">Рейтинг</th>
+<th className="w-[10%] px-3 py-4 text-center">Отзывы</th>
+<th className="px-3 py-4">Первое объявление</th>
                   </tr>
                 </thead>
 
@@ -1606,17 +1606,17 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                                 : "bg-[#03bd48]/10 text-[#028c36]"
                             }`}
                           >
-                            <span className="truncate">{positions}</span>
+                            <span className="break-words leading-5">{positions}</span>
                           </span>
                         </td>
 
                         <td className="px-3 py-3.5 align-top">
                           <div
-                            className="truncate font-extrabold text-black"
-                            title={item.sellerName}
-                          >
-                            {item.sellerName}
-                          </div>
+  className="break-words font-extrabold leading-5 text-black"
+  title={item.sellerName}
+>
+  {item.sellerName}
+</div>
 
                           {isSelected && (
                             <div className="mt-1 text-[10px] font-extrabold text-[#028c36]">
@@ -1642,25 +1642,25 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
                         <td className="px-3 py-3.5 align-top">
                           {ad?.link ? (
                             <a
-                              href={ad.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(event) => event.stopPropagation()}
-                              className="block truncate font-extrabold text-[#028c36] hover:underline"
-                              title={ad.title || "Открыть объявление"}
-                            >
-                              {ad.title || "Открыть объявление"}
-                            </a>
+  href={ad.link}
+  target="_blank"
+  rel="noreferrer"
+  onClick={(event) => event.stopPropagation()}
+  className="block break-words font-extrabold leading-5 text-[#028c36] hover:underline"
+  title={ad.title || "Открыть объявление"}
+>
+  {ad.title || "Открыть объявление"}
+</a>
                           ) : (
-                            <div className="truncate font-bold text-black/65">
-                              {ad?.title || "—"}
-                            </div>
+                            <div className="break-words font-bold leading-5 text-black/65">
+  {ad?.title || "—"}
+</div>
                           )}
 
                           {ad?.price && (
-                            <div className="mt-1 text-xs font-bold text-black/45">
-                              {ad.price}
-                            </div>
+                            <div className="mt-1 whitespace-nowrap text-xs font-bold text-black/45">
+  {ad.price}
+</div>
                           )}
                         </td>
                       </tr>
