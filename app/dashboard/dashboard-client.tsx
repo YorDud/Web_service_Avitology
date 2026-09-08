@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 type FinancialRecord = {
@@ -554,6 +554,7 @@ export default function DashboardClientPage({
   new Set()
 );
 const [avitoOnlySelected, setAvitoOnlySelected] = useState(false);
+const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
 
   const subscriptionLevel = user.subscriptionLevel.toLowerCase();
   const hasAccess = subscriptionLevel === "basic" || subscriptionLevel === "admin";
@@ -771,11 +772,13 @@ const [avitoOnlySelected, setAvitoOnlySelected] = useState(false);
   }
 
   async function loadAvitoAnalysis(id: number) {
-    setAvitoAnalysisLoading(true);
-    setAvitoAnalyticsError("");
-    setSelectedAvitoAnalysisId(id);
-setSelectedAvitoRowIds(new Set());
-setAvitoOnlySelected(false);
+  if (id === selectedAvitoAnalysisId || avitoAnalysisLoading) return;
+
+  setAvitoAnalysisLoading(true);
+  setAvitoAnalyticsError("");
+  setSelectedAvitoAnalysisId(id);
+  setSelectedAvitoRowIds(new Set());
+  setAvitoOnlySelected(false);
 
     try {
       const response = await fetch(`/api/avito-search-analyses/${id}`);
@@ -1256,337 +1259,441 @@ setAvitoOnlySelected(false);
                       )}
 
                       {avitoAnalyses.length > 0 && (
-                        <div className="grid gap-5 xl:grid-cols-[290px_minmax(0,1fr)]">
-                          <div className="max-h-[600px] space-y-2 overflow-y-auto rounded-3xl border border-black/[0.07] bg-black/[0.018] p-3">
-                            {avitoAnalyses.map((analysis) => (
-                              <button
-                                key={analysis.id}
-                                type="button"
-                                onClick={() => loadAvitoAnalysis(analysis.id)}
-                                className={`w-full rounded-2xl border p-4 text-left transition ${
-                                  selectedAvitoAnalysisId === analysis.id
-                                    ? "border-[#03bd48] bg-[#03bd48]/10"
-                                    : "border-transparent bg-white hover:border-black/10"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="text-sm font-extrabold text-black">
-                                    {new Intl.DateTimeFormat("ru-RU", {
-                                      dateStyle: "medium",
-                                      timeStyle: "short",
-                                    }).format(new Date(analysis.createdAt))}
-                                  </span>
-                                  <span className="rounded-full bg-black/[0.06] px-2 py-1 text-[10px] font-extrabold">
-                                    {analysis.itemsCount}
-                                  </span>
-                                </div>
-                                <div className="mt-2 truncate text-sm font-bold text-[#028c36]">
-                                  {analysis.searchQuery || "Запрос не указан"}
-                                </div>
-                                <div className="mt-1 text-xs text-black/45">
-                                  Продавцов: {analysis.itemsCount}
-                                </div>
-                              </button>
-                            ))}
+  <div className="space-y-5">
+    <div className="rounded-3xl border border-black/[0.07] bg-[linear-gradient(135deg,rgba(3,189,72,0.07),rgba(255,255,255,0.98))] p-3 shadow-[0_10px_28px_rgba(16,24,40,0.04)] sm:p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
+            Сохранённые анализы
+          </div>
+          <div className="mt-1 text-sm font-extrabold text-black">
+            Выберите дату и поисковый запрос
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              avitoAnalysesScrollRef.current?.scrollBy({
+                left: -340,
+                behavior: "smooth",
+              });
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white text-black transition hover:border-[#03bd48]/45 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36]"
+            aria-label="Показать предыдущие анализы"
+            title="Предыдущие анализы"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              avitoAnalysesScrollRef.current?.scrollBy({
+                left: 340,
+                behavior: "smooth",
+              });
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white text-black transition hover:border-[#03bd48]/45 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36]"
+            aria-label="Показать следующие анализы"
+            title="Следующие анализы"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={avitoAnalysesScrollRef}
+        className="mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]"
+      >
+        {avitoAnalyses.map((analysis) => {
+          const isActive = selectedAvitoAnalysisId === analysis.id;
+
+          return (
+            <button
+              key={analysis.id}
+              type="button"
+              onClick={() => loadAvitoAnalysis(analysis.id)}
+              className={`w-[215px] shrink-0 snap-start rounded-2xl border p-3.5 text-left transition-all duration-200 ${
+                isActive
+                  ? "border-[#03bd48] bg-[#03bd48]/10 shadow-[0_8px_20px_rgba(3,189,72,0.12)]"
+                  : "border-black/[0.08] bg-white hover:-translate-y-0.5 hover:border-[#03bd48]/45 hover:bg-[#03bd48]/[0.035]"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-[11px] font-extrabold text-black/65">
+                  {new Intl.DateTimeFormat("ru-RU", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }).format(new Date(analysis.createdAt))}
+                </div>
+
+                <span
+                  className={`rounded-full px-2 py-1 text-[10px] font-extrabold ${
+                    isActive
+                      ? "bg-[#03bd48] text-white"
+                      : "bg-black/[0.06] text-black/55"
+                  }`}
+                >
+                  {analysis.itemsCount}
+                </span>
+              </div>
+
+              <div
+                className={`mt-2 truncate text-sm font-extrabold ${
+                  isActive ? "text-[#028c36]" : "text-black"
+                }`}
+                title={analysis.searchQuery || "Запрос не указан"}
+              >
+                {analysis.searchQuery || "Запрос не указан"}
+              </div>
+
+              <div className="mt-1 text-xs font-semibold text-black/42">
+                Продавцов: {analysis.itemsCount}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+
+    <div className="relative min-w-0 rounded-3xl border border-black/[0.07] bg-white p-4 shadow-[0_14px_35px_rgba(16,24,40,0.06)] md:p-5">
+      {avitoAnalysisLoading && selectedAvitoAnalysis && (
+        <div className="absolute inset-x-4 top-4 z-20 flex items-center justify-center gap-2 rounded-xl border border-[#03bd48]/25 bg-white/95 px-4 py-2.5 text-xs font-extrabold text-[#028c36] shadow-[0_8px_22px_rgba(16,24,40,0.1)] backdrop-blur md:inset-x-5 md:top-5">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#03bd48]/25 border-t-[#03bd48]" />
+          Обновляем выбранный анализ…
+        </div>
+      )}
+
+      {!selectedAvitoAnalysis && avitoAnalysisLoading && (
+        <div className="py-16 text-center text-sm font-semibold text-black/50">
+          Загружаем выбранный анализ...
+        </div>
+      )}
+
+      {selectedAvitoAnalysis && (
+        <>
+          <div className="flex flex-col gap-4 border-b border-black/[0.07] pb-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
+                Выбранный анализ
+              </div>
+
+              <h4 className="mt-2 truncate text-2xl font-extrabold tracking-[-0.04em] text-black">
+                {selectedAvitoAnalysis.searchQuery || "Поисковый запрос"}
+              </h4>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-black/48">
+                <span>
+                  {new Intl.DateTimeFormat("ru-RU", {
+                    dateStyle: "long",
+                    timeStyle: "short",
+                  }).format(new Date(selectedAvitoAnalysis.createdAt))}
+                </span>
+
+                <span className="h-1 w-1 rounded-full bg-black/25" />
+
+                <span className="font-bold text-[#028c36]">
+                  {selectedAvitoAnalysis.itemsCount} продавцов
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => deleteAvitoAnalysis(selectedAvitoAnalysis.id)}
+              className="h-fit shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
+            >
+              Удалить
+            </button>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-black/[0.07] bg-black/[0.018] p-3 sm:p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <label className="relative block min-w-0 flex-1">
+                <span className="sr-only">
+                  Поиск по продавцу, позиции, объявлению или цене
+                </span>
+
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="6" />
+                  <path d="m16 16 4 4" />
+                </svg>
+
+                <input
+                  value={avitoSearch}
+                  onChange={(event) => setAvitoSearch(event.target.value)}
+                  placeholder="Поиск по продавцу, позиции, объявлению или цене..."
+                  className="w-full rounded-xl border border-black/10 bg-white py-3 pl-11 pr-4 text-sm font-semibold text-black outline-none transition placeholder:text-black/35 focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+                />
+              </label>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40">
+                  <input
+                    type="checkbox"
+                    checked={avitoOnlySelected}
+                    onChange={(event) => setAvitoOnlySelected(event.target.checked)}
+                    className="h-4 w-4 rounded border-black/25 accent-[#03bd48]"
+                  />
+                  Только выделенные
+                </label>
+
+                {selectedAvitoRowIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedAvitoRowIds(new Set());
+                      setAvitoOnlySelected(false);
+                    }}
+                    className="rounded-xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-3 py-3 text-xs font-extrabold text-[#028c36] transition hover:bg-[#03bd48]/20"
+                  >
+                    Снять: {selectedAvitoRowIds.size}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-black/[0.06] px-3 py-1.5 text-xs font-bold text-black/55">
+                В таблице: {filteredAvitoItems.length}
+              </span>
+
+              <span className="rounded-full bg-[#03bd48]/10 px-3 py-1.5 text-xs font-extrabold text-[#028c36]">
+                Выбрано: {selectedAvitoRowIds.size}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-black/[0.08] bg-white">
+            <div className="max-h-[620px] overflow-y-auto">
+              <table className="w-full table-fixed border-collapse text-left">
+                <thead className="sticky top-0 z-10 bg-[#101010] shadow-[0_2px_0_rgba(255,255,255,0.08)]">
+                  <tr className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-white/65">
+                    <th className="w-[52px] px-3 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        aria-label="Выбрать все строки"
+                        checked={
+                          filteredAvitoItems.length > 0 &&
+                          filteredAvitoItems.every((item) =>
+                            selectedAvitoRowIds.has(item.id)
+                          )
+                        }
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+
+                          setSelectedAvitoRowIds((current) => {
+                            const next = new Set(current);
+
+                            filteredAvitoItems.forEach((item) => {
+                              if (checked) {
+                                next.add(item.id);
+                              } else {
+                                next.delete(item.id);
+                              }
+                            });
+
+                            return next;
+                          });
+                        }}
+                        className="h-4 w-4 cursor-pointer rounded border-white/30 accent-[#03bd48]"
+                      />
+                    </th>
+
+                    <th className="w-[12%] px-3 py-4">Позиции</th>
+                    <th className="w-[19%] px-3 py-4">Продавец</th>
+                    <th className="w-[10%] px-3 py-4 text-center">Объявл.</th>
+                    <th className="w-[9%] px-3 py-4 text-center">Рейтинг</th>
+                    <th className="w-[9%] px-3 py-4 text-center">Отзывы</th>
+                    <th className="px-3 py-4">Первое объявление</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filteredAvitoItems.map((item) => {
+                    const ad = item.ads[0];
+                    const isSelected = selectedAvitoRowIds.has(item.id);
+
+                    const positions = item.positions.length
+                      ? item.positions.join(", ")
+                      : item.firstPosition ?? "—";
+
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => {
+                          setSelectedAvitoRowIds((current) => {
+                            const next = new Set(current);
+
+                            if (next.has(item.id)) {
+                              next.delete(item.id);
+                            } else {
+                              next.add(item.id);
+                            }
+
+                            return next;
+                          });
+                        }}
+                        className={`cursor-pointer border-b border-black/[0.06] text-sm transition last:border-b-0 ${
+                          isSelected
+                            ? "bg-[#03bd48]/[0.12] shadow-[inset_4px_0_0_#03bd48]"
+                            : "bg-white hover:bg-[#03bd48]/[0.035]"
+                        }`}
+                      >
+                        <td className="px-3 py-3.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            aria-label={`Выбрать продавца ${item.sellerName}`}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={() => {
+                              setSelectedAvitoRowIds((current) => {
+                                const next = new Set(current);
+
+                                if (next.has(item.id)) {
+                                  next.delete(item.id);
+                                } else {
+                                  next.add(item.id);
+                                }
+
+                                return next;
+                              });
+                            }}
+                            className="h-4 w-4 cursor-pointer rounded border-black/25 accent-[#03bd48]"
+                          />
+                        </td>
+
+                        <td className="px-3 py-3.5 align-top">
+                          <span
+                            className={`inline-flex max-w-full rounded-lg px-2 py-1 text-xs font-extrabold ${
+                              isSelected
+                                ? "bg-[#03bd48] text-white"
+                                : "bg-[#03bd48]/10 text-[#028c36]"
+                            }`}
+                          >
+                            <span className="truncate">{positions}</span>
+                          </span>
+                        </td>
+
+                        <td className="px-3 py-3.5 align-top">
+                          <div
+                            className="truncate font-extrabold text-black"
+                            title={item.sellerName}
+                          >
+                            {item.sellerName}
                           </div>
 
-                          <div className="min-w-0 rounded-3xl border border-black/[0.07] bg-white p-4 md:p-5">
-                            {avitoAnalysisLoading && (
-                              <div className="py-16 text-center text-sm font-semibold text-black/50">
-                                Загружаем выбранный анализ...
-                              </div>
-                            )}
+                          {isSelected && (
+                            <div className="mt-1 text-[10px] font-extrabold text-[#028c36]">
+                              Выбрано
+                            </div>
+                          )}
+                        </td>
 
-                            {!avitoAnalysisLoading && selectedAvitoAnalysis && (
-                              <>
-                                <div className="flex flex-col gap-4 border-b border-black/[0.07] pb-5 sm:flex-row sm:justify-between">
-                                  <div>
-                                    <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
-                                      Выбранный анализ
-                                    </div>
-                                    <h4 className="mt-2 text-2xl font-extrabold tracking-[-0.04em] text-black">
-                                      {selectedAvitoAnalysis.searchQuery || "Поисковый запрос"}
-                                    </h4>
-                                    <p className="mt-2 text-sm text-black/48">
-                                      {new Intl.DateTimeFormat("ru-RU", {
-                                        dateStyle: "long",
-                                        timeStyle: "short",
-                                      }).format(new Date(selectedAvitoAnalysis.createdAt))}{" "}
-                                      · {selectedAvitoAnalysis.itemsCount} продавцов
-                                    </p>
-                                  </div>
+                        <td className="px-3 py-3.5 text-center align-top">
+                          <span className="inline-flex min-w-8 justify-center rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-extrabold text-black/70">
+                            {item.adsCount}
+                          </span>
+                        </td>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteAvitoAnalysis(selectedAvitoAnalysis.id)}
-                                    className="h-fit rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600"
-                                  >
-                                    Удалить
-                                  </button>
-                                </div>
+                        <td className="px-3 py-3.5 text-center align-top font-extrabold text-black">
+                          {item.rating || "—"}
+                        </td>
 
-                                <div className="mt-5 rounded-3xl border border-black/[0.07] bg-[linear-gradient(135deg,rgba(3,189,72,0.07),rgba(255,255,255,0.96))] p-3 sm:p-4">
-  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-    <label className="relative block min-w-0 flex-1">
-      <span className="sr-only">
-        Поиск по продавцу, позиции, объявлению или цене
-      </span>
+                        <td className="px-3 py-3.5 text-center align-top font-extrabold text-black">
+                          {item.reviews || "—"}
+                        </td>
 
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35"
-        aria-hidden="true"
-      >
-        <circle cx="11" cy="11" r="6" />
-        <path d="m16 16 4 4" />
-      </svg>
+                        <td className="px-3 py-3.5 align-top">
+                          {ad?.link ? (
+                            <a
+                              href={ad.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(event) => event.stopPropagation()}
+                              className="block truncate font-extrabold text-[#028c36] hover:underline"
+                              title={ad.title || "Открыть объявление"}
+                            >
+                              {ad.title || "Открыть объявление"}
+                            </a>
+                          ) : (
+                            <div className="truncate font-bold text-black/65">
+                              {ad?.title || "—"}
+                            </div>
+                          )}
 
-      <input
-        value={avitoSearch}
-        onChange={(event) => setAvitoSearch(event.target.value)}
-        placeholder="Поиск по продавцу, позиции, объявлению или цене..."
-        className="w-full rounded-2xl border border-black/10 bg-white py-3.5 pl-11 pr-4 text-sm font-semibold text-black outline-none transition placeholder:text-black/35 focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
-      />
-    </label>
+                          {ad?.price && (
+                            <div className="mt-1 text-xs font-bold text-black/45">
+                              {ad.price}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
 
-    <div className="flex flex-wrap items-center gap-2">
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04]">
-        <input
-          type="checkbox"
-          checked={avitoOnlySelected}
-          onChange={(event) => setAvitoOnlySelected(event.target.checked)}
-          className="h-4 w-4 rounded border-black/25 accent-[#03bd48]"
-        />
-        Оставить только выделенные
-      </label>
+                  {filteredAvitoItems.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-5 py-16 text-center">
+                        <div className="text-base font-extrabold text-black">
+                          {avitoOnlySelected
+                            ? "Нет выбранных строк"
+                            : "По вашему поиску ничего не найдено"}
+                        </div>
 
-      {selectedAvitoRowIds.size > 0 && (
-        <button
-          type="button"
-          onClick={() => {
-            setSelectedAvitoRowIds(new Set());
-            setAvitoOnlySelected(false);
-          }}
-          className="rounded-xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-3 py-3 text-xs font-extrabold text-[#028c36] transition hover:bg-[#03bd48]/20"
-        >
-          Снять выделение ({selectedAvitoRowIds.size})
-        </button>
+                        <p className="mt-2 text-sm text-black/45">
+                          {avitoOnlySelected
+                            ? "Выберите строки или отключите фильтр «Только выделенные»."
+                            : "Измените запрос поиска или выберите другой анализ."}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
     </div>
   </div>
-
-  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-    <span className="rounded-full bg-black/[0.06] px-3 py-1.5 font-bold text-black/55">
-      В таблице: {filteredAvitoItems.length}
-    </span>
-
-    <span className="rounded-full bg-[#03bd48]/10 px-3 py-1.5 font-extrabold text-[#028c36]">
-      Выбрано: {selectedAvitoRowIds.size}
-    </span>
-
-    {avitoOnlySelected && (
-      <span className="rounded-full bg-amber-100 px-3 py-1.5 font-extrabold text-amber-800">
-        Показаны только выделенные
-      </span>
-    )}
-  </div>
-</div>
-
-<div className="mt-5 overflow-hidden rounded-3xl border border-black/[0.08] bg-white shadow-[0_12px_28px_rgba(16,24,40,0.05)]">
-  <div className="max-h-[650px] overflow-auto">
-    <table className="w-full min-w-[920px] table-fixed border-collapse text-left">
-      <thead className="sticky top-0 z-10 bg-[#101010] shadow-[0_2px_0_rgba(255,255,255,0.08)]">
-        <tr className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-white/65">
-          <th className="w-[62px] px-4 py-4 text-center">
-            <input
-              type="checkbox"
-              aria-label="Выбрать все отображаемые строки"
-              checked={
-                filteredAvitoItems.length > 0 &&
-                filteredAvitoItems.every((item) => selectedAvitoRowIds.has(item.id))
-              }
-              onChange={(event) => {
-                const checked = event.target.checked;
-
-                setSelectedAvitoRowIds((current) => {
-                  const next = new Set(current);
-
-                  filteredAvitoItems.forEach((item) => {
-                    if (checked) {
-                      next.add(item.id);
-                    } else {
-                      next.delete(item.id);
-                    }
-                  });
-
-                  return next;
-                });
-              }}
-              className="h-4 w-4 cursor-pointer rounded border-white/30 accent-[#03bd48]"
-            />
-          </th>
-          <th className="w-[150px] px-4 py-4">Позиции</th>
-          <th className="w-[190px] px-4 py-4">Продавец</th>
-          <th className="w-[110px] px-4 py-4 text-center">Объявлений</th>
-          <th className="w-[100px] px-4 py-4 text-center">Рейтинг</th>
-          <th className="w-[100px] px-4 py-4 text-center">Отзывы</th>
-          <th className="px-4 py-4">Первое объявление</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {filteredAvitoItems.map((item) => {
-          const ad = item.ads[0];
-          const isSelected = selectedAvitoRowIds.has(item.id);
-          const positions = item.positions.length
-            ? item.positions.join(", ")
-            : item.firstPosition ?? "—";
-
-          return (
-            <tr
-              key={item.id}
-              onClick={() => {
-                setSelectedAvitoRowIds((current) => {
-                  const next = new Set(current);
-
-                  if (next.has(item.id)) {
-                    next.delete(item.id);
-                  } else {
-                    next.add(item.id);
-                  }
-
-                  return next;
-                });
-              }}
-              className={`cursor-pointer border-b border-black/[0.06] text-sm transition last:border-b-0 ${
-                isSelected
-                  ? "bg-[#03bd48]/[0.12] shadow-[inset_4px_0_0_#03bd48]"
-                  : "bg-white hover:bg-[#03bd48]/[0.035]"
-              }`}
-            >
-              <td className="px-4 py-4 text-center">
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  aria-label={`Выбрать продавца ${item.sellerName}`}
-                  onClick={(event) => event.stopPropagation()}
-                  onChange={() => {
-                    setSelectedAvitoRowIds((current) => {
-                      const next = new Set(current);
-
-                      if (next.has(item.id)) {
-                        next.delete(item.id);
-                      } else {
-                        next.add(item.id);
-                      }
-
-                      return next;
-                    });
-                  }}
-                  className="h-4 w-4 cursor-pointer rounded border-black/25 accent-[#03bd48]"
-                />
-              </td>
-
-              <td className="px-4 py-4 align-top">
-                <span
-                  className={`inline-flex rounded-xl px-2.5 py-1.5 text-xs font-extrabold ${
-                    isSelected
-                      ? "bg-[#03bd48] text-white"
-                      : "bg-[#03bd48]/10 text-[#028c36]"
-                  }`}
-                >
-                  {positions}
-                </span>
-              </td>
-
-              <td className="px-4 py-4 align-top">
-                <div className="truncate font-extrabold text-black" title={item.sellerName}>
-                  {item.sellerName}
-                </div>
-
-                {isSelected && (
-                  <div className="mt-1 text-[11px] font-extrabold text-[#028c36]">
-                    Выбрано для сравнения
-                  </div>
-                )}
-              </td>
-
-              <td className="px-4 py-4 text-center align-top">
-                <span className="inline-flex min-w-9 justify-center rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-extrabold text-black/70">
-                  {item.adsCount}
-                </span>
-              </td>
-
-              <td className="px-4 py-4 text-center align-top">
-                <span className="font-extrabold text-black">
-                  {item.rating || "—"}
-                </span>
-              </td>
-
-              <td className="px-4 py-4 text-center align-top">
-                <span className="font-extrabold text-black">
-                  {item.reviews || "—"}
-                </span>
-              </td>
-
-              <td className="px-4 py-4 align-top">
-                {ad?.link ? (
-                  <a
-                    href={ad.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(event) => event.stopPropagation()}
-                    className="block truncate font-extrabold text-[#028c36] transition hover:text-[#016f2b] hover:underline"
-                    title={ad.title || "Открыть объявление"}
-                  >
-                    {ad.title || "Открыть объявление"}
-                  </a>
-                ) : (
-                  <div className="truncate font-bold text-black/65">
-                    {ad?.title || "—"}
-                  </div>
-                )}
-
-                {ad?.price && (
-                  <div className="mt-1 text-xs font-bold text-black/45">
-                    {ad.price}
-                  </div>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-
-        {filteredAvitoItems.length === 0 && (
-          <tr>
-            <td colSpan={7} className="px-5 py-16 text-center">
-              <div className="mx-auto max-w-sm">
-                <div className="text-base font-extrabold text-black">
-                  {avitoOnlySelected
-                    ? "Нет выбранных строк для отображения"
-                    : "По вашему поиску ничего не найдено"}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-black/45">
-                  {avitoOnlySelected
-                    ? "Снимите фильтр «Оставить только выделенные» или выберите строки в таблице."
-                    : "Измените поисковый запрос или выберите другой сохранённый анализ."}
-                </p>
-              </div>
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-</div>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )}
+)}
+                              
                     </div>
                   </CollapsibleContent>
                 </section>
