@@ -1976,9 +1976,25 @@ function renderSellersTable(rows) {
   restoreCurrentTableScroll();
 }
 
+function updateSaveAnalysisButtonVisibility() {
+  const saveBtn = document.querySelector("#helpsell-save-analysis-btn");
+
+  if (!saveBtn) return;
+
+  const shouldShow = currentTab === "sellers";
+
+  saveBtn.style.display = shouldShow ? "inline-flex" : "none";
+
+  if (!shouldShow) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Сохранить анализ в личный кабинет";
+  }
+}
+
 function renderCurrentTab() {
   ensureInlineContainer();
   updateActiveTabUi();
+  updateSaveAnalysisButtonVisibility();
   updateToolbarState();
 
   const panel = document.querySelector("#helpsell-extra-panel");

@@ -313,12 +313,12 @@ if (openSiteBtn) {
 
     if (globalThis.extApi?.raw?.tabs?.create) {
       globalThis.extApi.raw.tabs.create({
-        url: `${siteUrl}/extension`,
+        url: `${siteUrl}`,
       });
       return;
     }
 
-    window.open(`${siteUrl}/extension`, "_blank");
+    window.open(`${siteUrl}`, "_blank");
   });
 }
 

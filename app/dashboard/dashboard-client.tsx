@@ -1537,7 +1537,7 @@ const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
 
                     <th className="w-[13%] px-3 py-4">Позиции</th>
 <th className="w-[20%] px-3 py-4">Продавец</th>
-<th className="w-[11%] px-3 py-4 text-center">Объявлений</th>
+<th className="w-[11%] px-3 py-4 text-center">Объяв.</th>
 <th className="w-[10%] px-3 py-4 text-center">Рейтинг</th>
 <th className="w-[10%] px-3 py-4 text-center">Отзывы</th>
 <th className="px-3 py-4">Первое объявление</th>
