@@ -47,6 +47,24 @@ type AvitoAnalysisDetails = AvitoAnalysisSummary & {
   items: AvitoAnalysisItem[];
 };
 
+type ComparedAvitoItem = {
+  comparisonId: string;
+  analysisId: number;
+  sourceItemId: number;
+  analysisCreatedAt: string;
+  searchQuery: string;
+  city: string | null;
+  sellerName: string;
+  positions: number[];
+  firstPosition: number | null;
+  adsCount: number;
+  rating: string | null;
+  reviews: string | null;
+  firstAdTitle: string | null;
+  firstAdPrice: string | null;
+  firstAdLink: string | null;
+};
+
 type DashboardPageProps = {
   user: {
     name: string;
@@ -585,6 +603,9 @@ export default function DashboardClientPage({
   const [avitoOnlySelected, setAvitoOnlySelected] = useState(false);
   const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
 
+  const [comparedAvitoItems, setComparedAvitoItems] = useState<ComparedAvitoItem[]>([]);
+  const [comparisonMessage, setComparisonMessage] = useState("");
+
   const subscriptionLevel = user.subscriptionLevel.toLowerCase();
   const hasAccess =
     subscriptionLevel === "basic" || subscriptionLevel === "admin";
@@ -908,6 +929,87 @@ export default function DashboardClientPage({
       setAvitoOnlySelected(false);
     }
   }
+
+function addSelectedAvitoItemsToComparison() {
+  if (!selectedAvitoAnalysis || selectedAvitoRowIds.size === 0) {
+    return;
+  }
+
+  const selectedItems = selectedAvitoAnalysis.items.filter((item) =>
+    selectedAvitoRowIds.has(item.id)
+  );
+
+  let addedCount = 0;
+  let alreadyAddedCount = 0;
+
+  setComparedAvitoItems((current) => {
+    const existingIds = new Set(current.map((item) => item.comparisonId));
+
+    const itemsToAdd = selectedItems
+      .filter((item) => {
+        const comparisonId = `${selectedAvitoAnalysis.id}-${item.id}`;
+
+        if (existingIds.has(comparisonId)) {
+          alreadyAddedCount += 1;
+          return false;
+        }
+
+        addedCount += 1;
+        return true;
+      })
+      .map((item) => {
+        const firstAd = item.ads[0];
+
+        return {
+          comparisonId: `${selectedAvitoAnalysis.id}-${item.id}`,
+          analysisId: selectedAvitoAnalysis.id,
+          sourceItemId: item.id,
+          analysisCreatedAt: selectedAvitoAnalysis.createdAt,
+          searchQuery: selectedAvitoAnalysis.searchQuery || "Поисковый запрос",
+          city: selectedAvitoAnalysis.city,
+          sellerName: item.sellerName,
+          positions: item.positions,
+          firstPosition: item.firstPosition,
+          adsCount: item.adsCount,
+          rating: item.rating,
+          reviews: item.reviews,
+          firstAdTitle: firstAd?.title || null,
+          firstAdPrice: firstAd?.price || null,
+          firstAdLink: firstAd?.link || null,
+        };
+      });
+
+    return [...current, ...itemsToAdd];
+  });
+
+  if (addedCount > 0 && alreadyAddedCount > 0) {
+    setComparisonMessage(
+      `Добавлено в сравнение: ${addedCount}. Уже были добавлены: ${alreadyAddedCount}.`
+    );
+  } else if (addedCount > 0) {
+    setComparisonMessage(
+      `${addedCount === 1 ? "Продавец добавлен" : `Добавлено продавцов: ${addedCount}`} в сравнение.`
+    );
+  } else {
+    setComparisonMessage("Все выбранные продавцы уже находятся в сравнении.");
+  }
+
+  window.setTimeout(() => {
+    setComparisonMessage("");
+  }, 3500);
+}
+
+function removeComparedAvitoItem(comparisonId: string) {
+  setComparedAvitoItems((current) =>
+    current.filter((item) => item.comparisonId !== comparisonId)
+  );
+}
+
+function clearAvitoComparison() {
+  setComparedAvitoItems([]);
+  setComparisonMessage("");
+}
+
 
   return (
     <main className="min-h-screen bg-white">
@@ -1565,33 +1667,52 @@ export default function DashboardClientPage({
                                     </label>
 
                                     <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
-                                      <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 sm:w-auto">
-                                        <input
-                                          type="checkbox"
-                                          checked={avitoOnlySelected}
-                                          onChange={(event) =>
-                                            setAvitoOnlySelected(
-                                              event.target.checked,
-                                            )
-                                          }
-                                          className="h-4 w-4 rounded border-black/25 accent-[#03bd48]"
-                                        />
-                                        Только выделенные
-                                      </label>
+  <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 sm:w-auto">
+    <input
+      type="checkbox"
+      checked={avitoOnlySelected}
+      onChange={(event) => setAvitoOnlySelected(event.target.checked)}
+      className="h-4 w-4 rounded border-black/25 accent-[#03bd48]"
+    />
+    Только выделенные
+  </label>
 
-                                      {selectedAvitoRowIds.size > 0 && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setSelectedAvitoRowIds(new Set());
-                                            setAvitoOnlySelected(false);
-                                          }}
-                                          className="w-full rounded-xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-3 py-3 text-xs font-extrabold text-[#028c36] transition hover:bg-[#03bd48]/20 sm:w-auto"
-                                        >
-                                          Снять: {selectedAvitoRowIds.size}
-                                        </button>
-                                      )}
-                                    </div>
+  {selectedAvitoRowIds.size > 0 && (
+    <>
+      <button
+        type="button"
+        onClick={addSelectedAvitoItemsToComparison}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#03bd48] px-3 py-3 text-xs font-extrabold text-white shadow-[0_8px_18px_rgba(3,189,72,0.22)] transition hover:-translate-y-0.5 hover:bg-[#02963a] sm:w-auto"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-4 w-4"
+          aria-hidden="true"
+        >
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+        В сравнение: {selectedAvitoRowIds.size}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setSelectedAvitoRowIds(new Set());
+          setAvitoOnlySelected(false);
+        }}
+        className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/60 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 sm:w-auto"
+      >
+        Снять: {selectedAvitoRowIds.size}
+      </button>
+    </>
+  )}
+</div>
                                   </div>
 
                                   <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1603,6 +1724,23 @@ export default function DashboardClientPage({
                                       Выбрано: {selectedAvitoRowIds.size}
                                     </span>
                                   </div>
+                                  {comparisonMessage && (
+  <div className="mt-3 flex items-start gap-2 rounded-xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-3 py-3 text-xs font-bold leading-5 text-[#027a30]">
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="mt-0.5 h-4 w-4 shrink-0"
+      aria-hidden="true"
+    >
+      <path d="m5 12 4 4L19 6" />
+    </svg>
+    {comparisonMessage}
+  </div>
+)}
                                 </div>
 
                                 <div className="mt-5 space-y-3 md:hidden">
@@ -1961,6 +2099,242 @@ export default function DashboardClientPage({
                                     </table>
                                   </div>
                                 </div>
+
+{comparedAvitoItems.length > 0 && (
+  <section className="mt-6 overflow-hidden rounded-3xl border border-[#03bd48]/25 bg-[linear-gradient(145deg,rgba(3,189,72,0.09),rgba(255,255,255,0.98)_42%)] p-4 shadow-[0_14px_35px_rgba(3,189,72,0.08)] sm:p-5">
+    <div className="flex flex-col gap-4 border-b border-[#03bd48]/15 pb-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <div className="inline-flex items-center gap-2 rounded-full bg-[#03bd48]/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#027a30]">
+          <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
+          Рабочее сравнение
+        </div>
+
+        <h4 className="mt-3 text-2xl font-extrabold tracking-[-0.04em] text-black">
+          Сравнение продавцов
+        </h4>
+
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-black/50">
+          Здесь собраны выбранные продавцы из разных анализов и поисковых запросов.
+          Сравнение хранится в текущем браузере до обновления страницы.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:items-end">
+        <span className="inline-flex w-fit rounded-full bg-black px-3 py-1.5 text-xs font-extrabold text-white">
+          В сравнении: {comparedAvitoItems.length}
+        </span>
+
+        <button
+          type="button"
+          onClick={clearAvitoComparison}
+          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
+        >
+          Очистить сравнение
+        </button>
+      </div>
+    </div>
+
+    {/* Карточки для мобильных */}
+    <div className="mt-4 space-y-3 md:hidden">
+      {comparedAvitoItems.map((item) => {
+        const positions = item.positions.length
+          ? item.positions.join(", ")
+          : item.firstPosition ?? "—";
+
+        return (
+          <article
+            key={item.comparisonId}
+            className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-[0_8px_20px_rgba(16,24,40,0.04)]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="break-words text-base font-extrabold leading-5 text-black">
+                  {item.sellerName}
+                </div>
+
+                <div className="mt-1 text-xs font-semibold text-black/45">
+                  {item.searchQuery}
+                  {item.city ? ` · ${item.city}` : ""}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => removeComparedAvitoItem(item.comparisonId)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
+                aria-label={`Убрать ${item.sellerName} из сравнения`}
+                title="Убрать из сравнения"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-[#03bd48]/[0.08] p-2.5">
+                <div className="text-[9px] font-extrabold uppercase tracking-wide text-[#027a30]/65">
+                  Позиции
+                </div>
+                <div className="mt-1 break-words text-sm font-extrabold text-[#028c36]">
+                  {positions}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-black/[0.035] p-2.5">
+                <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                  Рейтинг
+                </div>
+                <div className="mt-1 text-sm font-extrabold text-black">
+                  {item.rating || "—"}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-black/[0.035] p-2.5">
+                <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                  Отзывы
+                </div>
+                <div className="mt-1 text-sm font-extrabold text-black">
+                  {item.reviews || "—"}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 border-t border-black/[0.07] pt-3">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-black/45">
+                  Объявлений: {item.adsCount}
+                </span>
+                <span className="font-bold text-black/45">
+                  {new Intl.DateTimeFormat("ru-RU", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  }).format(new Date(item.analysisCreatedAt))}
+                </span>
+              </div>
+
+              {item.firstAdLink ? (
+                <a
+                  href={item.firstAdLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 block break-words text-sm font-extrabold leading-5 text-[#028c36] hover:underline"
+                >
+                  {item.firstAdTitle || "Открыть объявление"}
+                </a>
+              ) : (
+                <div className="mt-2 break-words text-sm font-bold leading-5 text-black/65">
+                  {item.firstAdTitle || "Первое объявление не указано"}
+                </div>
+              )}
+
+              {item.firstAdPrice && (
+                <div className="mt-1 text-xs font-bold text-black/45">
+                  {item.firstAdPrice}
+                </div>
+              )}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+
+    {/* Таблица для планшета и ПК */}
+    <div className="mt-4 hidden overflow-hidden rounded-2xl border border-black/[0.08] bg-white md:block">
+      <div className="max-h-[560px] overflow-y-auto">
+        <table className="w-full table-fixed border-collapse text-left">
+          <thead className="sticky top-0 z-10 bg-[#101010]">
+            <tr className="whitespace-nowrap text-[10px] font-extrabold uppercase tracking-[0.07em] text-white/60">
+              <th className="w-[18%] px-4 py-4">Продавец</th>
+              <th className="w-[17%] px-4 py-4">Запрос</th>
+              <th className="w-[12%] px-4 py-4">Дата анализа</th>
+              <th className="w-[11%] px-4 py-4">Позиции</th>
+              <th className="w-[10%] px-4 py-4 text-center">Объявл.</th>
+              <th className="w-[10%] px-4 py-4 text-center">Рейтинг</th>
+              <th className="w-[10%] px-4 py-4 text-center">Отзывы</th>
+              <th className="w-[70px] px-4 py-4 text-center">Убрать</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {comparedAvitoItems.map((item) => {
+              const positions = item.positions.length
+                ? item.positions.join(", ")
+                : item.firstPosition ?? "—";
+
+              return (
+                <tr
+                  key={item.comparisonId}
+                  className="border-b border-black/[0.06] bg-white text-sm transition last:border-b-0 hover:bg-[#03bd48]/[0.035]"
+                >
+                  <td className="px-4 py-3.5 align-top">
+                    <div className="break-words font-extrabold leading-5 text-black">
+                      {item.sellerName}
+                    </div>
+
+                    {item.city && (
+                      <div className="mt-1 text-xs font-semibold text-black/42">
+                        {item.city}
+                      </div>
+                    )}
+                  </td>
+
+                  <td className="px-4 py-3.5 align-top">
+                    <div className="break-words font-bold leading-5 text-black/70">
+                      {item.searchQuery}
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3.5 align-top">
+                    <div className="font-bold text-black/65">
+                      {new Intl.DateTimeFormat("ru-RU", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      }).format(new Date(item.analysisCreatedAt))}
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3.5 align-top">
+                    <span className="inline-flex max-w-full rounded-lg bg-[#03bd48]/10 px-2 py-1 text-xs font-extrabold text-[#028c36]">
+                      <span className="break-words">{positions}</span>
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3.5 text-center align-top">
+                    <span className="inline-flex min-w-8 justify-center rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-extrabold text-black/70">
+                      {item.adsCount}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3.5 text-center align-top font-extrabold text-black">
+                    {item.rating || "—"}
+                  </td>
+
+                  <td className="px-4 py-3.5 text-center align-top font-extrabold text-black">
+                    {item.reviews || "—"}
+                  </td>
+
+                  <td className="px-4 py-3.5 text-center align-top">
+                    <button
+                      type="button"
+                      onClick={() => removeComparedAvitoItem(item.comparisonId)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-lg font-bold text-red-600 transition hover:bg-red-100"
+                      aria-label={`Убрать ${item.sellerName} из сравнения`}
+                      title="Убрать из сравнения"
+                    >
+                      ×
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+)}
+
                               </>
                             )}
                           </div>
