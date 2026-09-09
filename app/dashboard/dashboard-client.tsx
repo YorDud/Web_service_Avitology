@@ -2931,37 +2931,31 @@ function clearAvitoComparison() {
                                       />
                                     </td>
                                     <td className="px-5 py-3">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        value={record.income}
-                                        onChange={(event) =>
-                                          updateFinancialDraft(
-                                            record.id,
-                                            "income",
-                                            event.target.value,
-                                          )
-                                        }
-                                        className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-[#028c36] outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
-                                      />
-                                    </td>
-                                    <td className="px-5 py-3">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        value={record.expense}
-                                        onChange={(event) =>
-                                          updateFinancialDraft(
-                                            record.id,
-                                            "expense",
-                                            event.target.value,
-                                          )
-                                        }
-                                        className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-red-600 outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
-                                      />
-                                    </td>
+  <input
+    type="number"
+    min="0"
+    step="1"
+    value={record.income == 0 ? "" : record.income}
+    onChange={(event) =>
+      updateFinancialDraft(record.id, "income", event.target.value)
+    }
+    className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-[#028c36] outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+  />
+</td>
+
+<td className="px-5 py-3">
+  <input
+    type="number"
+    min="0"
+    step="1"
+    value={record.expense == 0 ? "" : record.expense}
+    onChange={(event) =>
+      updateFinancialDraft(record.id, "expense", event.target.value)
+    }
+    className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-red-600 outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+  />
+</td>
+
                                     <td
                                       className={`px-5 py-3 text-base font-extrabold ${getProfitClass(
                                         profit,
