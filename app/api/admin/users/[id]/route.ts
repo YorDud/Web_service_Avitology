@@ -87,3 +87,86 @@ export async function PATCH(req: Request, { params }: Params) {
     );
   }
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const sessionUser = await getSessionUser();
+
+  if (!sessionUser) {
+    return NextResponse.json(
+      { error: "Не авторизован" },
+      { status: 401 }
+    );
+  }
+
+  const admin = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: {
+      id: true,
+      subscriptionLevel: true,
+    },
+  });
+
+  if (!admin || admin.subscriptionLevel !== "admin") {
+    return NextResponse.json(
+      { error: "Недостаточно прав" },
+      { status: 403 }
+    );
+  }
+
+  const { id } = await params;
+  const userId = Number(id);
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return NextResponse.json(
+      { error: "Некорректный ID пользователя" },
+      { status: 400 }
+    );
+  }
+
+  if (userId === admin.id) {
+    return NextResponse.json(
+      { error: "Нельзя удалить собственный аккаунт администратора" },
+      { status: 400 }
+    );
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  if (!user) {
+    return NextResponse.json(
+      { error: "Пользователь не найден" },
+      { status: 404 }
+    );
+  }
+
+  try {
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+
+    return NextResponse.json({
+      success: true,
+      deletedUserId: userId,
+      message: `Пользователь «${user.name}» удалён`,
+    });
+  } catch (error) {
+    console.error("Admin delete user error:", error);
+
+    return NextResponse.json(
+      {
+        error:
+          "Не удалось удалить пользователя. Возможно, у него есть связанные записи в базе данных.",
+      },
+      { status: 500 }
+    );
+  }
+}

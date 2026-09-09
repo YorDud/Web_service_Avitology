@@ -120,6 +120,7 @@ export default async function AdminPage() {
     <AdminUsersClient
       users={users}
       payments={payments}
+      adminId={admin.id}
       adminName={admin.name}
       initialServiceSettings={{
         id: serviceSettings.id,

@@ -2306,10 +2306,11 @@ function clearAvitoComparison() {
                   </td>
 
                   <td className="whitespace-nowrap px-2 py-3.5 align-top text-center lg:px-3">
-  <div className="text-xs font-extrabold text-black/65">
-    {formatAnalysisDateTime(item.analysisCreatedAt)}
+  <div className="text-xs font-extrabold text-black/65 whitespace-pre-line">
+    {formatAnalysisDateTime(item.analysisCreatedAt).replace(', ', '\n')}
   </div>
 </td>
+
 
                   <td className="px-2 py-3.5 align-top lg:px-3">
                     <span className="inline-flex max-w-full rounded-lg bg-[#03bd48]/10 px-2 py-1 text-xs font-extrabold text-[#028c36]">
@@ -2628,7 +2629,7 @@ function clearAvitoComparison() {
                         )}
 
                       <div className="rounded-3xl border border-black/[0.07] bg-black/[0.018] p-4 md:p-5">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                           <div>
                             <div className="text-sm font-extrabold text-black">
                               Период аналитики
@@ -2637,7 +2638,7 @@ function clearAvitoComparison() {
                               По умолчанию отображаются последние 7 дней.
                             </p>
                           </div>
-                          <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
+                          <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:w-auto sm:grid-cols-2">
                             <label className="block min-w-0">
                               <span className="mb-2 block text-xs font-bold text-black/50">
                                 Начало периода
@@ -2649,7 +2650,7 @@ function clearAvitoComparison() {
                                 onChange={(event) =>
                                   setPeriodStart(event.target.value)
                                 }
-                                className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+                                className="min-w-0 max-w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-[13px] font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10 sm:text-sm"
                               />
                             </label>
                             <label className="block min-w-0">
@@ -2664,7 +2665,7 @@ function clearAvitoComparison() {
                                 onChange={(event) =>
                                   setPeriodEnd(event.target.value)
                                 }
-                                className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+                                className="min-w-0 max-w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-[13px] font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10 sm:text-sm"
                               />
                             </label>
                           </div>
@@ -2711,7 +2712,7 @@ function clearAvitoComparison() {
                   <CollapsibleContent isOpen={isFinancialTableOpen}>
                     <div>
                       <div className="mt-6 rounded-3xl border border-black/[0.07] bg-[linear-gradient(135deg,rgba(3,189,72,0.055),rgba(255,255,255,0.9))] p-4 md:p-5">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                           <div>
                             <div className="text-sm font-extrabold text-black">
                               Период отображения таблицы
@@ -2720,7 +2721,7 @@ function clearAvitoComparison() {
                               По умолчанию отображается последний месяц.
                             </p>
                           </div>
-                          <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
+                          <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:w-auto sm:grid-cols-2">
                             <label className="block min-w-0">
                               <span className="mb-2 block text-xs font-bold text-black/50">
                                 Начало периода
@@ -2732,7 +2733,7 @@ function clearAvitoComparison() {
                                 onChange={(event) =>
                                   setTablePeriodStart(event.target.value)
                                 }
-                                className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+                                className="min-w-0 max-w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-[13px] font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10 sm:text-sm"
                               />
                             </label>
                             <label className="block min-w-0">
@@ -2747,7 +2748,7 @@ function clearAvitoComparison() {
                                 onChange={(event) =>
                                   setTablePeriodEnd(event.target.value)
                                 }
-                                className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+                                className="min-w-0 max-w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-[13px] font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10 sm:text-sm"
                               />
                             </label>
                           </div>

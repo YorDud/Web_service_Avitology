@@ -60,6 +60,7 @@ type AdminSection =
 type Props = {
   users: UserItem[];
   payments: PaymentItem[];
+  adminId: number;
   adminName: string;
   initialServiceSettings: ServiceSettings;
 };
@@ -134,6 +135,7 @@ function PaymentInfoCard({
 export default function AdminUsersClient({
   users: initialUsers,
   payments,
+  adminId,
   adminName,
   initialServiceSettings,
 }: Props) {
@@ -328,6 +330,59 @@ export default function AdminUsersClient({
       setLoading(false);
     }
   }
+
+  async function deleteUser() {
+  if (!selectedUser) return;
+
+  if (selectedUser.id === adminId) {
+    setError("Нельзя удалить аккаунт администратора, под которым вы сейчас авторизованы.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Удалить пользователя «${selectedUser.name}»?\n\nЭто действие нельзя отменить.`
+  );
+
+  if (!confirmed) return;
+
+  setLoading(true);
+  setError("");
+  setMessage("");
+
+  try {
+    const res = await fetch(`/api/admin/users/${selectedUser.id}`, {
+      method: "DELETE",
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      setError(data?.error || "Не удалось удалить пользователя.");
+      return;
+    }
+
+    setUsers((current) => {
+      const updatedUsers = current.filter((user) => user.id !== selectedUser.id);
+
+      setSelectedUser((currentSelected) => {
+        if (currentSelected?.id !== selectedUser.id) {
+          return currentSelected;
+        }
+
+        return updatedUsers[0] || null;
+      });
+
+      return updatedUsers;
+    });
+
+    setMessage(`Пользователь «${selectedUser.name}» удалён.`);
+  } catch (err) {
+    console.error(err);
+    setError("Ошибка сети. Не удалось удалить пользователя.");
+  } finally {
+    setLoading(false);
+  }
+}
 
   async function createUser() {
     setLoading(true);
@@ -861,18 +916,33 @@ export default function AdminUsersClient({
                         />
                       </div>
 
-                      <div className="mt-2 md:col-span-2">
-                        <button
-                          type="button"
-                          onClick={saveUser}
-                          disabled={loading}
-                          className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {loading
-                            ? "Сохранение..."
-                            : "Сохранить изменения"}
-                        </button>
-                      </div>
+                      <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:flex-wrap md:col-span-2">
+  <button
+    type="button"
+    onClick={saveUser}
+    disabled={loading}
+    className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+  >
+    {loading ? "Сохранение..." : "Сохранить изменения"}
+  </button>
+
+  {selectedUser.id !== adminId && (
+    <button
+      type="button"
+      onClick={deleteUser}
+      disabled={loading}
+      className="w-full rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-extrabold text-red-600 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+    >
+      Удалить пользователя
+    </button>
+  )}
+
+  {selectedUser.id === adminId && (
+    <div className="flex items-center rounded-2xl border border-black/10 bg-black/[0.025] px-4 py-3 text-xs font-bold leading-5 text-black/45">
+      Вы редактируете свой аккаунт администратора. Его удаление недоступно.
+    </div>
+  )}
+</div>
                     </div>
                   )}
                 </section>
