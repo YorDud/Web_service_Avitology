@@ -119,6 +119,15 @@ function formatRecordDate(value: string) {
   const [year, month, day] = value.split("-");
   return year && month && day ? `${day}.${month}.${year}` : value;
 }
+function formatAnalysisDateTime(value: string) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
 
 function getDateRange(start: string, end: string) {
   const result: string[] = [];
@@ -1743,7 +1752,7 @@ function clearAvitoComparison() {
 )}
                                 </div>
 
-                                <div className="mt-5 space-y-3 md:hidden">
+                                <div className="mt-5 max-h-[620px] space-y-3 overflow-y-auto overscroll-contain pr-1 md:hidden">
                                   {filteredAvitoItems.map((item) => {
                                     const ad = item.ads[0];
                                     const isSelected = selectedAvitoRowIds.has(
@@ -2203,13 +2212,9 @@ function clearAvitoComparison() {
                 <span className="font-bold text-black/45">
                   Объявлений: {item.adsCount}
                 </span>
-                <span className="font-bold text-black/45">
-                  {new Intl.DateTimeFormat("ru-RU", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  }).format(new Date(item.analysisCreatedAt))}
-                </span>
+                <span className="whitespace-nowrap text-[11px] font-bold text-black/45">
+  {formatAnalysisDateTime(item.analysisCreatedAt)}
+</span>
               </div>
 
               {item.firstAdLink ? (
@@ -2242,18 +2247,34 @@ function clearAvitoComparison() {
     <div className="mt-4 hidden overflow-hidden rounded-2xl border border-black/[0.08] bg-white md:block">
       <div className="max-h-[560px] overflow-y-auto">
         <table className="w-full table-fixed border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-[#101010]">
-            <tr className="whitespace-nowrap text-[10px] font-extrabold uppercase tracking-[0.07em] text-white/60">
-              <th className="w-[18%] px-4 py-4">Продавец</th>
-              <th className="w-[17%] px-4 py-4">Запрос</th>
-              <th className="w-[12%] px-4 py-4">Дата анализа</th>
-              <th className="w-[11%] px-4 py-4">Позиции</th>
-              <th className="w-[10%] px-4 py-4 text-center">Объявл.</th>
-              <th className="w-[10%] px-4 py-4 text-center">Рейтинг</th>
-              <th className="w-[10%] px-4 py-4 text-center">Отзывы</th>
-              <th className="w-[70px] px-4 py-4 text-center">Убрать</th>
-            </tr>
-          </thead>
+          <thead className="sticky top-0 z-10 bg-[#101010] shadow-[0_2px_0_rgba(255,255,255,0.08)]">
+  <tr className="whitespace-nowrap text-[9px] font-extrabold uppercase tracking-[0.045em] text-white/65">
+    <th className="w-[17%] px-2 py-4 lg:px-3">Продавец</th>
+    <th className="w-[14%] px-2 py-4 lg:px-3">Запрос</th>
+    <th className="w-[17%] px-2 py-4 lg:px-3">Дата</th>
+    <th className="w-[12%] px-2 py-4 lg:px-3">Позиции</th>
+    <th className="w-[9%] px-2 py-4 text-center lg:px-3">Объявл.</th>
+    <th className="w-[10%] px-2 py-4 text-center lg:px-3">Рейтинг</th>
+    <th className="w-[10%] px-2 py-4 text-center lg:px-3">Отзывы</th>
+    <th className="w-[11%] px-2 py-4 text-center lg:px-3">
+      <span className="sr-only">Убрать</span>
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="mx-auto h-4 w-4 text-white/70"
+        aria-hidden="true"
+      >
+        <path d="M3 6h18" />
+        <path d="M8 6V4h8v2" />
+        <path d="m19 6-1 14H6L5 6" />
+      </svg>
+    </th>
+  </tr>
+</thead>
 
           <tbody>
             {comparedAvitoItems.map((item) => {
@@ -2266,7 +2287,7 @@ function clearAvitoComparison() {
                   key={item.comparisonId}
                   className="border-b border-black/[0.06] bg-white text-sm transition last:border-b-0 hover:bg-[#03bd48]/[0.035]"
                 >
-                  <td className="px-4 py-3.5 align-top">
+                  <td className="px-2 py-3.5 align-top lg:px-3">
                     <div className="break-words font-extrabold leading-5 text-black">
                       {item.sellerName}
                     </div>
@@ -2278,43 +2299,39 @@ function clearAvitoComparison() {
                     )}
                   </td>
 
-                  <td className="px-4 py-3.5 align-top">
+                  <td className="px-2 py-3.5 align-top lg:px-3">
                     <div className="break-words font-bold leading-5 text-black/70">
                       {item.searchQuery}
                     </div>
                   </td>
 
-                  <td className="px-4 py-3.5 align-top">
-                    <div className="font-bold text-black/65">
-                      {new Intl.DateTimeFormat("ru-RU", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      }).format(new Date(item.analysisCreatedAt))}
-                    </div>
-                  </td>
+                  <td className="whitespace-nowrap px-2 py-3.5 align-top text-center lg:px-3">
+  <div className="text-xs font-extrabold text-black/65">
+    {formatAnalysisDateTime(item.analysisCreatedAt)}
+  </div>
+</td>
 
-                  <td className="px-4 py-3.5 align-top">
+                  <td className="px-2 py-3.5 align-top lg:px-3">
                     <span className="inline-flex max-w-full rounded-lg bg-[#03bd48]/10 px-2 py-1 text-xs font-extrabold text-[#028c36]">
                       <span className="break-words">{positions}</span>
                     </span>
                   </td>
 
-                  <td className="px-4 py-3.5 text-center align-top">
+                  <td className="whitespace-nowrap px-2 py-3.5 text-center align-top lg:px-3">
                     <span className="inline-flex min-w-8 justify-center rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-extrabold text-black/70">
                       {item.adsCount}
                     </span>
                   </td>
 
-                  <td className="px-4 py-3.5 text-center align-top font-extrabold text-black">
+                  <td className="whitespace-nowrap px-2 py-3.5 text-center align-top font-extrabold text-black lg:px-3">
                     {item.rating || "—"}
                   </td>
 
-                  <td className="px-4 py-3.5 text-center align-top font-extrabold text-black">
-                    {item.reviews || "—"}
-                  </td>
+                  <td className="whitespace-nowrap px-2 py-3.5 text-center align-top font-extrabold text-black lg:px-3">
+  {item.reviews || "—"}
+</td>
 
-                  <td className="px-4 py-3.5 text-center align-top">
+                  <td className="px-2 py-3.5 text-center align-top lg:px-3">
                     <button
                       type="button"
                       onClick={() => removeComparedAvitoItem(item.comparisonId)}
