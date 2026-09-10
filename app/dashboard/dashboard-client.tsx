@@ -65,6 +65,45 @@ type ComparedAvitoItem = {
   firstAdLink: string | null;
 };
 
+type BidderApi = {
+  id: number;
+  title: string;
+  city: string;
+  query: string;
+  avitoItemId: string | null;
+  avitoItemUrl: string | null;
+  targetFrom: number;
+  targetTo: number;
+  currentPosition: number | null;
+  currentBid: number;
+  minBid: number;
+  maxBid: number;
+  checkInterval: number;
+  schedule: string;
+  status: BidderStatus;
+  mode: BidderMode;
+  changesToday: number;
+  nextCheckAt: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type BidderEvent = {
+  id: number;
+  type: string;
+  message: string;
+  createdAt: string;
+};
+
+type AvitoConnection = {
+  clientIdMasked: string;
+  tokenExpiresAt: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+};
+
 type DashboardPageProps = {
   user: {
     name: string;
@@ -76,14 +115,100 @@ type DashboardPageProps = {
     subscriptionEndsAt: string;
   };
   initialFinancialRecords: FinancialRecord[];
+  initialBidders: BidderApi[];
+  initialAvitoConnection: AvitoConnection | null;
 };
 
 type DashboardSection =
   | "profile"
   | "avito"
   | "financial"
+  | "bid-manager"
   | "popular-queries"
   | null;
+
+type BidderStatus = "active" | "paused" | "attention";
+type BidderMode = "dry_run" | "live";
+
+type Bidder = BidderApi & {
+  position: number | null;
+  nextCheck: string;
+  imageLabel: string;
+};
+
+function formatBidderNextCheck(value: string | null, status: BidderStatus) {
+  if (status === "paused") return "на паузе";
+  if (!value) return "ожидает проверки";
+
+  const difference = new Date(value).getTime() - Date.now();
+  if (difference <= 0) return "сейчас";
+
+  const minutes = Math.ceil(difference / (60 * 1000));
+  return `через ${minutes} мин`;
+}
+
+function toBidder(apiBidder: BidderApi): Bidder {
+  return {
+    ...apiBidder,
+    position: apiBidder.currentPosition,
+    nextCheck: formatBidderNextCheck(apiBidder.nextCheckAt, apiBidder.status),
+    imageLabel: apiBidder.title.trim().slice(0, 2).toUpperCase() || "АВ",
+  };
+}
+
+function formatConnectionDate(value: string | null) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+type BidderDraft = {
+  title: string;
+  city: string;
+  query: string;
+  avitoItemId: string | null;
+  avitoItemUrl: string | null;
+  targetFrom: number;
+  targetTo: number;
+  minBid: number;
+  maxBid: number;
+  step: number;
+  interval: number;
+  schedule: string;
+  mode: BidderMode;
+};
+
+type AvitoItem = {
+  id: string;
+  title: string;
+  url: string | null;
+  price: string | null;
+  status: string | null;
+  serviceType: string | null;
+  category: string | null;
+};
+
+const initialBidderDraft: BidderDraft = {
+  title: "",
+  city: "",
+  query: "",
+  avitoItemId: null,
+  avitoItemUrl: null,
+  targetFrom: 3,
+  targetTo: 5,
+  minBid: 150,
+  maxBid: 400,
+  step: 10,
+  interval: 10,
+  schedule: "Ежедневно, 09:00–22:00",
+  mode: "dry_run",
+};
 
 function getSubscriptionStyle(level: string) {
   switch (level.toLowerCase()) {
@@ -569,6 +694,8 @@ function IncomeChart({
 export default function DashboardClientPage({
   user,
   initialFinancialRecords,
+  initialBidders,
+  initialAvitoConnection,
 }: DashboardPageProps) {
   const [activeSection, setActiveSection] =
     useState<DashboardSection>("profile");
@@ -612,8 +739,42 @@ export default function DashboardClientPage({
   const [avitoOnlySelected, setAvitoOnlySelected] = useState(false);
   const avitoAnalysesScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const [comparedAvitoItems, setComparedAvitoItems] = useState<ComparedAvitoItem[]>([]);
+  const [comparedAvitoItems, setComparedAvitoItems] = useState<
+    ComparedAvitoItem[]
+  >([]);
   const [comparisonMessage, setComparisonMessage] = useState("");
+
+  // Первый визуальный прототип бид-менеджера. На этом этапе данные живут
+  // только в состоянии страницы и не отправляются в Авито или в базу.
+  const [bidders, setBidders] = useState<Bidder[]>(() =>
+    initialBidders.map(toBidder),
+  );
+  const [bidderSaving, setBidderSaving] = useState(false);
+  const [checkingBidderId, setCheckingBidderId] = useState<number | null>(null);
+  const [isBidderWizardOpen, setIsBidderWizardOpen] = useState(false);
+  const [bidderWizardStep, setBidderWizardStep] = useState(1);
+  const [bidderDraft, setBidderDraft] =
+    useState<BidderDraft>(initialBidderDraft);
+  const [bidderMessage, setBidderMessage] = useState("");
+  const [editingBidderId, setEditingBidderId] = useState<number | null>(null);
+  const [avitoConnection, setAvitoConnection] =
+    useState<AvitoConnection | null>(initialAvitoConnection);
+  const [isAvitoConnectionOpen, setIsAvitoConnectionOpen] = useState(false);
+  const [avitoConnectionSaving, setAvitoConnectionSaving] = useState(false);
+  const [avitoConnectionError, setAvitoConnectionError] = useState("");
+  const [avitoClientId, setAvitoClientId] = useState("");
+  const [avitoClientSecret, setAvitoClientSecret] = useState("");
+  const [avitoItems, setAvitoItems] = useState<AvitoItem[]>([]);
+  const [avitoItemsLoading, setAvitoItemsLoading] = useState(false);
+  const [avitoItemsError, setAvitoItemsError] = useState("");
+
+  const [expandedBidderId, setExpandedBidderId] = useState<number | null>(null);
+const [bidderEvents, setBidderEvents] = useState<Record<number, BidderEvent[]>>(
+  {},
+);
+const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null>(
+  null,
+);
 
   const subscriptionLevel = user.subscriptionLevel.toLowerCase();
   const hasAccess =
@@ -657,8 +818,17 @@ export default function DashboardClientPage({
       available: hasAccess,
     },
     {
-      id: "popular-queries",
+      id: "bid-manager",
       index: "04",
+      title: "Бид-менеджер Авито",
+      description: hasAccess
+        ? "Автоматическое управление ставками"
+        : "Доступно с подпиской Basic",
+      available: hasAccess,
+    },
+    {
+      id: "popular-queries",
+      index: "05",
       title: "Запросы по популярности Авито",
       description: hasAccess
         ? "Подбор популярных запросов"
@@ -939,86 +1109,493 @@ export default function DashboardClientPage({
     }
   }
 
-function addSelectedAvitoItemsToComparison() {
-  if (!selectedAvitoAnalysis || selectedAvitoRowIds.size === 0) {
+  function addSelectedAvitoItemsToComparison() {
+    if (!selectedAvitoAnalysis || selectedAvitoRowIds.size === 0) {
+      return;
+    }
+
+    const selectedItems = selectedAvitoAnalysis.items.filter((item) =>
+      selectedAvitoRowIds.has(item.id),
+    );
+
+    let addedCount = 0;
+    let alreadyAddedCount = 0;
+
+    setComparedAvitoItems((current) => {
+      const existingIds = new Set(current.map((item) => item.comparisonId));
+
+      const itemsToAdd = selectedItems
+        .filter((item) => {
+          const comparisonId = `${selectedAvitoAnalysis.id}-${item.id}`;
+
+          if (existingIds.has(comparisonId)) {
+            alreadyAddedCount += 1;
+            return false;
+          }
+
+          addedCount += 1;
+          return true;
+        })
+        .map((item) => {
+          const firstAd = item.ads[0];
+
+          return {
+            comparisonId: `${selectedAvitoAnalysis.id}-${item.id}`,
+            analysisId: selectedAvitoAnalysis.id,
+            sourceItemId: item.id,
+            analysisCreatedAt: selectedAvitoAnalysis.createdAt,
+            searchQuery:
+              selectedAvitoAnalysis.searchQuery || "Поисковый запрос",
+            city: selectedAvitoAnalysis.city,
+            sellerName: item.sellerName,
+            positions: item.positions,
+            firstPosition: item.firstPosition,
+            adsCount: item.adsCount,
+            rating: item.rating,
+            reviews: item.reviews,
+            firstAdTitle: firstAd?.title || null,
+            firstAdPrice: firstAd?.price || null,
+            firstAdLink: firstAd?.link || null,
+          };
+        });
+
+      return [...current, ...itemsToAdd];
+    });
+
+    if (addedCount > 0 && alreadyAddedCount > 0) {
+      setComparisonMessage(
+        `Добавлено в сравнение: ${addedCount}. Уже были добавлены: ${alreadyAddedCount}.`,
+      );
+    } else if (addedCount > 0) {
+      setComparisonMessage(
+        `${addedCount === 1 ? "Продавец добавлен" : `Добавлено продавцов: ${addedCount}`} в сравнение.`,
+      );
+    } else {
+      setComparisonMessage("Все выбранные продавцы уже находятся в сравнении.");
+    }
+
+    window.setTimeout(() => {
+      setComparisonMessage("");
+    }, 3500);
+  }
+
+  function removeComparedAvitoItem(comparisonId: string) {
+    setComparedAvitoItems((current) =>
+      current.filter((item) => item.comparisonId !== comparisonId),
+    );
+  }
+
+  function clearAvitoComparison() {
+    setComparedAvitoItems([]);
+    setComparisonMessage("");
+  }
+
+  function showBidderMessage(text: string) {
+    setBidderMessage(text);
+    window.setTimeout(() => setBidderMessage(""), 3200);
+  }
+
+  async function toggleBidderStatus(id: number) {
+    const bidder = bidders.find((item) => item.id === id);
+    if (!bidder || bidderSaving) return;
+
+    const nextStatus: "active" | "paused" =
+      bidder.status === "active" ? "paused" : "active";
+    setBidderSaving(true);
+    try {
+      const response = await fetch(`/api/avito-bidders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        showBidderMessage(data?.error || "Не удалось изменить статус бидера.");
+        return;
+      }
+      setBidders((current) =>
+        current.map((item) => (item.id === id ? toBidder(data.bidder) : item)),
+      );
+      await loadBidderEvents(id);
+      showBidderMessage(
+        nextStatus === "active"
+          ? `Бидер «${bidder.title}» запущен.`
+          : `Бидер «${bidder.title}» поставлен на паузу.`,
+      );
+    } catch (error) {
+      console.error(error);
+      showBidderMessage("Ошибка сети. Не удалось изменить статус бидера.");
+    } finally {
+      setBidderSaving(false);
+    }
+  }
+
+  async function deleteBidder(id: number) {
+    const bidder = bidders.find((item) => item.id === id);
+    if (
+      !bidder ||
+      bidderSaving ||
+      !window.confirm(`Удалить бидер «${bidder.title}»?`)
+    )
+      return;
+
+    setBidderSaving(true);
+    try {
+      const response = await fetch(`/api/avito-bidders/${id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        showBidderMessage(data?.error || "Не удалось удалить бидер.");
+        return;
+      }
+      setBidders((current) => current.filter((item) => item.id !== id));
+      showBidderMessage("Бидер удалён.");
+    } catch (error) {
+      console.error(error);
+      showBidderMessage("Ошибка сети. Не удалось удалить бидер.");
+    } finally {
+      setBidderSaving(false);
+    }
+  }
+
+  async function loadBidderEvents(bidderId: number) {
+  setBidderEventsLoadingId(bidderId);
+
+  try {
+    const response = await fetch(`/api/avito-bidders/${bidderId}/events`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      showBidderMessage(
+        data?.error || "Не удалось загрузить историю событий бидера.",
+      );
+      return;
+    }
+
+    setBidderEvents((current) => ({
+      ...current,
+      [bidderId]: Array.isArray(data?.events) ? data.events : [],
+    }));
+  } catch (error) {
+    console.error(error);
+    showBidderMessage("Ошибка сети. Не удалось загрузить историю событий.");
+  } finally {
+    setBidderEventsLoadingId(null);
+  }
+}
+
+async function toggleBidderEvents(bidderId: number) {
+  if (expandedBidderId === bidderId) {
+    setExpandedBidderId(null);
     return;
   }
 
-  const selectedItems = selectedAvitoAnalysis.items.filter((item) =>
-    selectedAvitoRowIds.has(item.id)
-  );
+  setExpandedBidderId(bidderId);
 
-  let addedCount = 0;
-  let alreadyAddedCount = 0;
+  if (!bidderEvents[bidderId]) {
+    await loadBidderEvents(bidderId);
+  }
+}
 
-  setComparedAvitoItems((current) => {
-    const existingIds = new Set(current.map((item) => item.comparisonId));
+  async function checkBidderItem(id: number) {
+  const bidder = bidders.find((item) => item.id === id);
 
-    const itemsToAdd = selectedItems
-      .filter((item) => {
-        const comparisonId = `${selectedAvitoAnalysis.id}-${item.id}`;
-
-        if (existingIds.has(comparisonId)) {
-          alreadyAddedCount += 1;
-          return false;
-        }
-
-        addedCount += 1;
-        return true;
-      })
-      .map((item) => {
-        const firstAd = item.ads[0];
-
-        return {
-          comparisonId: `${selectedAvitoAnalysis.id}-${item.id}`,
-          analysisId: selectedAvitoAnalysis.id,
-          sourceItemId: item.id,
-          analysisCreatedAt: selectedAvitoAnalysis.createdAt,
-          searchQuery: selectedAvitoAnalysis.searchQuery || "Поисковый запрос",
-          city: selectedAvitoAnalysis.city,
-          sellerName: item.sellerName,
-          positions: item.positions,
-          firstPosition: item.firstPosition,
-          adsCount: item.adsCount,
-          rating: item.rating,
-          reviews: item.reviews,
-          firstAdTitle: firstAd?.title || null,
-          firstAdPrice: firstAd?.price || null,
-          firstAdLink: firstAd?.link || null,
-        };
-      });
-
-    return [...current, ...itemsToAdd];
-  });
-
-  if (addedCount > 0 && alreadyAddedCount > 0) {
-    setComparisonMessage(
-      `Добавлено в сравнение: ${addedCount}. Уже были добавлены: ${alreadyAddedCount}.`
-    );
-  } else if (addedCount > 0) {
-    setComparisonMessage(
-      `${addedCount === 1 ? "Продавец добавлен" : `Добавлено продавцов: ${addedCount}`} в сравнение.`
-    );
-  } else {
-    setComparisonMessage("Все выбранные продавцы уже находятся в сравнении.");
+  if (!bidder || !bidder.avitoItemId || checkingBidderId !== null) {
+    return;
   }
 
-  window.setTimeout(() => {
-    setComparisonMessage("");
-  }, 3500);
+  setCheckingBidderId(id);
+
+  try {
+    const itemResponse = await fetch(`/api/avito-items/${bidder.avitoItemId}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const itemData = await itemResponse.json().catch(() => null);
+    const checkedAt = new Date().toISOString();
+
+    if (!itemResponse.ok) {
+      const errorMessage =
+        itemData?.error || "Не удалось проверить объявление Авито.";
+
+      const patchResponse = await fetch(`/api/avito-bidders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lastError: errorMessage,
+          lastCheckedAt: checkedAt,
+        }),
+      });
+
+      const patchData = await patchResponse.json().catch(() => null);
+
+      if (patchResponse.ok && patchData?.bidder) {
+        setBidders((current) =>
+          current.map((item) =>
+            item.id === id ? toBidder(patchData.bidder) : item,
+          ),
+        );
+        await loadBidderEvents(id);
+      }
+
+      showBidderMessage(errorMessage);
+      return;
+    }
+
+    const item = itemData?.item;
+
+    const patchResponse = await fetch(`/api/avito-bidders/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title:
+          typeof item?.title === "string" && item.title.trim().length > 0
+            ? item.title.trim()
+            : bidder.title,
+        avitoItemUrl:
+          typeof item?.url === "string" && item.url.trim().length > 0
+            ? item.url.trim()
+            : bidder.avitoItemUrl,
+        lastError: null,
+        lastCheckedAt: checkedAt,
+      }),
+    });
+
+    const patchData = await patchResponse.json().catch(() => null);
+
+    if (!patchResponse.ok || !patchData?.bidder) {
+      showBidderMessage(
+        patchData?.error || "Не удалось сохранить результат проверки объявления.",
+      );
+      return;
+    }
+
+    setBidders((current) =>
+      current.map((item) =>
+        item.id === id ? toBidder(patchData.bidder) : item,
+      ),
+    );
+
+    await loadBidderEvents(id);
+
+    showBidderMessage(`Объявление «${patchData.bidder.title}» проверено.`);
+  } catch (error) {
+    console.error(error);
+    showBidderMessage("Ошибка сети. Не удалось проверить объявление.");
+  } finally {
+    setCheckingBidderId(null);
+  }
 }
 
-function removeComparedAvitoItem(comparisonId: string) {
-  setComparedAvitoItems((current) =>
-    current.filter((item) => item.comparisonId !== comparisonId)
-  );
-}
+  function openBidderWizard() {
+    setEditingBidderId(null);
+    setBidderDraft(initialBidderDraft);
+    setBidderWizardStep(1);
+    setIsBidderWizardOpen(true);
+    void loadAvitoItems();
+  }
 
-function clearAvitoComparison() {
-  setComparedAvitoItems([]);
-  setComparisonMessage("");
-}
+  function openBidderEditor(bidder: Bidder) {
+    setEditingBidderId(bidder.id);
+    setBidderDraft({
+      title: bidder.title,
+      city: bidder.city,
+      query: bidder.query,
+      avitoItemId: bidder.avitoItemId,
+      avitoItemUrl: bidder.avitoItemUrl,
+      targetFrom: bidder.targetFrom,
+      targetTo: bidder.targetTo,
+      minBid: bidder.minBid,
+      maxBid: bidder.maxBid,
+      step: 10,
+      interval: bidder.checkInterval,
+      schedule: bidder.schedule,
+      mode: bidder.mode,
+    });
+    setBidderWizardStep(1);
+    setIsBidderWizardOpen(true);
+    void loadAvitoItems();
+  }
 
+  function openAvitoConnection() {
+    setAvitoConnectionError("");
+    setAvitoClientId("");
+    setAvitoClientSecret("");
+    setIsAvitoConnectionOpen(true);
+  }
+
+  async function saveAvitoConnection() {
+    if (avitoConnectionSaving) return;
+
+    setAvitoConnectionSaving(true);
+    setAvitoConnectionError("");
+    try {
+      const response = await fetch("/api/avito-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: avitoClientId,
+          clientSecret: avitoClientSecret,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setAvitoConnectionError(
+          data?.error || "Не удалось подключить аккаунт Авито.",
+        );
+        return;
+      }
+
+      setAvitoConnection(data.connection);
+      setIsAvitoConnectionOpen(false);
+      await loadAvitoItems();
+      showBidderMessage("Аккаунт Авито подключён и проверен.");
+    } catch (error) {
+      console.error(error);
+      setAvitoConnectionError("Ошибка сети. Повторите попытку.");
+    } finally {
+      setAvitoConnectionSaving(false);
+    }
+  }
+
+  async function disconnectAvitoConnection() {
+    if (
+      avitoConnectionSaving ||
+      !window.confirm("Отключить аккаунт Авито от Бид-менеджера?")
+    ) {
+      return;
+    }
+
+    setAvitoConnectionSaving(true);
+    try {
+      const response = await fetch("/api/avito-connection", {
+        method: "DELETE",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        showBidderMessage(data?.error || "Не удалось отключить аккаунт Авито.");
+        return;
+      }
+
+      setAvitoConnection(null);
+      setAvitoItems([]);
+      setAvitoItemsError("");
+      showBidderMessage("Аккаунт Авито отключён.");
+    } catch (error) {
+      console.error(error);
+      showBidderMessage("Ошибка сети. Не удалось отключить аккаунт Авито.");
+    } finally {
+      setAvitoConnectionSaving(false);
+    }
+  }
+
+  async function loadAvitoItems() {
+    if (!avitoConnection) {
+      setAvitoItems([]);
+      setAvitoItemsError("Сначала подключите аккаунт Авито.");
+      return;
+    }
+
+    setAvitoItemsLoading(true);
+    setAvitoItemsError("");
+    try {
+      const response = await fetch("/api/avito-items", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setAvitoItems([]);
+        setAvitoItemsError(
+          data?.error || "Не удалось получить список объявлений Авито.",
+        );
+        return;
+      }
+
+      setAvitoItems(Array.isArray(data?.items) ? data.items : []);
+    } catch (error) {
+      console.error(error);
+      setAvitoItems([]);
+      setAvitoItemsError("Ошибка сети. Не удалось получить объявления Авито.");
+    } finally {
+      setAvitoItemsLoading(false);
+    }
+  }
+
+  async function saveBidder() {
+    if (bidderSaving) return;
+
+    const payload = {
+      title: bidderDraft.title,
+      city: bidderDraft.city,
+      query: bidderDraft.query,
+      avitoItemId: bidderDraft.avitoItemId,
+      avitoItemUrl: bidderDraft.avitoItemUrl,
+      targetFrom: bidderDraft.targetFrom,
+      targetTo: bidderDraft.targetTo,
+      minBid: bidderDraft.minBid,
+      maxBid: bidderDraft.maxBid,
+      checkInterval: bidderDraft.interval,
+      schedule: bidderDraft.schedule,
+      mode: bidderDraft.mode,
+    };
+
+    setBidderSaving(true);
+    try {
+      const isEditing = editingBidderId !== null;
+      const response = await fetch(
+        isEditing
+          ? `/api/avito-bidders/${editingBidderId}`
+          : "/api/avito-bidders",
+        {
+          method: isEditing ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        showBidderMessage(
+          data?.error ||
+            (isEditing
+              ? "Не удалось сохранить изменения бидера."
+              : "Не удалось создать бидер."),
+        );
+        return;
+      }
+
+      const savedBidder = toBidder(data.bidder);
+      setBidders((current) =>
+        isEditing
+          ? current.map((item) =>
+              item.id === savedBidder.id ? savedBidder : item,
+            )
+          : [savedBidder, ...current],
+      );
+      await loadBidderEvents(savedBidder.id);
+setExpandedBidderId(savedBidder.id);
+      setIsBidderWizardOpen(false);
+      setEditingBidderId(null);
+      showBidderMessage(
+        isEditing
+          ? "Настройки бидера сохранены."
+          : "Бидер сохранён и запущен. Настройки не пропадут после обновления страницы.",
+      );
+    } catch (error) {
+      console.error(error);
+      showBidderMessage("Ошибка сети. Не удалось сохранить бидер.");
+    } finally {
+      setBidderSaving(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-white">
@@ -1676,52 +2253,59 @@ function clearAvitoComparison() {
                                     </label>
 
                                     <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
-  <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 sm:w-auto">
-    <input
-      type="checkbox"
-      checked={avitoOnlySelected}
-      onChange={(event) => setAvitoOnlySelected(event.target.checked)}
-      className="h-4 w-4 rounded border-black/25 accent-[#03bd48]"
-    />
-    Только выделенные
-  </label>
+                                      <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 sm:w-auto">
+                                        <input
+                                          type="checkbox"
+                                          checked={avitoOnlySelected}
+                                          onChange={(event) =>
+                                            setAvitoOnlySelected(
+                                              event.target.checked,
+                                            )
+                                          }
+                                          className="h-4 w-4 rounded border-black/25 accent-[#03bd48]"
+                                        />
+                                        Только выделенные
+                                      </label>
 
-  {selectedAvitoRowIds.size > 0 && (
-    <>
-      <button
-        type="button"
-        onClick={addSelectedAvitoItemsToComparison}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#03bd48] px-3 py-3 text-xs font-extrabold text-white shadow-[0_8px_18px_rgba(3,189,72,0.22)] transition hover:-translate-y-0.5 hover:bg-[#02963a] sm:w-auto"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-4 w-4"
-          aria-hidden="true"
-        >
-          <path d="M12 5v14" />
-          <path d="M5 12h14" />
-        </svg>
-        В сравнение: {selectedAvitoRowIds.size}
-      </button>
+                                      {selectedAvitoRowIds.size > 0 && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={
+                                              addSelectedAvitoItemsToComparison
+                                            }
+                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#03bd48] px-3 py-3 text-xs font-extrabold text-white shadow-[0_8px_18px_rgba(3,189,72,0.22)] transition hover:-translate-y-0.5 hover:bg-[#02963a] sm:w-auto"
+                                          >
+                                            <svg
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="2.4"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              className="h-4 w-4"
+                                              aria-hidden="true"
+                                            >
+                                              <path d="M12 5v14" />
+                                              <path d="M5 12h14" />
+                                            </svg>
+                                            В сравнение:{" "}
+                                            {selectedAvitoRowIds.size}
+                                          </button>
 
-      <button
-        type="button"
-        onClick={() => {
-          setSelectedAvitoRowIds(new Set());
-          setAvitoOnlySelected(false);
-        }}
-        className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/60 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 sm:w-auto"
-      >
-        Снять: {selectedAvitoRowIds.size}
-      </button>
-    </>
-  )}
-</div>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedAvitoRowIds(new Set());
+                                              setAvitoOnlySelected(false);
+                                            }}
+                                            className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold text-black/60 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 sm:w-auto"
+                                          >
+                                            Снять: {selectedAvitoRowIds.size}
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
 
                                   <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1734,22 +2318,22 @@ function clearAvitoComparison() {
                                     </span>
                                   </div>
                                   {comparisonMessage && (
-  <div className="mt-3 flex items-start gap-2 rounded-xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-3 py-3 text-xs font-bold leading-5 text-[#027a30]">
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="mt-0.5 h-4 w-4 shrink-0"
-      aria-hidden="true"
-    >
-      <path d="m5 12 4 4L19 6" />
-    </svg>
-    {comparisonMessage}
-  </div>
-)}
+                                    <div className="mt-3 flex items-start gap-2 rounded-xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-3 py-3 text-xs font-bold leading-5 text-[#027a30]">
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2.4"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className="mt-0.5 h-4 w-4 shrink-0"
+                                        aria-hidden="true"
+                                      >
+                                        <path d="m5 12 4 4L19 6" />
+                                      </svg>
+                                      {comparisonMessage}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="mt-5 max-h-[620px] space-y-3 overflow-y-auto overscroll-contain pr-1 md:hidden">
@@ -2109,250 +2693,286 @@ function clearAvitoComparison() {
                                   </div>
                                 </div>
 
-{comparedAvitoItems.length > 0 && (
-  <section className="mt-6 overflow-hidden rounded-3xl border border-[#03bd48]/25 bg-[linear-gradient(145deg,rgba(3,189,72,0.09),rgba(255,255,255,0.98)_42%)] p-4 shadow-[0_14px_35px_rgba(3,189,72,0.08)] sm:p-5">
-    <div className="flex flex-col gap-4 border-b border-[#03bd48]/15 pb-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0">
-        <div className="inline-flex items-center gap-2 rounded-full bg-[#03bd48]/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#027a30]">
-          <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
-          Рабочее сравнение
-        </div>
+                                {comparedAvitoItems.length > 0 && (
+                                  <section className="mt-6 overflow-hidden rounded-3xl border border-[#03bd48]/25 bg-[linear-gradient(145deg,rgba(3,189,72,0.09),rgba(255,255,255,0.98)_42%)] p-4 shadow-[0_14px_35px_rgba(3,189,72,0.08)] sm:p-5">
+                                    <div className="flex flex-col gap-4 border-b border-[#03bd48]/15 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                                      <div className="min-w-0">
+                                        <div className="inline-flex items-center gap-2 rounded-full bg-[#03bd48]/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#027a30]">
+                                          <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
+                                          Рабочее сравнение
+                                        </div>
 
-        <h4 className="mt-3 text-2xl font-extrabold tracking-[-0.04em] text-black">
-          Сравнение продавцов
-        </h4>
+                                        <h4 className="mt-3 text-2xl font-extrabold tracking-[-0.04em] text-black">
+                                          Сравнение продавцов
+                                        </h4>
 
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-black/50">
-          Здесь собраны выбранные продавцы из разных анализов и поисковых запросов.
-          Сравнение хранится в текущем браузере до обновления страницы.
-        </p>
-      </div>
+                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-black/50">
+                                          Здесь собраны выбранные продавцы из
+                                          разных анализов и поисковых запросов.
+                                          Сравнение хранится в текущем браузере
+                                          до обновления страницы.
+                                        </p>
+                                      </div>
 
-      <div className="flex flex-col gap-2 sm:items-end">
-        <span className="inline-flex w-fit rounded-full bg-black px-3 py-1.5 text-xs font-extrabold text-white">
-          В сравнении: {comparedAvitoItems.length}
-        </span>
+                                      <div className="flex flex-col gap-2 sm:items-end">
+                                        <span className="inline-flex w-fit rounded-full bg-black px-3 py-1.5 text-xs font-extrabold text-white">
+                                          В сравнении:{" "}
+                                          {comparedAvitoItems.length}
+                                        </span>
 
-        <button
-          type="button"
-          onClick={clearAvitoComparison}
-          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
-        >
-          Очистить сравнение
-        </button>
-      </div>
-    </div>
+                                        <button
+                                          type="button"
+                                          onClick={clearAvitoComparison}
+                                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
+                                        >
+                                          Очистить сравнение
+                                        </button>
+                                      </div>
+                                    </div>
 
-    {/* Карточки для мобильных */}
-    <div className="mt-4 space-y-3 md:hidden">
-      {comparedAvitoItems.map((item) => {
-        const positions = item.positions.length
-          ? item.positions.join(", ")
-          : item.firstPosition ?? "—";
+                                    {/* Карточки для мобильных */}
+                                    <div className="mt-4 space-y-3 md:hidden">
+                                      {comparedAvitoItems.map((item) => {
+                                        const positions = item.positions.length
+                                          ? item.positions.join(", ")
+                                          : (item.firstPosition ?? "—");
 
-        return (
-          <article
-            key={item.comparisonId}
-            className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-[0_8px_20px_rgba(16,24,40,0.04)]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="break-words text-base font-extrabold leading-5 text-black">
-                  {item.sellerName}
-                </div>
+                                        return (
+                                          <article
+                                            key={item.comparisonId}
+                                            className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-[0_8px_20px_rgba(16,24,40,0.04)]"
+                                          >
+                                            <div className="flex items-start justify-between gap-3">
+                                              <div className="min-w-0">
+                                                <div className="break-words text-base font-extrabold leading-5 text-black">
+                                                  {item.sellerName}
+                                                </div>
 
-                <div className="mt-1 text-xs font-semibold text-black/45">
-                  {item.searchQuery}
-                  {item.city ? ` · ${item.city}` : ""}
-                </div>
-              </div>
+                                                <div className="mt-1 text-xs font-semibold text-black/45">
+                                                  {item.searchQuery}
+                                                  {item.city
+                                                    ? ` · ${item.city}`
+                                                    : ""}
+                                                </div>
+                                              </div>
 
-              <button
-                type="button"
-                onClick={() => removeComparedAvitoItem(item.comparisonId)}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
-                aria-label={`Убрать ${item.sellerName} из сравнения`}
-                title="Убрать из сравнения"
-              >
-                ×
-              </button>
-            </div>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  removeComparedAvitoItem(
+                                                    item.comparisonId,
+                                                  )
+                                                }
+                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
+                                                aria-label={`Убрать ${item.sellerName} из сравнения`}
+                                                title="Убрать из сравнения"
+                                              >
+                                                ×
+                                              </button>
+                                            </div>
 
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <div className="rounded-xl bg-[#03bd48]/[0.08] p-2.5">
-                <div className="text-[9px] font-extrabold uppercase tracking-wide text-[#027a30]/65">
-                  Позиции
-                </div>
-                <div className="mt-1 break-words text-sm font-extrabold text-[#028c36]">
-                  {positions}
-                </div>
-              </div>
+                                            <div className="mt-3 grid grid-cols-3 gap-2">
+                                              <div className="rounded-xl bg-[#03bd48]/[0.08] p-2.5">
+                                                <div className="text-[9px] font-extrabold uppercase tracking-wide text-[#027a30]/65">
+                                                  Позиции
+                                                </div>
+                                                <div className="mt-1 break-words text-sm font-extrabold text-[#028c36]">
+                                                  {positions}
+                                                </div>
+                                              </div>
 
-              <div className="rounded-xl bg-black/[0.035] p-2.5">
-                <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
-                  Рейтинг
-                </div>
-                <div className="mt-1 text-sm font-extrabold text-black">
-                  {item.rating || "—"}
-                </div>
-              </div>
+                                              <div className="rounded-xl bg-black/[0.035] p-2.5">
+                                                <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                                  Рейтинг
+                                                </div>
+                                                <div className="mt-1 text-sm font-extrabold text-black">
+                                                  {item.rating || "—"}
+                                                </div>
+                                              </div>
 
-              <div className="rounded-xl bg-black/[0.035] p-2.5">
-                <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
-                  Отзывы
-                </div>
-                <div className="mt-1 text-sm font-extrabold text-black">
-                  {item.reviews || "—"}
-                </div>
-              </div>
-            </div>
+                                              <div className="rounded-xl bg-black/[0.035] p-2.5">
+                                                <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                                  Отзывы
+                                                </div>
+                                                <div className="mt-1 text-sm font-extrabold text-black">
+                                                  {item.reviews || "—"}
+                                                </div>
+                                              </div>
+                                            </div>
 
-            <div className="mt-3 border-t border-black/[0.07] pt-3">
-              <div className="flex items-center justify-between gap-2 text-xs">
-                <span className="font-bold text-black/45">
-                  Объявлений: {item.adsCount}
-                </span>
-                <span className="whitespace-nowrap text-[11px] font-bold text-black/45">
-  {formatAnalysisDateTime(item.analysisCreatedAt)}
-</span>
-              </div>
+                                            <div className="mt-3 border-t border-black/[0.07] pt-3">
+                                              <div className="flex items-center justify-between gap-2 text-xs">
+                                                <span className="font-bold text-black/45">
+                                                  Объявлений: {item.adsCount}
+                                                </span>
+                                                <span className="whitespace-nowrap text-[11px] font-bold text-black/45">
+                                                  {formatAnalysisDateTime(
+                                                    item.analysisCreatedAt,
+                                                  )}
+                                                </span>
+                                              </div>
 
-              {item.firstAdLink ? (
-                <a
-                  href={item.firstAdLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 block break-words text-sm font-extrabold leading-5 text-[#028c36] hover:underline"
-                >
-                  {item.firstAdTitle || "Открыть объявление"}
-                </a>
-              ) : (
-                <div className="mt-2 break-words text-sm font-bold leading-5 text-black/65">
-                  {item.firstAdTitle || "Первое объявление не указано"}
-                </div>
-              )}
+                                              {item.firstAdLink ? (
+                                                <a
+                                                  href={item.firstAdLink}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="mt-2 block break-words text-sm font-extrabold leading-5 text-[#028c36] hover:underline"
+                                                >
+                                                  {item.firstAdTitle ||
+                                                    "Открыть объявление"}
+                                                </a>
+                                              ) : (
+                                                <div className="mt-2 break-words text-sm font-bold leading-5 text-black/65">
+                                                  {item.firstAdTitle ||
+                                                    "Первое объявление не указано"}
+                                                </div>
+                                              )}
 
-              {item.firstAdPrice && (
-                <div className="mt-1 text-xs font-bold text-black/45">
-                  {item.firstAdPrice}
-                </div>
-              )}
-            </div>
-          </article>
-        );
-      })}
-    </div>
+                                              {item.firstAdPrice && (
+                                                <div className="mt-1 text-xs font-bold text-black/45">
+                                                  {item.firstAdPrice}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </article>
+                                        );
+                                      })}
+                                    </div>
 
-    {/* Таблица для планшета и ПК */}
-    <div className="mt-4 hidden overflow-hidden rounded-2xl border border-black/[0.08] bg-white md:block">
-      <div className="max-h-[560px] overflow-y-auto">
-        <table className="w-full table-fixed border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-[#101010] shadow-[0_2px_0_rgba(255,255,255,0.08)]">
-  <tr className="whitespace-nowrap text-[9px] font-extrabold uppercase tracking-[0.045em] text-white/65">
-    <th className="w-[17%] px-2 py-4 lg:px-3">Продавец</th>
-    <th className="w-[14%] px-2 py-4 lg:px-3">Запрос</th>
-    <th className="w-[17%] px-2 py-4 lg:px-3">Дата</th>
-    <th className="w-[12%] px-2 py-4 lg:px-3">Позиции</th>
-    <th className="w-[9%] px-2 py-4 text-center lg:px-3">Объявл.</th>
-    <th className="w-[10%] px-2 py-4 text-center lg:px-3">Рейтинг</th>
-    <th className="w-[10%] px-2 py-4 text-center lg:px-3">Отзывы</th>
-    <th className="w-[11%] px-2 py-4 text-center lg:px-3">
-      <span className="sr-only">Убрать</span>
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="mx-auto h-4 w-4 text-white/70"
-        aria-hidden="true"
-      >
-        <path d="M3 6h18" />
-        <path d="M8 6V4h8v2" />
-        <path d="m19 6-1 14H6L5 6" />
-      </svg>
-    </th>
-  </tr>
-</thead>
+                                    {/* Таблица для планшета и ПК */}
+                                    <div className="mt-4 hidden overflow-hidden rounded-2xl border border-black/[0.08] bg-white md:block">
+                                      <div className="max-h-[560px] overflow-y-auto">
+                                        <table className="w-full table-fixed border-collapse text-left">
+                                          <thead className="sticky top-0 z-10 bg-[#101010] shadow-[0_2px_0_rgba(255,255,255,0.08)]">
+                                            <tr className="whitespace-nowrap text-[9px] font-extrabold uppercase tracking-[0.045em] text-white/65">
+                                              <th className="w-[17%] px-2 py-4 lg:px-3">
+                                                Продавец
+                                              </th>
+                                              <th className="w-[14%] px-2 py-4 lg:px-3">
+                                                Запрос
+                                              </th>
+                                              <th className="w-[17%] px-2 py-4 lg:px-3">
+                                                Дата
+                                              </th>
+                                              <th className="w-[12%] px-2 py-4 lg:px-3">
+                                                Позиции
+                                              </th>
+                                              <th className="w-[9%] px-2 py-4 text-center lg:px-3">
+                                                Объявл.
+                                              </th>
+                                              <th className="w-[10%] px-2 py-4 text-center lg:px-3">
+                                                Рейтинг
+                                              </th>
+                                              <th className="w-[10%] px-2 py-4 text-center lg:px-3">
+                                                Отзывы
+                                              </th>
+                                              <th className="w-[11%] px-2 py-4 text-center lg:px-3">
+                                                <span className="sr-only">
+                                                  Убрать
+                                                </span>
+                                                <svg
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2.2"
+                                                  strokeLinecap="round"
+                                                  strokeLinejoin="round"
+                                                  className="mx-auto h-4 w-4 text-white/70"
+                                                  aria-hidden="true"
+                                                >
+                                                  <path d="M3 6h18" />
+                                                  <path d="M8 6V4h8v2" />
+                                                  <path d="m19 6-1 14H6L5 6" />
+                                                </svg>
+                                              </th>
+                                            </tr>
+                                          </thead>
 
-          <tbody>
-            {comparedAvitoItems.map((item) => {
-              const positions = item.positions.length
-                ? item.positions.join(", ")
-                : item.firstPosition ?? "—";
+                                          <tbody>
+                                            {comparedAvitoItems.map((item) => {
+                                              const positions = item.positions
+                                                .length
+                                                ? item.positions.join(", ")
+                                                : (item.firstPosition ?? "—");
 
-              return (
-                <tr
-                  key={item.comparisonId}
-                  className="border-b border-black/[0.06] bg-white text-sm transition last:border-b-0 hover:bg-[#03bd48]/[0.035]"
-                >
-                  <td className="px-2 py-3.5 align-top lg:px-3">
-                    <div className="break-words font-extrabold leading-5 text-black">
-                      {item.sellerName}
-                    </div>
+                                              return (
+                                                <tr
+                                                  key={item.comparisonId}
+                                                  className="border-b border-black/[0.06] bg-white text-sm transition last:border-b-0 hover:bg-[#03bd48]/[0.035]"
+                                                >
+                                                  <td className="px-2 py-3.5 align-top lg:px-3">
+                                                    <div className="break-words font-extrabold leading-5 text-black">
+                                                      {item.sellerName}
+                                                    </div>
 
-                    {item.city && (
-                      <div className="mt-1 text-xs font-semibold text-black/42">
-                        {item.city}
-                      </div>
-                    )}
-                  </td>
+                                                    {item.city && (
+                                                      <div className="mt-1 text-xs font-semibold text-black/42">
+                                                        {item.city}
+                                                      </div>
+                                                    )}
+                                                  </td>
 
-                  <td className="px-2 py-3.5 align-top lg:px-3">
-                    <div className="break-words font-bold leading-5 text-black/70">
-                      {item.searchQuery}
-                    </div>
-                  </td>
+                                                  <td className="px-2 py-3.5 align-top lg:px-3">
+                                                    <div className="break-words font-bold leading-5 text-black/70">
+                                                      {item.searchQuery}
+                                                    </div>
+                                                  </td>
 
-                  <td className="whitespace-nowrap px-2 py-3.5 align-top text-center lg:px-3">
-  <div className="text-xs font-extrabold text-black/65 whitespace-pre-line">
-    {formatAnalysisDateTime(item.analysisCreatedAt).replace(', ', '\n')}
-  </div>
-</td>
+                                                  <td className="whitespace-nowrap px-2 py-3.5 align-top text-center lg:px-3">
+                                                    <div className="text-xs font-extrabold text-black/65 whitespace-pre-line">
+                                                      {formatAnalysisDateTime(
+                                                        item.analysisCreatedAt,
+                                                      ).replace(", ", "\n")}
+                                                    </div>
+                                                  </td>
 
+                                                  <td className="px-2 py-3.5 align-top lg:px-3">
+                                                    <span className="inline-flex max-w-full rounded-lg bg-[#03bd48]/10 px-2 py-1 text-xs font-extrabold text-[#028c36]">
+                                                      <span className="break-words">
+                                                        {positions}
+                                                      </span>
+                                                    </span>
+                                                  </td>
 
-                  <td className="px-2 py-3.5 align-top lg:px-3">
-                    <span className="inline-flex max-w-full rounded-lg bg-[#03bd48]/10 px-2 py-1 text-xs font-extrabold text-[#028c36]">
-                      <span className="break-words">{positions}</span>
-                    </span>
-                  </td>
+                                                  <td className="whitespace-nowrap px-2 py-3.5 text-center align-top lg:px-3">
+                                                    <span className="inline-flex min-w-8 justify-center rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-extrabold text-black/70">
+                                                      {item.adsCount}
+                                                    </span>
+                                                  </td>
 
-                  <td className="whitespace-nowrap px-2 py-3.5 text-center align-top lg:px-3">
-                    <span className="inline-flex min-w-8 justify-center rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-extrabold text-black/70">
-                      {item.adsCount}
-                    </span>
-                  </td>
+                                                  <td className="whitespace-nowrap px-2 py-3.5 text-center align-top font-extrabold text-black lg:px-3">
+                                                    {item.rating || "—"}
+                                                  </td>
 
-                  <td className="whitespace-nowrap px-2 py-3.5 text-center align-top font-extrabold text-black lg:px-3">
-                    {item.rating || "—"}
-                  </td>
+                                                  <td className="whitespace-nowrap px-2 py-3.5 text-center align-top font-extrabold text-black lg:px-3">
+                                                    {item.reviews || "—"}
+                                                  </td>
 
-                  <td className="whitespace-nowrap px-2 py-3.5 text-center align-top font-extrabold text-black lg:px-3">
-  {item.reviews || "—"}
-</td>
-
-                  <td className="px-2 py-3.5 text-center align-top lg:px-3">
-                    <button
-                      type="button"
-                      onClick={() => removeComparedAvitoItem(item.comparisonId)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-lg font-bold text-red-600 transition hover:bg-red-100"
-                      aria-label={`Убрать ${item.sellerName} из сравнения`}
-                      title="Убрать из сравнения"
-                    >
-                      ×
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-)}
-
+                                                  <td className="px-2 py-3.5 text-center align-top lg:px-3">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        removeComparedAvitoItem(
+                                                          item.comparisonId,
+                                                        )
+                                                      }
+                                                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-lg font-bold text-red-600 transition hover:bg-red-100"
+                                                      aria-label={`Убрать ${item.sellerName} из сравнения`}
+                                                      title="Убрать из сравнения"
+                                                    >
+                                                      ×
+                                                    </button>
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  </section>
+                                )}
                               </>
                             )}
                           </div>
@@ -2931,30 +3551,46 @@ function clearAvitoComparison() {
                                       />
                                     </td>
                                     <td className="px-5 py-3">
-  <input
-    type="number"
-    min="0"
-    step="1"
-    value={record.income == 0 ? "" : record.income}
-    onChange={(event) =>
-      updateFinancialDraft(record.id, "income", event.target.value)
-    }
-    className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-[#028c36] outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
-  />
-</td>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={
+                                          record.income == 0
+                                            ? ""
+                                            : record.income
+                                        }
+                                        onChange={(event) =>
+                                          updateFinancialDraft(
+                                            record.id,
+                                            "income",
+                                            event.target.value,
+                                          )
+                                        }
+                                        className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-[#028c36] outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+                                      />
+                                    </td>
 
-<td className="px-5 py-3">
-  <input
-    type="number"
-    min="0"
-    step="1"
-    value={record.expense == 0 ? "" : record.expense}
-    onChange={(event) =>
-      updateFinancialDraft(record.id, "expense", event.target.value)
-    }
-    className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-red-600 outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
-  />
-</td>
+                                    <td className="px-5 py-3">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={
+                                          record.expense == 0
+                                            ? ""
+                                            : record.expense
+                                        }
+                                        onChange={(event) =>
+                                          updateFinancialDraft(
+                                            record.id,
+                                            "expense",
+                                            event.target.value,
+                                          )
+                                        }
+                                        className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-red-600 outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
+                                      />
+                                    </td>
 
                                     <td
                                       className={`px-5 py-3 text-base font-extrabold ${getProfitClass(
@@ -3011,6 +3647,1085 @@ function clearAvitoComparison() {
                     </div>
                   </CollapsibleContent>
                 </section>
+              </div>
+            )}
+
+            {activeSection === "bid-manager" && hasAccess && (
+              <div className="space-y-6">
+                <section className="relative overflow-hidden rounded-[32px] bg-[#101010] p-4 text-white shadow-[0_24px_65px_rgba(16,24,40,0.22)] sm:p-6 md:p-8">
+                  <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#03bd48]/20 blur-3xl" />
+                  <div className="pointer-events-none absolute bottom-0 left-1/4 h-48 w-48 rounded-full bg-white/[0.04] blur-3xl" />
+                  <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/75">
+                        <span className="h-2 w-2 rounded-full bg-[#03bd48] shadow-[0_0_0_5px_rgba(3,189,72,0.14)]" />
+                        Инструменты HelpSell
+                      </div>
+                      <h2 className="text-[30px] font-extrabold leading-[1.03] tracking-[-0.055em] sm:text-4xl md:text-5xl">
+                        Бид-менеджер
+                        <span className="text-[#03bd48]"> Авито</span>
+                      </h2>
+                      <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62 md:text-[15px]">
+                        Подключайте кабинет Авито, выбирайте реальные объявления
+                        и сохраняйте несколько независимых стратегий продвижения
+                        — настройки останутся в вашем кабинете.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={openBidderWizard}
+                      className="btn-primary w-full shrink-0 sm:w-auto"
+                    >
+                      <span className="text-lg leading-none">+</span>
+                      Создать бидер
+                    </button>
+                  </div>
+                </section>
+
+                <section className="rounded-[28px] border border-black/[0.08] bg-white p-4 shadow-[0_12px_32px_rgba(16,24,40,0.05)] sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-extrabold ${avitoConnection ? "bg-[#03bd48]/10 text-[#028c36]" : "bg-amber-50 text-amber-700"}`}
+                      >
+                        {avitoConnection ? "✓" : "!"}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-extrabold uppercase tracking-[0.1em] text-black/42">
+                          Аккаунт Авито
+                        </div>
+                        {avitoConnection ? (
+                          <>
+                            <div className="mt-1 font-extrabold text-black">
+                              Аккаунт подключён
+                            </div>
+                            <div className="mt-1 text-xs font-semibold text-black/48">
+                              Client ID: {avitoConnection.clientIdMasked} ·
+                              Проверен:{" "}
+                              {formatConnectionDate(
+                                avitoConnection.lastCheckedAt,
+                              )}
+                            </div>
+                            {avitoConnection.lastError && (
+                              <div className="mt-1 text-xs font-bold text-red-600">
+                                {avitoConnection.lastError}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="mt-1 font-extrabold text-black">
+                              Аккаунт Авито не подключён
+                            </div>
+                            <div className="mt-1 text-xs font-semibold text-black/48">
+                              Подключите кабинет, чтобы позже выбирать реальные
+                              объявления и управлять продвижением.
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={openAvitoConnection}
+                        disabled={avitoConnectionSaving}
+                        className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {avitoConnection
+                          ? "Переподключить"
+                          : "Подключить Авито"}
+                      </button>
+                      {avitoConnection && (
+                        <button
+                          type="button"
+                          onClick={disconnectAvitoConnection}
+                          disabled={avitoConnectionSaving}
+                          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Отключить
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <MetricCard
+                    title="Активные бидеры"
+                    className="border-[#03bd48]/20 bg-[#03bd48]/[0.055] p-4 sm:p-5"
+                  >
+                    <div className="text-3xl font-extrabold tracking-[-0.05em] text-[#028c36]">
+                      {
+                        bidders.filter((item) => item.status === "active")
+                          .length
+                      }
+                    </div>
+                    <div className="mt-1 text-xs font-bold text-[#027a30]/65">
+                      автоматически работают
+                    </div>
+                  </MetricCard>
+                  <MetricCard title="На паузе" className="p-4 sm:p-5">
+                    <div className="text-3xl font-extrabold tracking-[-0.05em] text-black">
+                      {
+                        bidders.filter((item) => item.status === "paused")
+                          .length
+                      }
+                    </div>
+                    <div className="mt-1 text-xs font-bold text-black/42">
+                      можно запустить в любой момент
+                    </div>
+                  </MetricCard>
+                  <MetricCard
+                    title="Требуют внимания"
+                    className="border-amber-200 bg-amber-50 p-4 sm:p-5"
+                  >
+                    <div className="text-3xl font-extrabold tracking-[-0.05em] text-amber-700">
+                      {
+                        bidders.filter((item) => item.status === "attention")
+                          .length
+                      }
+                    </div>
+                    <div className="mt-1 text-xs font-bold text-amber-700/65">
+                      позиция ниже целевого диапазона
+                    </div>
+                  </MetricCard>
+                  <MetricCard
+                    title="Изменений сегодня"
+                    className="bg-black p-4 text-white sm:p-5"
+                  >
+                    <div className="text-3xl font-extrabold tracking-[-0.05em] text-[#03bd48]">
+                      {bidders.reduce(
+                        (sum, item) => sum + item.changesToday,
+                        0,
+                      )}
+                    </div>
+                    <div className="mt-1 text-xs font-bold text-white/45">
+                      история появится после подключения Авито
+                    </div>
+                  </MetricCard>
+                </section>
+
+                {bidderMessage && (
+                  <div className="flex items-start gap-2 rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-4 py-3 text-sm font-bold leading-6 text-[#027a30]">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#03bd48] text-xs text-white">
+                      ✓
+                    </span>
+                    {bidderMessage}
+                  </div>
+                )}
+
+                <section className="overflow-hidden rounded-[32px] border border-black/[0.07] bg-white p-4 shadow-[0_18px_45px_rgba(16,24,40,0.07)] sm:p-6 md:p-8">
+                  <div className="flex flex-col gap-4 border-b border-black/[0.07] pb-5 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <div className="badge-green mb-3">Ваши стратегии</div>
+                      <h3 className="text-2xl font-extrabold tracking-[-0.04em] text-black sm:text-3xl">
+                        Бидеры объявлений
+                      </h3>
+                      <p className="mt-2 max-w-2xl text-sm leading-7 text-black/50">
+                        Каждый бидер управляет отдельным объявлением и поисковым
+                        запросом. Можно создавать несколько независимых
+                        стратегий.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={openBidderWizard}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-black/10 bg-black/[0.025] px-5 py-4 text-sm font-extrabold text-black transition hover:border-[#03bd48]/50 hover:bg-[#03bd48]/[0.07] hover:text-[#028c36] sm:w-auto"
+                    >
+                      + Новый бидер
+                    </button>
+                  </div>
+
+                  {bidders.length === 0 ? (
+                    <div className="mt-6 rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-14 text-center">
+                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#03bd48]/10 text-2xl font-extrabold text-[#028c36]">
+                        +
+                      </div>
+                      <h4 className="mt-4 text-xl font-extrabold text-black">
+                        Пока нет бидеров
+                      </h4>
+                      <p className="mx-auto mt-2 max-w-md text-sm leading-7 text-black/50">
+                        Создайте первый бидер: выберите объявление, цель по
+                        позиции и безопасные границы ставки.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={openBidderWizard}
+                        className="btn-primary mt-5"
+                      >
+                        Создать первый бидер
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-5 space-y-3">
+                      {bidders.map((bidder) => {
+                        const status =
+                          bidder.status === "active"
+                            ? {
+                                label: "Активен",
+                                className:
+                                  "bg-[#03bd48]/12 text-[#028c36] border-[#03bd48]/25",
+                              }
+                            : bidder.status === "paused"
+                              ? {
+                                  label: "На паузе",
+                                  className:
+                                    "bg-black/[0.045] text-black/55 border-black/10",
+                                }
+                              : {
+                                  label: "Нужно внимание",
+                                  className:
+                                    "bg-amber-50 text-amber-700 border-amber-200",
+                                };
+                        const positionsText =
+                          bidder.targetFrom === bidder.targetTo
+                            ? `Топ-${bidder.targetFrom}`
+                            : `${bidder.targetFrom}–${bidder.targetTo} место`;
+                        return (
+                          <article
+                            key={bidder.id}
+                            className="overflow-hidden rounded-3xl border border-black/[0.08] bg-white transition hover:border-[#03bd48]/30 hover:shadow-[0_14px_32px_rgba(16,24,40,0.07)]"
+                          >
+                            <div className="flex flex-col gap-4 p-4 sm:p-5 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start">
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#101010,#303337)] text-sm font-extrabold tracking-[0.08em] text-[#03bd48]">
+                                {bidder.imageLabel}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-start justify-between gap-2 lg:justify-start">
+                                  <h4 className="break-words text-lg font-extrabold leading-6 text-black">
+                                    {bidder.title}
+                                  </h4>
+                                  <span
+                                    className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.07em] ${status.className}`}
+                                  >
+                                    {status.label}
+                                  </span>
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-black/48">
+                                  <span>{bidder.query}</span>
+                                  <span className="hidden h-1 w-1 self-center rounded-full bg-black/25 sm:block" />
+                                  <span>{bidder.city}</span>
+                                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.07em] ${
+                                    bidder.mode === "live"
+                                      ? "bg-blue-50 text-blue-700"
+                                      : "bg-amber-50 text-amber-700"
+                                  }`}>
+                                    {bidder.mode === "live" ? "Live" : "Dry-run"}
+                                  </span>
+                                  {bidder.avitoItemId && (
+                                    <>
+                                      <span className="hidden h-1 w-1 self-center rounded-full bg-black/25 sm:block" />
+                                      <span>ID: {bidder.avitoItemId}</span>
+                                    </>
+                                  )}
+                                </div>
+                                {bidder.avitoItemUrl && (
+                                  <a
+                                    href={bidder.avitoItemUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-2 inline-flex text-xs font-extrabold text-[#028c36] transition hover:text-[#03bd48]"
+                                  >
+                                    Открыть объявление на Авито
+                                  </a>
+                                )}
+                                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-black/45">
+  <span>
+    Последняя проверка:{" "}
+    {bidder.lastCheckedAt
+      ? formatConnectionDate(bidder.lastCheckedAt)
+      : "ещё не выполнялась"}
+  </span>
+
+  {bidder.lastError && (
+    <span className="text-red-600">Ошибка: {bidder.lastError}</span>
+  )}
+</div>
+                                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                  <div className="rounded-xl bg-black/[0.025] p-2.5">
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                      Цель
+                                    </div>
+                                    <div className="mt-1 whitespace-nowrap text-sm font-extrabold text-black">
+                                      {positionsText}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className={`rounded-xl p-2.5 ${bidder.status === "attention" ? "bg-amber-50" : "bg-[#03bd48]/[0.07]"}`}
+                                  >
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                      Позиция
+                                    </div>
+                                    <div
+                                      className={`mt-1 text-sm font-extrabold ${bidder.status === "attention" ? "text-amber-700" : "text-[#028c36]"}`}
+                                    >
+                                      {bidder.position
+                                        ? `${bidder.position} место`
+                                        : "—"}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-xl bg-black/[0.025] p-2.5">
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                      {bidder.mode === "live" ? "Ставка live" : "Ставка dry-run"}
+                                    </div>
+                                    <div className="mt-1 whitespace-nowrap text-sm font-extrabold text-black">
+                                      {formatMoney(bidder.currentBid)} ₽
+                                    </div>
+                                  </div>
+                                  <div className="rounded-xl bg-black/[0.025] p-2.5">
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
+                                      Проверка
+                                    </div>
+                                    <div className="mt-1 whitespace-nowrap text-xs font-extrabold text-black/65">
+                                      {bidder.nextCheck}
+                                    </div>
+                                  </div>
+                                  
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-col">
+                                <button
+                                  type="button"
+                                  onClick={() => openBidderEditor(bidder)}
+                                  disabled={bidderSaving}
+                                  className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Редактировать
+                                </button>
+                                <button
+  type="button"
+  onClick={() => checkBidderItem(bidder.id)}
+  disabled={
+    bidderSaving ||
+    checkingBidderId !== null ||
+    !bidder.avitoItemId
+  }
+  className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {checkingBidderId === bidder.id ? "Проверяем..." : "Проверить объявление"}
+</button>
+<button
+  type="button"
+  onClick={() => void toggleBidderEvents(bidder.id)}
+  disabled={bidderEventsLoadingId === bidder.id}
+  className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {expandedBidderId === bidder.id
+    ? "Скрыть историю"
+    : bidderEventsLoadingId === bidder.id
+      ? "Загружаем..."
+      : "История событий"}
+</button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleBidderStatus(bidder.id)}
+                                  disabled={bidderSaving}
+                                  className={`rounded-xl px-3 py-2.5 text-xs font-extrabold transition ${bidder.status === "active" ? "border border-black/10 bg-white text-black/70 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700" : "bg-[#03bd48] text-white hover:bg-[#02963a]"}`}
+                                >
+                                  {bidder.status === "active"
+                                    ? "Пауза"
+                                    : "Запустить"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteBidder(bidder.id)}
+                                  disabled={bidderSaving}
+                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
+                                >
+                                  Удалить
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.06] bg-black/[0.018] px-4 py-3 text-xs sm:px-5">
+                              <span className="font-semibold text-black/45">
+                                Диапазон ставки: {formatMoney(bidder.minBid)}–
+                                {formatMoney(bidder.maxBid)} ₽
+                              </span>
+                              <span className="font-extrabold text-[#028c36]">
+                                Изменений сегодня: {bidder.changesToday}
+                              </span>
+                            </div>
+                            {expandedBidderId === bidder.id && (
+  <div className="border-t border-black/[0.06] bg-black/[0.02] px-4 py-4 sm:px-5">
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
+          История событий
+        </div>
+        <div className="mt-1 text-sm font-bold text-black/55">
+          Последние действия по этому бидеру
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => void loadBidderEvents(bidder.id)}
+        disabled={bidderEventsLoadingId === bidder.id}
+        className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/35 hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {bidderEventsLoadingId === bidder.id ? "Обновляем..." : "Обновить"}
+      </button>
+    </div>
+
+    <div className="mt-4 space-y-3">
+      {(bidderEvents[bidder.id] ?? []).length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-black/15 bg-white px-4 py-6 text-sm font-semibold text-black/45">
+          История событий пока пуста.
+        </div>
+      ) : (
+        (bidderEvents[bidder.id] ?? []).map((event, index) => (
+          <div
+            key={event.id}
+            className="relative rounded-2xl border border-black/[0.06] bg-white px-4 py-4"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] ${
+                      event.type === "manual_check_success"
+                        ? "bg-[#03bd48]/12 text-[#028c36]"
+                        : event.type === "manual_check_error"
+                          ? "bg-red-50 text-red-600"
+                          : event.type === "bidder_deleted"
+                            ? "bg-black/[0.07] text-black/55"
+                            : "bg-blue-50 text-blue-700"
+                    }`}
+                  >
+                    {event.type === "manual_check_success"
+                      ? "Проверка OK"
+                      : event.type === "manual_check_error"
+                        ? "Ошибка проверки"
+                        : event.type === "bidder_deleted"
+                          ? "Удаление"
+                          : "Событие"}
+                  </span>
+                </div>
+
+                <div className="mt-2 text-sm font-bold leading-6 text-black">
+                  {event.message}
+                </div>
+              </div>
+
+              <div className="shrink-0 text-xs font-semibold text-black/40">
+                {formatConnectionDate(event.createdAt)}
+              </div>
+            </div>
+
+            {index < (bidderEvents[bidder.id] ?? []).length - 1 && (
+              <div className="mt-3 border-b border-dashed border-black/10" />
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+)}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                <section className="rounded-3xl border border-black/[0.07] bg-black/[0.018] p-4 sm:p-5">
+                  <div className="flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-sm font-extrabold text-[#03bd48]">
+                      i
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-extrabold text-black">
+                        Первый этап Бид-менеджера
+                      </h4>
+                      <p className="mt-1 text-sm leading-6 text-black/50">
+                        Бидеры пока не подключены к кабинету Авито: позиции и
+                        ставки показаны как тестовые данные. На следующем этапе
+                        добавим подключение кабинета, сохранение стратегий и
+                        фоновую проверку ставок.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                {isAvitoConnectionOpen && (
+                  <div className="fixed inset-0 z-[10001] overflow-y-auto bg-black/55 p-3 backdrop-blur-sm sm:p-6">
+                    <div className="mx-auto flex min-h-full w-full max-w-lg items-center">
+                      <section className="my-auto w-full overflow-hidden rounded-[30px] bg-white shadow-[0_28px_80px_rgba(0,0,0,0.28)]">
+                        <div className="flex items-start justify-between gap-4 bg-[#101010] p-5 text-white sm:p-7">
+                          <div>
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-white/45">
+                              Интеграция
+                            </div>
+                            <h3 className="mt-2 text-2xl font-extrabold tracking-[-0.04em]">
+                              Подключить аккаунт Авито
+                            </h3>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsAvitoConnectionOpen(false)}
+                            disabled={avitoConnectionSaving}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-xl text-white transition hover:bg-white/20 disabled:opacity-50"
+                            aria-label="Закрыть окно"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="space-y-5 p-5 sm:p-7">
+                          <p className="text-sm leading-6 text-black/55">
+                            Введите данные приложения из кабинета разработчика
+                            Авито. Client Secret будет зашифрован на сервере и
+                            не отобразится в кабинете.
+                          </p>
+                          {avitoConnectionError && (
+                            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700">
+                              {avitoConnectionError}
+                            </div>
+                          )}
+                          <label className="block">
+                            <span className="mb-2 block text-xs font-bold text-black/55">
+                              Client ID
+                            </span>
+                            <input
+                              value={avitoClientId}
+                              onChange={(event) =>
+                                setAvitoClientId(event.target.value)
+                              }
+                              autoComplete="off"
+                              disabled={avitoConnectionSaving}
+                              className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48] disabled:bg-black/[0.03]"
+                              placeholder="Введите Client ID"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="mb-2 block text-xs font-bold text-black/55">
+                              Client Secret
+                            </span>
+                            <input
+                              type="password"
+                              value={avitoClientSecret}
+                              onChange={(event) =>
+                                setAvitoClientSecret(event.target.value)
+                              }
+                              autoComplete="new-password"
+                              disabled={avitoConnectionSaving}
+                              className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48] disabled:bg-black/[0.03]"
+                              placeholder="Введите Client Secret"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={saveAvitoConnection}
+                            disabled={
+                              avitoConnectionSaving ||
+                              !avitoClientId.trim() ||
+                              !avitoClientSecret.trim()
+                            }
+                            className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {avitoConnectionSaving
+                              ? "Проверяем подключение…"
+                              : "Проверить и подключить"}
+                          </button>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                )}
+
+                {isBidderWizardOpen && (
+                  <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/55 p-3 backdrop-blur-sm sm:p-6">
+                    <div className="mx-auto flex min-h-full w-full max-w-3xl items-center">
+                      <section className="my-auto w-full overflow-hidden rounded-[30px] bg-white shadow-[0_28px_80px_rgba(0,0,0,0.28)]">
+                        <div className="flex items-start justify-between gap-4 bg-[#101010] p-5 text-white sm:p-7">
+                          <div>
+                            <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-white/45">
+                              {editingBidderId
+                                ? "Редактирование бидера"
+                                : "Новый бидер"}{" "}
+                              · шаг {bidderWizardStep} из 4
+                            </div>
+                            <h3 className="mt-2 text-2xl font-extrabold tracking-[-0.04em] sm:text-3xl">
+                              {editingBidderId
+                                ? "Редактирование стратегии"
+                                : "Создание стратегии"}
+                            </h3>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsBidderWizardOpen(false)}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-xl text-white transition hover:bg-white/20"
+                            aria-label="Закрыть мастер"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="flex gap-1.5 px-5 pt-5 sm:px-7">
+                          {[1, 2, 3, 4].map((step) => (
+                            <span
+                              key={step}
+                              className={`h-1.5 flex-1 rounded-full ${step <= bidderWizardStep ? "bg-[#03bd48]" : "bg-black/10"}`}
+                            />
+                          ))}
+                        </div>
+                        <div className="p-5 sm:p-7">
+                          {bidderWizardStep === 1 && (
+                            <div>
+                              <div className="badge-green mb-3">
+                                Шаг 1 · Объявление
+                              </div>
+                              <h4 className="text-2xl font-extrabold tracking-[-0.04em] text-black">
+                                Выберите объявление Авито
+                              </h4>
+                              <p className="mt-2 text-sm leading-6 text-black/50">
+                                На этом шаге стратегия привязывается к реальному
+                                объявлению из подключённого кабинета Авито.
+                              </p>
+
+                              {!avitoConnection && (
+                                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-bold leading-6 text-amber-800">
+                                  Аккаунт Авито ещё не подключён. Сначала
+                                  подключите кабинет, затем вернитесь к созданию
+                                  стратегии.
+                                </div>
+                              )}
+
+                              {avitoConnection && (
+                                <>
+                                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/10 bg-black/[0.02] px-4 py-4">
+                                    <div>
+                                      <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
+                                        Подключённый кабинет
+                                      </div>
+                                      <div className="mt-1 text-sm font-extrabold text-black">
+                                        Client ID:{" "}
+                                        {avitoConnection.clientIdMasked}
+                                      </div>
+                                      <div className="mt-1 text-xs font-semibold text-black/45">
+                                        Проверен:{" "}
+                                        {formatConnectionDate(
+                                          avitoConnection.lastCheckedAt,
+                                        )}
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => void loadAvitoItems()}
+                                      disabled={avitoItemsLoading}
+                                      className="rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-extrabold text-black/70 transition hover:border-[#03bd48]/35 hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      {avitoItemsLoading
+                                        ? "Обновляем…"
+                                        : "Обновить объявления"}
+                                    </button>
+                                  </div>
+
+                                  {avitoItemsError && (
+                                    <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm font-bold leading-6 text-red-700">
+                                      {avitoItemsError}
+                                    </div>
+                                  )}
+
+                                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                                    {avitoItems.map((item) => (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() =>
+                                          setBidderDraft({
+                                            ...bidderDraft,
+                                            title: item.title,
+                                            avitoItemId: item.id,
+                                            avitoItemUrl: item.url,
+                                          })
+                                        }
+                                        className={`rounded-2xl border p-4 text-left transition ${bidderDraft.avitoItemId === item.id ? "border-[#03bd48] bg-[#03bd48]/10" : "border-black/10 bg-white hover:border-[#03bd48]/35"}`}
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-black/40">
+                                            Объявление Авито
+                                          </div>
+                                          <span className="rounded-full bg-black/[0.05] px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-black/45">
+                                            ID {item.id}
+                                          </span>
+                                        </div>
+                                        <div className="mt-2 font-extrabold text-black">
+                                          {item.title}
+                                        </div>
+                                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-black/45">
+                                          {item.price && (
+                                            <span>{item.price}</span>
+                                          )}
+                                          {item.status && (
+                                            <span>Статус: {item.status}</span>
+                                          )}
+                                          {item.category && (
+                                            <span>{item.category}</span>
+                                          )}
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {!avitoItemsLoading &&
+                                    avitoItems.length === 0 &&
+                                    !avitoItemsError && (
+                                      <div className="mt-5 rounded-2xl border border-dashed border-black/15 bg-black/[0.02] px-4 py-8 text-center text-sm font-semibold leading-6 text-black/48">
+                                        Мы не нашли объявления в подключённом
+                                        кабинете. Проверьте, что в аккаунте
+                                        Авито есть активные объявления и у
+                                        приложения есть нужные права доступа.
+                                      </div>
+                                    )}
+                                </>
+                              )}
+
+                              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Название объявления
+                                  </span>
+                                  <input
+                                    value={bidderDraft.title}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        title: e.target.value,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Ссылка на объявление
+                                  </span>
+                                  <input
+                                    value={bidderDraft.avitoItemUrl ?? ""}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        avitoItemUrl: e.target.value || null,
+                                      })
+                                    }
+                                    placeholder="https://www.avito.ru/..."
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                          {bidderWizardStep === 2 && (
+                            <div>
+                              <div className="badge-green mb-3">
+                                Шаг 2 · Цель
+                              </div>
+                              <h4 className="text-2xl font-extrabold tracking-[-0.04em] text-black">
+                                Настройте позицию в поиске
+                              </h4>
+                              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Поисковый запрос
+                                  </span>
+                                  <input
+                                    value={bidderDraft.query}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        query: e.target.value,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Город
+                                  </span>
+                                  <input
+                                    value={bidderDraft.city}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        city: e.target.value,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Позиция от
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={bidderDraft.targetFrom}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        targetFrom: Number(e.target.value) || 1,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Позиция до
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={bidderDraft.targetTo}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        targetTo: Number(e.target.value) || 1,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  />
+                                </label>
+                              </div>
+                              <div className="mt-4 rounded-2xl bg-[#03bd48]/[0.07] p-4 text-sm font-bold text-[#027a30]">
+                                Цель: удерживать объявление на позициях{" "}
+                                {bidderDraft.targetFrom}–{bidderDraft.targetTo}.
+                              </div>
+                            </div>
+                          )}
+                          {bidderWizardStep === 3 && (
+                            <div>
+                              <div className="badge-green mb-3">
+                                Шаг 3 · Лимиты
+                              </div>
+                              <h4 className="text-2xl font-extrabold tracking-[-0.04em] text-black">
+                                Настройте безопасные границы
+                              </h4>
+                              <p className="mt-2 text-sm leading-6 text-black/50">
+                                Бидер никогда не сможет выйти за указанные
+                                лимиты ставки.
+                              </p>
+                              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Минимальная ставка, ₽
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={bidderDraft.minBid}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        minBid: Number(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Максимальная ставка, ₽
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={bidderDraft.maxBid}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        maxBid: Number(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Проверка каждые, мин.
+                                  </span>
+                                  <select
+                                    value={bidderDraft.interval}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        interval: Number(e.target.value),
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  >
+                                    <option value="5">5 минут</option>
+                                    <option value="10">10 минут</option>
+                                    <option value="15">15 минут</option>
+                                  </select>
+                                </label>
+                                <label className="block">
+                                  <span className="mb-2 block text-xs font-bold text-black/50">
+                                    Рабочее время
+                                  </span>
+                                  <input
+                                    value={bidderDraft.schedule}
+                                    onChange={(e) =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        schedule: e.target.value,
+                                      })
+                                    }
+                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+                                  />
+                                </label>
+                              </div>
+                              <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.02] p-4">
+                                <div className="text-xs font-extrabold uppercase tracking-[0.1em] text-black/40">
+                                  Режим работы
+                                </div>
+                                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        mode: "dry_run",
+                                      })
+                                    }
+                                    className={`rounded-2xl border p-4 text-left transition ${
+                                      bidderDraft.mode === "dry_run"
+                                        ? "border-amber-300 bg-amber-50"
+                                        : "border-black/10 bg-white hover:border-amber-300/60"
+                                    }`}
+                                  >
+                                    <div className="text-sm font-extrabold text-black">
+                                      Dry-run
+                                    </div>
+                                    <div className="mt-1 text-xs font-semibold leading-5 text-black/55">
+                                      Только расчёт позиции и рекомендуемой ставки внутри системы без боевого применения в Avito.
+                                    </div>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setBidderDraft({
+                                        ...bidderDraft,
+                                        mode: "live",
+                                      })
+                                    }
+                                    className={`rounded-2xl border p-4 text-left transition ${
+                                      bidderDraft.mode === "live"
+                                        ? "border-blue-300 bg-blue-50"
+                                        : "border-black/10 bg-white hover:border-blue-300/60"
+                                    }`}
+                                  >
+                                    <div className="text-sm font-extrabold text-black">
+                                      Live
+                                    </div>
+                                    <div className="mt-1 text-xs font-semibold leading-5 text-black/55">
+                                      Режим боевой готовности: worker будет рассчитывать ставку как подготовленную к применению через Avito API.
+                                    </div>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {bidderWizardStep === 4 && (
+                            <div>
+                              <div className="badge-green mb-3">
+                                Шаг 4 · Проверка
+                              </div>
+                              <h4 className="text-2xl font-extrabold tracking-[-0.04em] text-black">
+                                Проверьте стратегию
+                              </h4>
+                              <div className="mt-5 space-y-3 rounded-3xl bg-black/[0.025] p-4 sm:p-5">
+                                <div className="flex justify-between gap-4 border-b border-black/7 pb-3 text-sm">
+                                  <span className="text-black/45">
+                                    Объявление
+                                  </span>
+                                  <span className="text-right font-extrabold text-black">
+                                    {bidderDraft.title}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-4 border-b border-black/7 pb-3 text-sm">
+                                  <span className="text-black/45">Поиск</span>
+                                  <span className="text-right font-extrabold text-black">
+                                    {bidderDraft.query} · {bidderDraft.city}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-4 border-b border-black/7 pb-3 text-sm">
+                                  <span className="text-black/45">Цель</span>
+                                  <span className="font-extrabold text-[#028c36]">
+                                    Позиции {bidderDraft.targetFrom}–
+                                    {bidderDraft.targetTo}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-4 border-b border-black/7 pb-3 text-sm">
+                                  <span className="text-black/45">Ставка</span>
+                                  <span className="font-extrabold text-black">
+                                    {formatMoney(bidderDraft.minBid)}–
+                                    {formatMoney(bidderDraft.maxBid)} ₽
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-4 text-sm">
+                                  <span className="text-black/45">Режим</span>
+                                  <span
+                                    className={`font-extrabold ${
+                                      bidderDraft.mode === "live"
+                                        ? "text-blue-700"
+                                        : "text-amber-700"
+                                    }`}
+                                  >
+                                    {bidderDraft.mode === "live"
+                                      ? "Live"
+                                      : "Dry-run"}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                                <b>Режим работы.</b> В dry-run система только рассчитывает позицию и рекомендуемую ставку внутри платформы. В live режиме бидер помечается как готовый к боевому применению через Avito API.
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col-reverse gap-2 border-t border-black/[0.07] p-5 sm:flex-row sm:justify-between sm:p-7">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              bidderWizardStep === 1
+                                ? setIsBidderWizardOpen(false)
+                                : setBidderWizardStep((step) => step - 1)
+                            }
+                            className="rounded-xl px-4 py-3 text-sm font-extrabold text-black/55 transition hover:bg-black/[0.05]"
+                          >
+                            {bidderWizardStep === 1 ? "Отмена" : "Назад"}
+                          </button>
+                          {bidderWizardStep < 4 ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setBidderWizardStep((step) => step + 1)
+                              }
+                              disabled={bidderWizardStep === 1 && !bidderDraft.avitoItemId}
+                              className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                            >
+                              Продолжить
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={saveBidder}
+                              disabled={bidderSaving}
+                              className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                            >
+                              {editingBidderId
+                                ? "Сохранить изменения"
+                                : "Создать и запустить"}
+                            </button>
+                          )}
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

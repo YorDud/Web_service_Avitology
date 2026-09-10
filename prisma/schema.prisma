@@ -25,28 +25,40 @@ enum PaymentStatus {
   failed
 }
 
+enum AvitoBidderStatus {
+  active
+  paused
+  attention
+}
+
+enum AvitoBidderMode {
+  dry_run
+  live
+}
+
 model User {
-  id                   Int               @id @default(autoincrement())
-  publicId             Int?              @unique
-  email                String            @unique
-  name                 String
-  passwordHash         String
-  subscriptionLevel    SubscriptionLevel @default(free)
-  subscriptionPrice    Int               @default(0)
-  subscriptionPaidAt   DateTime?
-  subscriptionEndsAt   DateTime?
-  usedFreeTrial        Boolean           @default(false)
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
-  lastLoginAt          DateTime?
-  isActive             Boolean           @default(true)
-  notes                String?
+  id                 Int               @id @default(autoincrement())
+  publicId           Int?              @unique
+  email              String            @unique
+  name               String
+  passwordHash       String
+  subscriptionLevel  SubscriptionLevel @default(free)
+  subscriptionPrice  Int               @default(0)
+  subscriptionPaidAt DateTime?
+  subscriptionEndsAt DateTime?
+  usedFreeTrial      Boolean           @default(false)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  lastLoginAt        DateTime?
+  isActive           Boolean           @default(true)
+  notes              String?
+  extensionApiToken  String?           @unique
 
-  extensionApiToken    String?           @unique
-
-  payments             Payment[]
-  financialRecords     FinancialRecord[]
-  avitoSearchAnalyses  AvitoSearchAnalysis[]
+  payments               Payment[]
+  financialRecords       FinancialRecord[]
+  avitoSearchAnalyses    AvitoSearchAnalysis[]
+  avitoBidders           AvitoBidder[]
+  avitoAccountConnection AvitoAccountConnection?
 }
 
 model ServiceSettings {
@@ -61,24 +73,18 @@ model Payment {
   id                Int             @id @default(autoincrement())
   userId            Int
   user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   provider          PaymentProvider @default(test)
   status            PaymentStatus   @default(pending)
-
   amount            Int
   currency          String          @default("RUB")
   description       String?
-
   planCode          String?
   durationMonths    Int             @default(1)
-
   externalPaymentId String?         @unique
   confirmationUrl   String?
-
   paidAt            DateTime?
   expiresAt         DateTime?
   metadata          String?
-
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -90,11 +96,9 @@ model FinancialRecord {
   id         Int      @id @default(autoincrement())
   userId     Int
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   recordDate String
   income     Int      @default(0)
   expense    Int      @default(0)
-
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -103,16 +107,16 @@ model FinancialRecord {
 }
 
 model AvitoSearchAnalysis {
-  id          Int      @id @default(autoincrement())
+  id          Int                       @id @default(autoincrement())
   userId      Int
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  searchQuery String   @default("")
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  searchQuery String                    @default("")
   searchUrl   String?
   city        String?
-  source      String   @default("extension")
-  itemsCount  Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  source      String                    @default("extension")
+  itemsCount  Int                       @default(0)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
   items       AvitoSearchAnalysisItem[]
 
   @@index([userId, createdAt])
@@ -133,4 +137,69 @@ model AvitoSearchAnalysisItem {
   createdAt     DateTime            @default(now())
 
   @@index([analysisId, firstPosition])
+}
+
+model AvitoBidder {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title        String
+  city         String
+  query        String
+  avitoItemId  String?
+  avitoItemUrl String?
+
+  targetFrom Int
+  targetTo   Int
+
+  currentPosition Int?
+  currentBid      Int  @default(0)
+  minBid          Int
+  maxBid          Int
+
+  checkInterval Int    @default(10)
+  schedule      String @default("Ежедневно, 09:00–22:00")
+
+  status        AvitoBidderStatus @default(paused)
+  mode          AvitoBidderMode   @default(dry_run)
+  changesToday  Int               @default(0)
+  nextCheckAt   DateTime?
+  lastCheckedAt DateTime?
+  lastError     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events AvitoBidderEvent[]
+
+  @@index([userId, status])
+  @@index([userId, createdAt])
+}
+
+model AvitoBidderEvent {
+  id        Int         @id @default(autoincrement())
+  bidderId  Int
+  bidder    AvitoBidder @relation(fields: [bidderId], references: [id], onDelete: Cascade)
+  type      String
+  message   String
+  createdAt DateTime    @default(now())
+
+  @@index([bidderId, createdAt])
+}
+
+model AvitoAccountConnection {
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  clientId              String
+  encryptedClientSecret String
+
+  tokenExpiresAt DateTime?
+  lastCheckedAt  DateTime?
+  lastError      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
