@@ -48,8 +48,10 @@ function getNextCheckAt(intervalMinutes: number) {
 function serializeBidder(bidder: {
   id: number;
   title: string;
+  groupName: string | null;
   city: string;
   query: string;
+  searchUrl: string | null;
   avitoItemId: string | null;
   avitoItemUrl: string | null;
   targetFrom: number;
@@ -58,6 +60,10 @@ function serializeBidder(bidder: {
   currentBid: number;
   minBid: number;
   maxBid: number;
+  bidStep: number;
+  dailySpendLimit: number;
+  spentToday: number;
+  smartEconomyEnabled: boolean;
   checkInterval: number;
   schedule: string;
   status: string;
@@ -140,14 +146,19 @@ export async function POST(request: Request) {
 
   let body: {
     title?: unknown;
+    groupName?: unknown;
     city?: unknown;
     query?: unknown;
+    searchUrl?: unknown;
     avitoItemId?: unknown;
     avitoItemUrl?: unknown;
     targetFrom?: unknown;
     targetTo?: unknown;
     minBid?: unknown;
     maxBid?: unknown;
+    bidStep?: unknown;
+    dailySpendLimit?: unknown;
+    smartEconomyEnabled?: unknown;
     checkInterval?: unknown;
     schedule?: unknown;
     mode?: unknown;
@@ -182,6 +193,16 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  const groupName =
+    typeof body.groupName === "string" && body.groupName.trim().length > 0
+      ? body.groupName.trim()
+      : null;
+
+  const searchUrl =
+    typeof body.searchUrl === "string" && body.searchUrl.trim().length > 0
+      ? body.searchUrl.trim()
+      : null;
 
   const avitoItemId =
     typeof body.avitoItemId === "string" && body.avitoItemId.trim().length > 0
@@ -222,6 +243,20 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!isPositiveInteger(body.bidStep)) {
+    return NextResponse.json(
+      { error: "Укажите корректный шаг изменения ставки" },
+      { status: 400 },
+    );
+  }
+
+  if (!isNonNegativeInteger(body.dailySpendLimit)) {
+    return NextResponse.json(
+      { error: "Укажите корректный дневной лимит расходов" },
+      { status: 400 },
+    );
+  }
+
   if (!isValidCheckInterval(body.checkInterval)) {
     return NextResponse.json(
       { error: "Выберите корректный интервал проверки" },
@@ -237,13 +272,16 @@ export async function POST(request: Request) {
   }
 
   const mode = isValidBidderMode(body.mode) ? body.mode : "dry_run";
+  const smartEconomyEnabled = body.smartEconomyEnabled === true;
 
   const bidder = await prisma.avitoBidder.create({
     data: {
       userId: authorization.user.id,
       title: body.title.trim(),
+      groupName,
       city: body.city.trim(),
       query: body.query.trim(),
+      searchUrl,
       avitoItemId,
       avitoItemUrl,
       targetFrom: body.targetFrom,
@@ -251,6 +289,10 @@ export async function POST(request: Request) {
       currentBid: body.minBid,
       minBid: body.minBid,
       maxBid: body.maxBid,
+      bidStep: body.bidStep,
+      dailySpendLimit: body.dailySpendLimit,
+      spentToday: 0,
+      smartEconomyEnabled,
       checkInterval: body.checkInterval,
       schedule: body.schedule.trim(),
       status: "paused",

@@ -145,8 +145,10 @@ model AvitoBidder {
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title        String
+  groupName    String?
   city         String
   query        String
+  searchUrl    String?
   avitoItemId  String?
   avitoItemUrl String?
 
@@ -157,6 +159,11 @@ model AvitoBidder {
   currentBid      Int  @default(0)
   minBid          Int
   maxBid          Int
+  bidStep         Int  @default(10)
+
+  dailySpendLimit     Int     @default(0)
+  spentToday          Int     @default(0)
+  smartEconomyEnabled Boolean @default(false)
 
   checkInterval Int    @default(10)
   schedule      String @default("Ежедневно, 09:00–22:00")

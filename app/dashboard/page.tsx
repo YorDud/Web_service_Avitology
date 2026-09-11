@@ -1,83 +1,54 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import DashboardClient from "./dashboard-client";
 import { getSessionUser } from "@/lib/session";
-import { formatRuDateTime } from "@/lib/dates";
-import DashboardClientPage from "./dashboard-client";
+import { prisma } from "@/lib/prisma";
 
-
-function maskAvitoClientId(clientId: string) {
-  if (clientId.length <= 4) return "••••";
-  if (clientId.length <= 8) {
-    return `${clientId.slice(0, 2)}••••${clientId.slice(-2)}`;
-  }
-
-  return `${clientId.slice(0, 4)}••••${clientId.slice(-4)}`;
-}
-
-function serializeBidder(bidder: {
-  id: number;
-  title: string;
-  city: string;
-  query: string;
-  targetFrom: number;
-  targetTo: number;
-  currentPosition: number | null;
-  currentBid: number | null;
-  minBid: number;
-  maxBid: number;
-  status: string;
-  changesToday: number;
-}) {
-  const status: "active" | "paused" | "attention" =
-    bidder.status === "paused" || bidder.status === "attention"
-      ? bidder.status
-      : "active";
-
-  return {
-    id: bidder.id,
-    title: bidder.title,
-    city: bidder.city,
-    query: bidder.query,
-    targetFrom: bidder.targetFrom,
-    targetTo: bidder.targetTo,
-    position: bidder.currentPosition,
-    currentBid: bidder.currentBid ?? bidder.minBid,
-    minBid: bidder.minBid,
-    maxBid: bidder.maxBid,
-    status,
-    nextCheck: status === "paused" ? "на паузе" : "ожидает запуска worker",
-    changesToday: bidder.changesToday,
-    imageLabel: bidder.title.slice(0, 2).toUpperCase(),
-  };
-}
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const sessionUser = await getSessionUser();
 
-  if (!sessionUser) redirect("/auth");
+  if (!sessionUser) {
+    redirect("/login");
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: sessionUser.id },
-    include: {
-      financialRecords: { orderBy: { recordDate: "desc" } },
-      avitoBidders: { orderBy: { updatedAt: "desc" } },
-      avitoAccountConnection: true,
+    select: {
+      id: true,
+      publicId: true,
+      email: true,
+      name: true,
+      subscriptionLevel: true,
+      subscriptionPrice: true,
+      subscriptionPaidAt: true,
+      subscriptionEndsAt: true,
+      financialRecords: {
+        orderBy: {
+          recordDate: "asc",
+        },
+      },
+      avitoBidders: {
+        orderBy: {
+          updatedAt: "desc",
+        },
+      },
+      avitoAccountConnection: {
+        select: {
+          clientId: true,
+          tokenExpiresAt: true,
+          lastCheckedAt: true,
+          lastError: true,
+        },
+      },
     },
   });
 
-  if (!user) redirect("/auth");
+  if (!user) {
+    redirect("/login");
+  }
 
-  const dashboardUser = {
-    name: user.name ?? "Пользователь",
-    publicId: user.publicId === null || user.publicId === undefined ? "—" : String(user.publicId),
-    email: user.email ?? "—",
-    subscriptionLevel: String(user.subscriptionLevel ?? "free"),
-    subscriptionPriceText: user.subscriptionPrice === null || user.subscriptionPrice === undefined ? "—" : `${user.subscriptionPrice} ₽`,
-    subscriptionPaidAt: formatRuDateTime(user.subscriptionPaidAt) || "—",
-    subscriptionEndsAt: formatRuDateTime(user.subscriptionEndsAt) || "—",
-  };
-
-  const financialRecords = user.financialRecords.map((record) => ({
+  const initialFinancialRecords = user.financialRecords.map((record) => ({
     id: record.id,
     recordDate: record.recordDate,
     income: record.income,
@@ -85,46 +56,79 @@ export default async function DashboardPage() {
   }));
 
   const initialBidders = user.avitoBidders.map((bidder) => ({
-  id: bidder.id,
-  title: bidder.title,
-  city: bidder.city,
-  query: bidder.query,
-  avitoItemId: bidder.avitoItemId,
-  avitoItemUrl: bidder.avitoItemUrl,
-  targetFrom: bidder.targetFrom,
-  targetTo: bidder.targetTo,
-  currentPosition: bidder.currentPosition,
-  currentBid: bidder.currentBid,
-  minBid: bidder.minBid,
-  maxBid: bidder.maxBid,
-  checkInterval: bidder.checkInterval,
-  schedule: bidder.schedule,
-  status: bidder.status,
-  changesToday: bidder.changesToday,
-  nextCheckAt: bidder.nextCheckAt?.toISOString() ?? null,
-  lastCheckedAt: bidder.lastCheckedAt?.toISOString() ?? null,
-  lastError: bidder.lastError,
-  createdAt: bidder.createdAt.toISOString(),
-  updatedAt: bidder.updatedAt.toISOString(),
-}));
+    id: bidder.id,
+    title: bidder.title,
+    groupName: bidder.groupName,
+    city: bidder.city,
+    query: bidder.query,
+    searchUrl: bidder.searchUrl,
+    avitoItemId: bidder.avitoItemId,
+    avitoItemUrl: bidder.avitoItemUrl,
+    targetFrom: bidder.targetFrom,
+    targetTo: bidder.targetTo,
+    currentPosition: bidder.currentPosition,
+    currentBid: bidder.currentBid,
+    minBid: bidder.minBid,
+    maxBid: bidder.maxBid,
+    bidStep: bidder.bidStep,
+    dailySpendLimit: bidder.dailySpendLimit,
+    spentToday: bidder.spentToday,
+    smartEconomyEnabled: bidder.smartEconomyEnabled,
+    checkInterval: bidder.checkInterval,
+    schedule: bidder.schedule,
+    status: bidder.status,
+    mode: bidder.mode,
+    changesToday: bidder.changesToday,
+    nextCheckAt: bidder.nextCheckAt?.toISOString() ?? null,
+    lastCheckedAt: bidder.lastCheckedAt?.toISOString() ?? null,
+    lastError: bidder.lastError,
+    createdAt: bidder.createdAt.toISOString(),
+    updatedAt: bidder.updatedAt.toISOString(),
+  }));
 
-const avitoConnection = user.avitoAccountConnection
-  ? {
-      clientIdMasked: maskAvitoClientId(user.avitoAccountConnection.clientId),
-      tokenExpiresAt:
-        user.avitoAccountConnection.tokenExpiresAt?.toISOString() ?? null,
-      lastCheckedAt:
-        user.avitoAccountConnection.lastCheckedAt?.toISOString() ?? null,
-      lastError: user.avitoAccountConnection.lastError,
-    }
-  : null;
+  const initialAvitoConnection = user.avitoAccountConnection
+    ? {
+        clientIdMasked:
+          user.avitoAccountConnection.clientId.length <= 6
+            ? user.avitoAccountConnection.clientId
+            : `${user.avitoAccountConnection.clientId.slice(0, 3)}***${user.avitoAccountConnection.clientId.slice(-3)}`,
+        tokenExpiresAt:
+          user.avitoAccountConnection.tokenExpiresAt?.toISOString() ?? null,
+        lastCheckedAt:
+          user.avitoAccountConnection.lastCheckedAt?.toISOString() ?? null,
+        lastError: user.avitoAccountConnection.lastError,
+      }
+    : null;
 
   return (
-    <DashboardClientPage
-      user={dashboardUser}
-      initialFinancialRecords={financialRecords}
+    <DashboardClient
+      user={{
+        name: user.name,
+        publicId: user.publicId ? String(user.publicId) : "—",
+        email: user.email,
+        subscriptionLevel: user.subscriptionLevel,
+        subscriptionPriceText:
+          user.subscriptionPrice > 0
+            ? `${new Intl.NumberFormat("ru-RU").format(user.subscriptionPrice)} ₽/мес`
+            : "Бесплатно",
+        subscriptionPaidAt: user.subscriptionPaidAt
+          ? new Intl.DateTimeFormat("ru-RU", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            }).format(user.subscriptionPaidAt)
+          : "—",
+        subscriptionEndsAt: user.subscriptionEndsAt
+          ? new Intl.DateTimeFormat("ru-RU", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            }).format(user.subscriptionEndsAt)
+          : "—",
+      }}
+      initialFinancialRecords={initialFinancialRecords}
       initialBidders={initialBidders}
-      initialAvitoConnection={avitoConnection}
+      initialAvitoConnection={initialAvitoConnection}
     />
   );
 }

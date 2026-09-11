@@ -63,8 +63,10 @@ function getNextCheckAt(intervalMinutes: number) {
 function serializeBidder(bidder: {
   id: number;
   title: string;
+  groupName: string | null;
   city: string;
   query: string;
+  searchUrl: string | null;
   avitoItemId: string | null;
   avitoItemUrl: string | null;
   targetFrom: number;
@@ -73,6 +75,10 @@ function serializeBidder(bidder: {
   currentBid: number;
   minBid: number;
   maxBid: number;
+  bidStep: number;
+  dailySpendLimit: number;
+  spentToday: number;
+  smartEconomyEnabled: boolean;
   checkInterval: number;
   schedule: string;
   status: string;
@@ -166,14 +172,20 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   let body: {
     title?: unknown;
+    groupName?: unknown;
     city?: unknown;
     query?: unknown;
+    searchUrl?: unknown;
     avitoItemId?: unknown;
     avitoItemUrl?: unknown;
     targetFrom?: unknown;
     targetTo?: unknown;
     minBid?: unknown;
     maxBid?: unknown;
+    bidStep?: unknown;
+    dailySpendLimit?: unknown;
+    spentToday?: unknown;
+    smartEconomyEnabled?: unknown;
     checkInterval?: unknown;
     schedule?: unknown;
     status?: unknown;
@@ -193,8 +205,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const data: {
     title?: string;
+    groupName?: string | null;
     city?: string;
     query?: string;
+    searchUrl?: string | null;
     avitoItemId?: string | null;
     avitoItemUrl?: string | null;
     targetFrom?: number;
@@ -202,6 +216,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     minBid?: number;
     maxBid?: number;
     currentBid?: number;
+    bidStep?: number;
+    dailySpendLimit?: number;
+    spentToday?: number;
+    smartEconomyEnabled?: boolean;
     checkInterval?: number;
     schedule?: string;
     status?: BidderStatus;
@@ -227,6 +245,21 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (data.title !== existingBidder.title) {
       eventMessages.push(`Название изменено на «${data.title}».`);
+    }
+  }
+
+  if (body.groupName !== undefined) {
+    data.groupName =
+      typeof body.groupName === "string" && body.groupName.trim().length > 0
+        ? body.groupName.trim()
+        : null;
+
+    if (data.groupName !== existingBidder.groupName) {
+      eventMessages.push(
+        data.groupName
+          ? `Группа изменена: ${data.groupName}.`
+          : "Группа бидера очищена.",
+      );
     }
   }
 
@@ -257,6 +290,21 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (data.query !== existingBidder.query) {
       eventMessages.push(`Поисковый запрос изменён: ${data.query}.`);
+    }
+  }
+
+  if (body.searchUrl !== undefined) {
+    data.searchUrl =
+      typeof body.searchUrl === "string" && body.searchUrl.trim().length > 0
+        ? body.searchUrl.trim()
+        : null;
+
+    if (data.searchUrl !== existingBidder.searchUrl) {
+      eventMessages.push(
+        data.searchUrl
+          ? "Ссылка на поиск обновлена."
+          : "Ссылка на поиск удалена.",
+      );
     }
   }
 
@@ -298,6 +346,18 @@ export async function PATCH(request: Request, context: RouteContext) {
         data.mode === "live"
           ? "Режим работы переключён в live."
           : "Режим работы переключён в dry-run.",
+      );
+    }
+  }
+
+  if (body.smartEconomyEnabled !== undefined) {
+    data.smartEconomyEnabled = body.smartEconomyEnabled === true;
+
+    if (data.smartEconomyEnabled !== existingBidder.smartEconomyEnabled) {
+      eventMessages.push(
+        data.smartEconomyEnabled
+          ? "Умная экономия бюджета включена."
+          : "Умная экономия бюджета отключена.",
       );
     }
   }
@@ -388,6 +448,49 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (minBid !== existingBidder.minBid || maxBid !== existingBidder.maxBid) {
       eventMessages.push(`Лимиты ставок изменены: ${minBid}–${maxBid} ₽.`);
     }
+  }
+
+  if (body.bidStep !== undefined) {
+    if (!isPositiveInteger(body.bidStep)) {
+      return NextResponse.json(
+        { error: "Укажите корректный шаг изменения ставки" },
+        { status: 400 },
+      );
+    }
+
+    data.bidStep = body.bidStep;
+
+    if (data.bidStep !== existingBidder.bidStep) {
+      eventMessages.push(`Шаг изменения ставки обновлён: ${data.bidStep} ₽.`);
+    }
+  }
+
+  if (body.dailySpendLimit !== undefined) {
+    if (!isNonNegativeInteger(body.dailySpendLimit)) {
+      return NextResponse.json(
+        { error: "Укажите корректный дневной лимит расходов" },
+        { status: 400 },
+      );
+    }
+
+    data.dailySpendLimit = body.dailySpendLimit;
+
+    if (data.dailySpendLimit !== existingBidder.dailySpendLimit) {
+      eventMessages.push(
+        `Дневной лимит расходов обновлён: ${data.dailySpendLimit} ₽.`,
+      );
+    }
+  }
+
+  if (body.spentToday !== undefined) {
+    if (!isNonNegativeInteger(body.spentToday)) {
+      return NextResponse.json(
+        { error: "Укажите корректную сумму расходов за сегодня" },
+        { status: 400 },
+      );
+    }
+
+    data.spentToday = body.spentToday;
   }
 
   if (body.checkInterval !== undefined) {

@@ -6,6 +6,7 @@ import {
 import { getAvitoItemByIdForUser } from "@/lib/avito-api";
 import { calculateBidderDecision } from "@/lib/avito-bidder-decision";
 import { getBidderPosition } from "@/lib/avito-bidder-position";
+import { applyBid } from "@/lib/avito-bid-apply";
 
 type RunnerResult = {
   bidderId: number;
@@ -121,25 +122,12 @@ export async function runSingleBidder(params: {
       currentBid: bidder.currentBid,
       minBid: bidder.minBid,
       maxBid: bidder.maxBid,
-      step: 10,
+      bidStep: bidder.bidStep,
       targetFrom: bidder.targetFrom,
       targetTo: bidder.targetTo,
-    });
-
-    const nextCheckAt = getNextCheckAt(bidder.checkInterval);
-
-    const updatedBidder = await prisma.avitoBidder.update({
-      where: { id: bidder.id },
-      data: {
-        title: item.title || bidder.title,
-        avitoItemUrl: item.url || bidder.avitoItemUrl,
-        currentPosition: positionResult.position,
-        currentBid: decision.recommendedBid,
-        lastCheckedAt: new Date(),
-        lastError: null,
-        nextCheckAt,
-        status: "active",
-      },
+      smartEconomyEnabled: bidder.smartEconomyEnabled,
+      dailySpendLimit: bidder.dailySpendLimit,
+      spentToday: bidder.spentToday,
     });
 
     await createBidderEvent({
@@ -154,17 +142,120 @@ export async function runSingleBidder(params: {
       message: `Решение движка: ${decision.action}. ${decision.reason} Рекомендуемая ставка: ${decision.recommendedBid} ₽.`,
     });
 
-    if (bidder.mode === "dry_run") {
+    if (decision.action === "stop_due_to_daily_limit") {
+      const nextCheckAt = getNextCheckAt(bidder.checkInterval);
+
+      const updatedBidder = await prisma.avitoBidder.update({
+        where: { id: bidder.id },
+        data: {
+          title: item.title || bidder.title,
+          avitoItemUrl: item.url || bidder.avitoItemUrl,
+          currentPosition: positionResult.position,
+          lastCheckedAt: new Date(),
+          lastError: decision.reason,
+          nextCheckAt,
+          status: "attention",
+        },
+      });
+
+      await createBidderEvent({
+        bidderId: bidder.id,
+        type: "runner_daily_limit_reached",
+        message: decision.reason,
+      });
+
+      return {
+        bidderId: updatedBidder.id,
+        userId: updatedBidder.userId,
+        title: updatedBidder.title,
+        mode: updatedBidder.mode,
+        status: "failed",
+        message: decision.reason,
+        nextCheckAt: updatedBidder.nextCheckAt?.toISOString() ?? null,
+      };
+    }
+
+    const applyResult = await applyBid({
+      mode: bidder.mode,
+      bidderId: bidder.id,
+      userId: bidder.userId,
+      avitoItemId: bidder.avitoItemId,
+      currentBid: bidder.currentBid,
+      recommendedBid: decision.recommendedBid,
+    });
+
+    if (!applyResult.ok) {
+      const nextCheckAt = getNextCheckAt(bidder.checkInterval);
+
+      const updatedBidder = await prisma.avitoBidder.update({
+        where: { id: bidder.id },
+        data: {
+          title: item.title || bidder.title,
+          avitoItemUrl: item.url || bidder.avitoItemUrl,
+          currentPosition: positionResult.position,
+          lastCheckedAt: new Date(),
+          lastError: applyResult.message,
+          nextCheckAt,
+          status: "attention",
+        },
+      });
+
+      await createBidderEvent({
+        bidderId: bidder.id,
+        type: "runner_bid_apply_error",
+        message: `Ошибка применения ставки: ${applyResult.message}`,
+      });
+
+      return {
+        bidderId: updatedBidder.id,
+        userId: updatedBidder.userId,
+        title: updatedBidder.title,
+        mode: updatedBidder.mode,
+        status: "failed",
+        message: applyResult.message,
+        nextCheckAt: updatedBidder.nextCheckAt?.toISOString() ?? null,
+      };
+    }
+
+    const bidIncreased = applyResult.appliedBid > bidder.currentBid;
+    const estimatedSpentToday = bidIncreased
+      ? bidder.spentToday + (applyResult.appliedBid - bidder.currentBid)
+      : bidder.spentToday;
+
+    const nextCheckAt = getNextCheckAt(bidder.checkInterval);
+
+    const updatedBidder = await prisma.avitoBidder.update({
+      where: { id: bidder.id },
+      data: {
+        title: item.title || bidder.title,
+        avitoItemUrl: item.url || bidder.avitoItemUrl,
+        currentPosition: positionResult.position,
+        currentBid: applyResult.appliedBid,
+        spentToday: estimatedSpentToday,
+        lastCheckedAt: new Date(),
+        lastError: null,
+        nextCheckAt,
+        status: "active",
+      },
+    });
+
+    if (applyResult.status === "dry_run_only") {
       await createBidderEvent({
         bidderId: bidder.id,
         type: "runner_bid_applied_dry_run",
-        message: `Dry-run: рассчитанная ставка ${decision.recommendedBid} ₽ сохранена только внутри системы без отправки в Avito.`,
+        message: applyResult.message,
       });
-    } else {
+    } else if (applyResult.status === "pending_live_integration") {
       await createBidderEvent({
         bidderId: bidder.id,
         type: "runner_bid_apply_pending_live",
-        message: `Live-режим активен. Ставка ${decision.recommendedBid} ₽ готова к боевому применению через Avito API.`,
+        message: applyResult.message,
+      });
+    } else if (applyResult.status === "applied") {
+      await createBidderEvent({
+        bidderId: bidder.id,
+        type: "runner_bid_applied_live",
+        message: applyResult.message,
       });
     }
 
@@ -182,8 +273,8 @@ export async function runSingleBidder(params: {
       status: "processed",
       message:
         updatedBidder.mode === "dry_run"
-          ? `Dry-run обработан: позиция ${positionResult.position ?? "нет данных"}, решение ${decision.action}, внутренняя ставка ${decision.recommendedBid} ₽.`
-          : `Live-режим подготовил применение ставки: позиция ${positionResult.position ?? "нет данных"}, решение ${decision.action}, ставка ${decision.recommendedBid} ₽.`,
+          ? `Dry-run обработан: позиция ${positionResult.position ?? "нет данных"}, решение ${decision.action}, внутренняя ставка ${applyResult.appliedBid} ₽.`
+          : `Live-режим обработан: позиция ${positionResult.position ?? "нет данных"}, решение ${decision.action}, подготовленная ставка ${applyResult.appliedBid} ₽.`,
       nextCheckAt: updatedBidder.nextCheckAt?.toISOString() ?? null,
     };
   } catch (error) {
