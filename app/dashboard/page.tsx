@@ -55,7 +55,7 @@ export default async function DashboardPage() {
     expense: record.expense,
   }));
 
-  const initialBidders = user.avitoBidders.map((bidder) => ({
+    const initialBidders = user.avitoBidders.map((bidder) => ({
     id: bidder.id,
     title: bidder.title,
     groupName: bidder.groupName,
@@ -82,6 +82,17 @@ export default async function DashboardPage() {
     nextCheckAt: bidder.nextCheckAt?.toISOString() ?? null,
     lastCheckedAt: bidder.lastCheckedAt?.toISOString() ?? null,
     lastError: bidder.lastError,
+    promotionStrategy: bidder.promotionStrategy,
+    promotionDurationDays: bidder.promotionDurationDays,
+    lastPromotionOrderId: bidder.lastPromotionOrderId,
+    lastPromotionRequestId: bidder.lastPromotionRequestId,
+    lastPromotionStatus: bidder.lastPromotionStatus,
+    lastPromotionPrice: bidder.lastPromotionPrice,
+    lastPromotionOldPrice: bidder.lastPromotionOldPrice,
+    lastPromotionPayload: bidder.lastPromotionPayload,
+    lastForecastPayload: bidder.lastForecastPayload,
+    lastSuggestPayload: bidder.lastSuggestPayload,
+    lastAppliedAt: bidder.lastAppliedAt?.toISOString() ?? null,
     createdAt: bidder.createdAt.toISOString(),
     updatedAt: bidder.updatedAt.toISOString(),
   }));

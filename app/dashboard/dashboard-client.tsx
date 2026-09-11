@@ -68,8 +68,10 @@ type ComparedAvitoItem = {
 type BidderApi = {
   id: number;
   title: string;
+  groupName: string | null;
   city: string;
   query: string;
+  searchUrl: string | null;
   avitoItemId: string | null;
   avitoItemUrl: string | null;
   targetFrom: number;
@@ -78,6 +80,10 @@ type BidderApi = {
   currentBid: number;
   minBid: number;
   maxBid: number;
+  bidStep: number;
+  dailySpendLimit: number;
+  spentToday: number;
+  smartEconomyEnabled: boolean;
   checkInterval: number;
   schedule: string;
   status: BidderStatus;
@@ -86,9 +92,23 @@ type BidderApi = {
   nextCheckAt: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
+
+  promotionStrategy: string;
+  promotionDurationDays: number;
+  lastPromotionOrderId: string | null;
+  lastPromotionRequestId: string | null;
+  lastPromotionStatus: string | null;
+  lastPromotionPrice: number | null;
+  lastPromotionOldPrice: number | null;
+  lastPromotionPayload: string | null;
+  lastForecastPayload: string | null;
+  lastSuggestPayload: string | null;
+  lastAppliedAt: string | null;
+
   createdAt: string;
   updatedAt: string;
 };
+
 
 type BidderEvent = {
   id: number;
@@ -147,6 +167,8 @@ function formatBidderNextCheck(value: string | null, status: BidderStatus) {
   return `через ${minutes} мин`;
 }
 
+
+
 function toBidder(apiBidder: BidderApi): Bidder {
   return {
     ...apiBidder,
@@ -168,20 +190,90 @@ function formatConnectionDate(value: string | null) {
   }).format(new Date(value));
 }
 
+function formatCurrency(value: number | null | undefined) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "—";
+  }
+
+  return `${new Intl.NumberFormat("ru-RU").format(value)} ₽`;
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+
+  try {
+    return new Intl.DateTimeFormat("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return "—";
+  }
+}
+
+function formatPromotionStatus(status: string | null | undefined) {
+  if (!status) return "нет данных";
+
+  const map: Record<string, string> = {
+    dry_run: "dry-run",
+    created: "создана заявка",
+    apply_failed: "ошибка применения",
+    no_budget_from_suggests: "не получен бюджет",
+    daily_limit_reached: "дневной лимит достигнут",
+    runner_exception: "ошибка runner",
+  };
+
+  return map[status] ?? status;
+}
+
+function getOperationalRecord(
+  source: Record<number, unknown>,
+  bidderId: number,
+): Record<string, any> | null {
+  const value = source[bidderId];
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  return value as Record<string, any>;
+}
+
+function formatBooleanState(value: boolean) {
+  return value ? "да" : "нет";
+}
+
+function stringifyPretty(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return "Не удалось сериализовать ответ.";
+  }
+}
+
 type BidderDraft = {
   title: string;
+  groupName: string;
   city: string;
   query: string;
+  searchUrl: string;
   avitoItemId: string | null;
   avitoItemUrl: string | null;
-  targetFrom: number;
-  targetTo: number;
-  minBid: number;
-  maxBid: number;
-  step: number;
-  interval: number;
+  targetFrom: string;
+  targetTo: string;
+  minBid: string;
+  maxBid: string;
+  bidStep: string;
+  dailySpendLimit: string;
+  smartEconomyEnabled: boolean;
+  checkInterval: string;
   schedule: string;
   mode: BidderMode;
+
+  promotionStrategy: string;
+  promotionDurationDays: string;
 };
 
 type AvitoItem = {
@@ -196,18 +288,46 @@ type AvitoItem = {
 
 const initialBidderDraft: BidderDraft = {
   title: "",
+  groupName: "",
   city: "",
   query: "",
+  searchUrl: "",
   avitoItemId: null,
   avitoItemUrl: null,
-  targetFrom: 3,
-  targetTo: 5,
-  minBid: 150,
-  maxBid: 400,
-  step: 10,
-  interval: 10,
+  targetFrom: "3",
+  targetTo: "5",
+  minBid: "150",
+  maxBid: "400",
+  bidStep: "10",
+  dailySpendLimit: "0",
+  smartEconomyEnabled: false,
+  checkInterval: "10",
   schedule: "Ежедневно, 09:00–22:00",
   mode: "dry_run",
+  promotionStrategy: "bbip",
+  promotionDurationDays: "7",
+};
+
+const emptyBidderDraft: BidderDraft = {
+  title: "",
+  groupName: "",
+  city: "",
+  query: "",
+  searchUrl: "",
+  avitoItemId: null,
+  avitoItemUrl: null,
+  targetFrom: "1",
+  targetTo: "3",
+  minBid: "50",
+  maxBid: "500",
+  bidStep: "10",
+  dailySpendLimit: "0",
+  smartEconomyEnabled: false,
+  checkInterval: "10",
+  schedule: "Ежедневно, 09:00–22:00",
+  mode: "dry_run",
+  promotionStrategy: "bbip",
+  promotionDurationDays: "7",
 };
 
 function getSubscriptionStyle(level: string) {
@@ -702,6 +822,9 @@ export default function DashboardClientPage({
   const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>(
     initialFinancialRecords,
   );
+
+    
+
   const [periodStart, setPeriodStart] = useState(getDateBefore(6));
   const [periodEnd, setPeriodEnd] = useState(getTodayDate());
   const [tablePeriodStart, setTablePeriodStart] = useState(getDateBefore(29));
@@ -749,6 +872,38 @@ export default function DashboardClientPage({
   const [bidders, setBidders] = useState<Bidder[]>(() =>
     initialBidders.map(toBidder),
   );
+
+  const [operationalLoadingBidderId, setOperationalLoadingBidderId] = useState<
+    number | null
+  >(null);
+  const [runNowBidderId, setRunNowBidderId] = useState<number | null>(null);
+  const [bidderOperational, setBidderOperational] = useState<
+    Record<number, unknown>
+  >({});
+  const [bidderHealth, setBidderHealth] = useState<Record<string, any> | null>(
+    null,
+  );
+  const [bidderHealthLoading, setBidderHealthLoading] = useState(false);
+  const [bulkBidderAction, setBulkBidderAction] = useState<
+    "run_due" | "pause_all" | null
+  >(null);
+  const [bidderHealthError, setBidderHealthError] = useState("");
+  const [bulkBidderResult, setBulkBidderResult] = useState<string | null>(null);
+  const [workerRuns, setWorkerRuns] = useState<Record<string, any>[]>([]);
+  const [workerRunsLoading, setWorkerRunsLoading] = useState(false);
+  const [workerRunNowLoading, setWorkerRunNowLoading] = useState(false);
+  const [workerRunsError, setWorkerRunsError] = useState("");
+  const [liveApplyConfirmBidder, setLiveApplyConfirmBidder] = useState<Bidder | null>(null);
+  const [liveApplyConfirmation, setLiveApplyConfirmation] = useState("");
+
+  const [promotionActionLoading, setPromotionActionLoading] = useState<
+    "services" | "suggests" | "forecast" | "apply" | "order-status" | null
+  >(null);
+  const [promotionActionError, setPromotionActionError] = useState("");
+  const [promotionActionResult, setPromotionActionResult] = useState<
+    string | null
+  >(null);
+
   const [bidderSaving, setBidderSaving] = useState(false);
   const [checkingBidderId, setCheckingBidderId] = useState<number | null>(null);
   const [isBidderWizardOpen, setIsBidderWizardOpen] = useState(false);
@@ -918,6 +1073,8 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
     setFinancialError("");
     setIsEditingFinancials(false);
   }
+
+  
 
   function addFinancialRecord() {
     setFinancialDrafts((current) => [
@@ -1404,20 +1561,26 @@ async function toggleBidderEvents(bidderId: number) {
   function openBidderEditor(bidder: Bidder) {
     setEditingBidderId(bidder.id);
     setBidderDraft({
-      title: bidder.title,
-      city: bidder.city,
-      query: bidder.query,
-      avitoItemId: bidder.avitoItemId,
-      avitoItemUrl: bidder.avitoItemUrl,
-      targetFrom: bidder.targetFrom,
-      targetTo: bidder.targetTo,
-      minBid: bidder.minBid,
-      maxBid: bidder.maxBid,
-      step: 10,
-      interval: bidder.checkInterval,
-      schedule: bidder.schedule,
-      mode: bidder.mode,
-    });
+  title: bidder.title,
+  groupName: bidder.groupName ?? "",
+  city: bidder.city,
+  query: bidder.query,
+  searchUrl: bidder.searchUrl ?? "",
+  avitoItemId: bidder.avitoItemId,
+  avitoItemUrl: bidder.avitoItemUrl,
+  targetFrom: String(bidder.targetFrom),
+  targetTo: String(bidder.targetTo),
+  minBid: String(bidder.minBid),
+  maxBid: String(bidder.maxBid),
+  bidStep: String(bidder.bidStep),
+  dailySpendLimit: String(bidder.dailySpendLimit),
+  smartEconomyEnabled: bidder.smartEconomyEnabled,
+  checkInterval: String(bidder.checkInterval),
+  schedule: bidder.schedule,
+  mode: bidder.mode,
+  promotionStrategy: bidder.promotionStrategy || "bbip",
+  promotionDurationDays: String(bidder.promotionDurationDays || 7),
+});
     setBidderWizardStep(1);
     setIsBidderWizardOpen(true);
     void loadAvitoItems();
@@ -1530,23 +1693,320 @@ async function toggleBidderEvents(bidderId: number) {
     }
   }
 
+    async function runPromotionAction(
+    bidder: Bidder,
+    action: "services" | "suggests" | "forecast" | "apply" | "order-status",
+    confirmation?: string,
+  ) {
+    if (promotionActionLoading) return;
+
+    setPromotionActionLoading(action);
+    setPromotionActionError("");
+    setPromotionActionResult(null);
+
+    try {
+      let url = "";
+      let method: "GET" | "POST" = "GET";
+
+      if (action === "services") {
+        url = `/api/avito-bidders/${bidder.id}/promotion-services`;
+      } else if (action === "suggests") {
+        url = `/api/avito-bidders/${bidder.id}/promotion-suggests`;
+      } else if (action === "forecast") {
+        url = `/api/avito-bidders/${bidder.id}/promotion-forecast`;
+      } else if (action === "apply") {
+        url = `/api/avito-bidders/${bidder.id}/promotion-apply`;
+        method = "POST";
+      } else {
+        url = `/api/avito-bidders/${bidder.id}/promotion-order-status`;
+      }
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body:
+          method === "POST"
+            ? JSON.stringify(
+                action === "apply" ? { confirmation: confirmation ?? "" } : {},
+              )
+            : undefined,
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setPromotionActionError(
+          data?.error || "Не удалось выполнить действие Promotion API.",
+        );
+        return;
+      }
+
+      setPromotionActionResult(stringifyPretty(data));
+
+      if (action === "apply") {
+        showBidderMessage(data?.message || "Manual live apply выполнен.");
+      } else if (action === "order-status") {
+        showBidderMessage("Статус promotion order обновлён.");
+      }
+    } catch (error) {
+      console.error(error);
+      setPromotionActionError("Ошибка сети. Повторите попытку.");
+    } finally {
+      setPromotionActionLoading(null);
+    }
+  }
+
+    async function loadBidderOperational(bidderId: number) {
+    if (operationalLoadingBidderId !== null) return;
+
+    setOperationalLoadingBidderId(bidderId);
+    setPromotionActionError("");
+
+    try {
+      const response = await fetch(
+        `/api/avito-bidders/${bidderId}/operational`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+        },
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setPromotionActionError(
+          data?.error || "Не удалось получить operational summary.",
+        );
+        return;
+      }
+
+      setBidderOperational((current) => ({
+        ...current,
+        [bidderId]: data,
+      }));
+    } catch (error) {
+      console.error(error);
+      setPromotionActionError("Ошибка сети. Не удалось получить operational summary.");
+    } finally {
+      setOperationalLoadingBidderId(null);
+    }
+  }
+
+  async function runBidderNow(bidderId: number) {
+    if (runNowBidderId !== null) return;
+
+    setRunNowBidderId(bidderId);
+    setPromotionActionError("");
+
+    try {
+      const response = await fetch(`/api/avito-bidders/${bidderId}/run-now`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setPromotionActionError(
+          data?.error || "Не удалось запустить bidder вручную.",
+        );
+        return;
+      }
+
+      showBidderMessage(data?.result?.message || "Bidder выполнен вручную.");
+      await loadBidderOperational(bidderId);
+      await loadBidderEvents(bidderId);
+    } catch (error) {
+      console.error(error);
+      setPromotionActionError("Ошибка сети. Не удалось запустить bidder вручную.");
+    } finally {
+      setRunNowBidderId(null);
+    }
+  }
+
+  async function loadBidderHealth() {
+    if (bidderHealthLoading) return;
+
+    setBidderHealthLoading(true);
+    setBidderHealthError("");
+
+    try {
+      const response = await fetch("/api/avito-bidders/operations", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setBidderHealthError(
+          data?.error || "Не удалось получить сводку состояния bidder-ов.",
+        );
+        return;
+      }
+
+      setBidderHealth(data?.summary ?? null);
+    } catch (error) {
+      console.error(error);
+      setBidderHealthError("Ошибка сети. Не удалось получить сводку bidder-ов.");
+    } finally {
+      setBidderHealthLoading(false);
+    }
+  }
+
+  async function runBulkBidderOperation(action: "run_due" | "pause_all") {
+    if (bulkBidderAction || bidderHealthLoading) return;
+
+    if (
+      action === "pause_all" &&
+      !window.confirm("Поставить на паузу все активные bidder-ы?")
+    ) {
+      return;
+    }
+
+    setBulkBidderAction(action);
+    setBidderHealthError("");
+    setBulkBidderResult(null);
+
+    try {
+      const response = await fetch("/api/avito-bidders/operations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setBidderHealthError(
+          data?.error || "Не удалось выполнить массовую операцию.",
+        );
+        return;
+      }
+
+      setBidderHealth(data?.summary ?? null);
+
+      if (action === "pause_all") {
+        const pausedCount = Number(data?.pausedCount ?? 0);
+        const message = data?.message || `На паузу поставлено bidder-ов: ${pausedCount}.`;
+        setBulkBidderResult(message);
+        showBidderMessage(message);
+        setBidders((current) =>
+          current.map((bidder) =>
+            bidder.status === "active"
+              ? { ...bidder, status: "paused", nextCheck: "на паузе" }
+              : bidder,
+          ),
+        );
+      } else {
+        const result = data?.result;
+        const message = result
+          ? `Массовый запуск завершён: обработано ${result.processed ?? 0}, пропущено ${result.skipped ?? 0}, ошибок ${result.failed ?? 0}.`
+          : "Массовый запуск bidder-ов завершён.";
+        setBulkBidderResult(message);
+        showBidderMessage(message);
+      }
+    } catch (error) {
+      console.error(error);
+      setBidderHealthError("Ошибка сети. Не удалось выполнить массовую операцию.");
+    } finally {
+      setBulkBidderAction(null);
+    }
+  }
+
+  async function loadWorkerRuns() {
+    if (workerRunsLoading) return;
+
+    setWorkerRunsLoading(true);
+    setWorkerRunsError("");
+
+    try {
+      const response = await fetch("/api/avito-bidders/worker-runs", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setWorkerRunsError(data?.error || "Не удалось загрузить журнал worker-а.");
+        return;
+      }
+
+      setWorkerRuns(Array.isArray(data?.runs) ? data.runs : []);
+    } catch (error) {
+      console.error(error);
+      setWorkerRunsError("Ошибка сети. Не удалось загрузить журнал worker-а.");
+    } finally {
+      setWorkerRunsLoading(false);
+    }
+  }
+
+  async function runWorkerNowFromDashboard() {
+    if (workerRunNowLoading) return;
+
+    setWorkerRunNowLoading(true);
+    setWorkerRunsError("");
+
+    try {
+      const response = await fetch("/api/avito-bidders/worker-run-now", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setWorkerRunsError(data?.error || "Не удалось запустить worker.");
+        return;
+      }
+
+      showBidderMessage(data?.result?.message || "Worker запущен вручную.");
+      await Promise.all([loadWorkerRuns(), loadBidderHealth()]);
+    } catch (error) {
+      console.error(error);
+      setWorkerRunsError("Ошибка сети. Не удалось запустить worker.");
+    } finally {
+      setWorkerRunNowLoading(false);
+    }
+  }
+
+  async function confirmLiveApply() {
+    const bidder = liveApplyConfirmBidder;
+    if (!bidder || liveApplyConfirmation.trim() !== "LIVE") return;
+
+    await runPromotionAction(bidder, "apply", "LIVE");
+    setLiveApplyConfirmBidder(null);
+    setLiveApplyConfirmation("");
+    await Promise.all([loadBidderOperational(bidder.id), loadBidderHealth()]);
+  }
+
   async function saveBidder() {
     if (bidderSaving) return;
 
     const payload = {
-      title: bidderDraft.title,
-      city: bidderDraft.city,
-      query: bidderDraft.query,
-      avitoItemId: bidderDraft.avitoItemId,
-      avitoItemUrl: bidderDraft.avitoItemUrl,
-      targetFrom: bidderDraft.targetFrom,
-      targetTo: bidderDraft.targetTo,
-      minBid: bidderDraft.minBid,
-      maxBid: bidderDraft.maxBid,
-      checkInterval: bidderDraft.interval,
-      schedule: bidderDraft.schedule,
-      mode: bidderDraft.mode,
-    };
+  title: bidderDraft.title.trim(),
+  groupName: bidderDraft.groupName.trim() || null,
+  city: bidderDraft.city.trim(),
+  query: bidderDraft.query.trim(),
+  searchUrl: bidderDraft.searchUrl.trim() || null,
+  avitoItemId: bidderDraft.avitoItemId,
+  avitoItemUrl: bidderDraft.avitoItemUrl,
+  targetFrom: Number.parseInt(bidderDraft.targetFrom, 10) || 1,
+  targetTo: Number.parseInt(bidderDraft.targetTo, 10) || 1,
+  minBid: Number.parseInt(bidderDraft.minBid, 10) || 0,
+  maxBid: Number.parseInt(bidderDraft.maxBid, 10) || 0,
+  bidStep: Number.parseInt(bidderDraft.bidStep, 10) || 10,
+  dailySpendLimit: Number.parseInt(bidderDraft.dailySpendLimit, 10) || 0,
+  smartEconomyEnabled: bidderDraft.smartEconomyEnabled,
+  checkInterval: Number.parseInt(bidderDraft.checkInterval, 10) || 10,
+  schedule: bidderDraft.schedule.trim(),
+  mode: bidderDraft.mode,
+  promotionStrategy: bidderDraft.promotionStrategy.trim() || "bbip",
+  promotionDurationDays:
+    Number.parseInt(bidderDraft.promotionDurationDays, 10) || 7,
+};
 
     setBidderSaving(true);
     try {
@@ -3806,6 +4266,177 @@ setExpandedBidderId(savedBidder.id);
                   </MetricCard>
                 </section>
 
+                <section className="overflow-hidden rounded-[32px] border border-black/[0.08] bg-white shadow-[0_18px_45px_rgba(16,24,40,0.07)]">
+                  <div className="bg-black p-5 text-white sm:p-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70">
+                          <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
+                          Bidder health center
+                        </div>
+                        <h3 className="mt-3 text-2xl font-extrabold tracking-[-0.04em] sm:text-3xl">
+                          Центр управления bidder-ами
+                        </h3>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
+                          Оперативная сводка рабочего состояния, массовый запуск активных стратегий и безопасная остановка всех bidder-ов.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void loadBidderHealth()}
+                          disabled={bidderHealthLoading || bulkBidderAction !== null}
+                          className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-extrabold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {bidderHealthLoading ? "Обновляем..." : "Обновить health"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void runBulkBidderOperation("run_due")}
+                          disabled={bidderHealthLoading || bulkBidderAction !== null}
+                          className="rounded-xl bg-[#03bd48] px-4 py-3 text-xs font-extrabold text-white transition hover:bg-[#02963a] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {bulkBidderAction === "run_due" ? "Запускаем..." : "Запустить due bidder-ы"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void runBulkBidderOperation("pause_all")}
+                          disabled={bidderHealthLoading || bulkBidderAction !== null}
+                          className="rounded-xl border border-red-300/50 bg-red-500/15 px-4 py-3 text-xs font-extrabold text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {bulkBidderAction === "pause_all" ? "Ставим на паузу..." : "Пауза всех"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 sm:p-6">
+                    {bidderHealthError && (
+                      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700">
+                        {bidderHealthError}
+                      </div>
+                    )}
+
+                    {bulkBidderResult && (
+                      <div className="rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-4 py-3 text-sm font-bold leading-6 text-[#027a30]">
+                        {bulkBidderResult}
+                      </div>
+                    )}
+
+                    {!bidderHealth && !bidderHealthLoading && !bidderHealthError && (
+                      <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-8 text-center">
+                        <div className="text-lg font-extrabold text-black">Health summary ещё не загружен</div>
+                        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-black/48">
+                          Нажмите «Обновить health», чтобы проверить расписания, cooldown, готовность live-стратегий и наличие ошибок.
+                        </p>
+                      </div>
+                    )}
+
+                    {bidderHealthLoading && !bidderHealth && (
+                      <div className="rounded-3xl border border-black/[0.08] bg-black/[0.02] px-5 py-8 text-center text-sm font-bold text-black/50">
+                        Загружаем health summary...
+                      </div>
+                    )}
+
+                    {bidderHealth?.totals && (
+                      <>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                          <InfoCard title="Всего bidder-ов">
+                            <div className="text-2xl font-extrabold text-black">{bidderHealth.totals.all ?? 0}</div>
+                          </InfoCard>
+                          <InfoCard title="Активны" accent>
+                            <div className="text-2xl font-extrabold text-[#028c36]">{bidderHealth.totals.active ?? 0}</div>
+                          </InfoCard>
+                          <InfoCard title="Live готовы">
+                            <div className="text-2xl font-extrabold text-blue-700">{bidderHealth.totals.liveReady ?? 0}</div>
+                          </InfoCard>
+                          <InfoCard title="Cooldown">
+                            <div className="text-2xl font-extrabold text-amber-700">{bidderHealth.totals.cooldownActive ?? 0}</div>
+                          </InfoCard>
+                          <InfoCard title="Вне расписания">
+                            <div className="text-2xl font-extrabold text-black">{bidderHealth.totals.outsideSchedule ?? 0}</div>
+                          </InfoCard>
+                          <InfoCard title="С ошибками">
+                            <div className="text-2xl font-extrabold text-red-600">{bidderHealth.totals.withErrors ?? 0}</div>
+                          </InfoCard>
+                        </div>
+
+                        <details className="mt-4 rounded-2xl border border-black/[0.08] bg-black/[0.018] p-4">
+                          <summary className="cursor-pointer text-sm font-extrabold text-black">
+                            Детализация health по bidder-ам ({Array.isArray(bidderHealth.bidders) ? bidderHealth.bidders.length : 0})
+                          </summary>
+                          <div className="mt-4 space-y-2">
+                            {Array.isArray(bidderHealth.bidders) && bidderHealth.bidders.map((item: Record<string, any>) => (
+                              <div key={item.bidderId} className="grid gap-2 rounded-xl border border-black/[0.07] bg-white p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center">
+                                <div className="min-w-0">
+                                  <div className="truncate font-extrabold text-black">{item.title}</div>
+                                  <div className="mt-1 text-black/45">#{item.bidderId} · {item.mode} · {item.status}</div>
+                                </div>
+                                <span className={`w-fit rounded-full px-2.5 py-1 font-extrabold ${item.liveReady ? "bg-[#03bd48]/10 text-[#028c36]" : "bg-black/[0.05] text-black/55"}`}>
+                                  {item.liveReady ? "live ready" : "не готов"}
+                                </span>
+                                <span className={`w-fit rounded-full px-2.5 py-1 font-extrabold ${item.cooldown?.active ? "bg-amber-50 text-amber-700" : "bg-black/[0.05] text-black/55"}`}>
+                                  {item.cooldown?.active ? "cooldown" : "без cooldown"}
+                                </span>
+                                <span className={`w-fit rounded-full px-2.5 py-1 font-extrabold ${item.hasError ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-700"}`}>
+                                  {item.hasError ? "есть ошибка" : item.schedule?.allowedNow ? "в расписании" : "вне окна"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+
+                        <div className="mt-3 text-xs font-semibold text-black/40">
+                          Сводка сформирована: {formatDateTime(bidderHealth.generatedAt ?? null)}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </section>
+
+                <section className="overflow-hidden rounded-[32px] border border-black/[0.08] bg-white shadow-[0_18px_45px_rgba(16,24,40,0.07)]">
+                  <div className="flex flex-col gap-4 bg-black p-5 text-white sm:flex-row sm:items-end sm:justify-between sm:p-6">
+                    <div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70">
+                        <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
+                        Worker monitor
+                      </div>
+                      <h3 className="mt-3 text-2xl font-extrabold tracking-[-0.04em]">Журнал запусков worker-а</h3>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
+                        Контроль автоматических и ручных запусков: обработанные bidder-ы, пропуски, ошибки и состояние фонового процесса.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => void loadWorkerRuns()} disabled={workerRunsLoading || workerRunNowLoading} className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-extrabold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50">
+                        {workerRunsLoading ? "Обновляем..." : "Обновить журнал"}
+                      </button>
+                      <button type="button" onClick={() => void runWorkerNowFromDashboard()} disabled={workerRunsLoading || workerRunNowLoading} className="rounded-xl bg-[#03bd48] px-4 py-3 text-xs font-extrabold text-white transition hover:bg-[#02963a] disabled:cursor-not-allowed disabled:opacity-50">
+                        {workerRunNowLoading ? "Запускаем..." : "Запустить worker сейчас"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-4 sm:p-6">
+                    {workerRunsError && <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{workerRunsError}</div>}
+                    {!workerRunsLoading && workerRuns.length === 0 && !workerRunsError && <div className="rounded-2xl border border-dashed border-black/15 bg-black/[0.02] px-4 py-7 text-center text-sm font-semibold text-black/48">Журнал ещё не загружен или запусков пока нет.</div>}
+                    {workerRuns.length > 0 && <div className="space-y-2">
+                      {workerRuns.map((run) => <div key={run.id} className="grid gap-3 rounded-2xl border border-black/[0.08] bg-black/[0.018] p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${run.status === "completed" ? "bg-[#03bd48]/10 text-[#028c36]" : run.status === "failed" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>{run.status}</span>
+                            <span className="text-xs font-bold text-black/45">{run.source}</span>
+                          </div>
+                          <div className="mt-2 text-sm font-bold text-black">{run.message || "Worker run"}</div>
+                          {run.error && <div className="mt-1 text-xs font-bold text-red-600">{run.error}</div>}
+                          <div className="mt-1 text-xs text-black/42">Старт: {formatDateTime(run.startedAt)} · Завершение: {formatDateTime(run.finishedAt)}</div>
+                        </div>
+                        <div className="rounded-xl bg-white px-3 py-2 text-center"><div className="text-[9px] font-extrabold uppercase text-black/35">Обработано</div><div className="mt-1 text-lg font-extrabold text-[#028c36]">{run.processed}</div></div>
+                        <div className="flex gap-2"><div className="rounded-xl bg-white px-3 py-2 text-center"><div className="text-[9px] font-extrabold uppercase text-black/35">Пропуск</div><div className="mt-1 text-lg font-extrabold text-black">{run.skipped}</div></div><div className="rounded-xl bg-white px-3 py-2 text-center"><div className="text-[9px] font-extrabold uppercase text-black/35">Ошибки</div><div className="mt-1 text-lg font-extrabold text-red-600">{run.failed}</div></div></div>
+                      </div>)}
+                    </div>}
+                  </div>
+                </section>
+
                 {bidderMessage && (
                   <div className="flex items-start gap-2 rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-4 py-3 text-sm font-bold leading-6 text-[#027a30]">
                     <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#03bd48] text-xs text-white">
@@ -3984,6 +4615,9 @@ setExpandedBidderId(savedBidder.id);
                                   
                                 </div>
                               </div>
+
+
+                              
                               <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-col">
                                 <button
                                   type="button"
@@ -4017,6 +4651,8 @@ setExpandedBidderId(savedBidder.id);
       ? "Загружаем..."
       : "История событий"}
 </button>
+
+
                                 <button
                                   type="button"
                                   onClick={() => toggleBidderStatus(bidder.id)}
@@ -4037,6 +4673,288 @@ setExpandedBidderId(savedBidder.id);
                                 </button>
                               </div>
                             </div>
+
+
+                            
+                            <div className="border-t border-black/[0.06] bg-white px-4 py-4 sm:px-5">
+                              <div className="flex flex-col gap-3">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div>
+                                    <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/35">
+                                      Manual live controls
+                                    </div>
+                                    <div className="mt-1 text-sm font-bold text-black/65">
+                                      Promotion API для bidder #{bidder.id}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-full bg-black/[0.04] px-3 py-1.5 text-[11px] font-extrabold text-black/55">
+                                    {bidder.mode === "live" ? "live" : "dry-run"}
+                                  </div>
+                                </div>
+
+                                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                                  <button
+                                    type="button"
+                                    onClick={() => runPromotionAction(bidder, "services")}
+                                    disabled={promotionActionLoading !== null}
+                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/75 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {promotionActionLoading === "services"
+                                      ? "Загрузка..."
+                                      : "Services"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => runPromotionAction(bidder, "suggests")}
+                                    disabled={promotionActionLoading !== null}
+                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/75 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {promotionActionLoading === "suggests"
+                                      ? "Загрузка..."
+                                      : "Suggests"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => runPromotionAction(bidder, "forecast")}
+                                    disabled={promotionActionLoading !== null}
+                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/75 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {promotionActionLoading === "forecast"
+                                      ? "Загрузка..."
+                                      : "Forecast"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (bidder.mode !== "live") {
+                                        setPromotionActionError(
+                                          "Manual live apply доступен только для bidder-а в режиме live.",
+                                        );
+                                        return;
+                                      }
+                                      setLiveApplyConfirmation("");
+                                      setLiveApplyConfirmBidder(bidder);
+                                    }}
+                                    disabled={promotionActionLoading !== null || bidder.mode !== "live"}
+                                    className="rounded-xl bg-[#03bd48] px-3 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#02963a] disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {promotionActionLoading === "apply"
+                                      ? "Отправка..."
+                                      : "Live apply"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => runPromotionAction(bidder, "order-status")}
+                                    disabled={promotionActionLoading !== null}
+                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/75 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {promotionActionLoading === "order-status"
+                                      ? "Проверка..."
+                                      : "Order status"}
+                                  </button>
+                                </div>
+
+                                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                                  <div className="rounded-xl bg-black/[0.025] p-3">
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                      Promotion status
+                                    </div>
+                                    <div className="mt-1 text-sm font-extrabold text-black">
+                                      {formatPromotionStatus(bidder.lastPromotionStatus)}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-xl bg-black/[0.025] p-3">
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                      Order ID
+                                    </div>
+                                    <div className="mt-1 break-all text-xs font-extrabold text-black/75">
+                                      {bidder.lastPromotionOrderId || "—"}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-xl bg-black/[0.025] p-3">
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                      Цена
+                                    </div>
+                                    <div className="mt-1 text-sm font-extrabold text-black">
+                                      {formatCurrency(bidder.lastPromotionPrice)}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-xl bg-black/[0.025] p-3">
+                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                      Last apply
+                                    </div>
+                                    <div className="mt-1 text-xs font-extrabold text-black/75">
+                                      {formatDateTime(bidder.lastAppliedAt)}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {promotionActionError && (
+                                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-xs font-bold leading-5 text-red-700">
+                                    {promotionActionError}
+                                  </div>
+                                )}
+
+                                {promotionActionResult && (
+                                  <details className="rounded-xl border border-black/10 bg-black/[0.02] p-3">
+                                    <summary className="cursor-pointer text-xs font-extrabold text-black">
+                                      Ответ Promotion API
+                                    </summary>
+                                    <pre className="mt-3 max-h-[340px] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-white p-3 text-[11px] leading-5 text-black/75">
+                                      {promotionActionResult}
+                                    </pre>
+                                  </details>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="border-t border-black/[0.06] bg-black/[0.015] px-4 py-4 sm:px-5">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/35">
+                                    Operational control
+                                  </div>
+                                  <div className="mt-1 text-sm font-bold text-black/60">
+                                    Сводка состояния bidder и ручное управление runner
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => loadBidderOperational(bidder.id)}
+                                    disabled={operationalLoadingBidderId !== null}
+                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/35 hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {operationalLoadingBidderId === bidder.id
+                                      ? "Обновляем..."
+                                      : "Обновить состояние"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => runBidderNow(bidder.id)}
+                                    disabled={runNowBidderId !== null}
+                                    className="rounded-xl bg-black px-3 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#03bd48] disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {runNowBidderId === bidder.id
+                                      ? "Запуск..."
+                                      : "Run now"}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {(() => {
+                                const operational = getOperationalRecord(
+                                  bidderOperational,
+                                  bidder.id,
+                                );
+
+                                if (!operational) {
+                                  return (
+                                    <div className="mt-3 rounded-2xl border border-dashed border-black/15 bg-white px-4 py-4 text-sm font-semibold text-black/45">
+                                      Operational summary ещё не загружен.
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                    <div className="rounded-xl bg-white p-3">
+                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                        Live ready
+                                      </div>
+                                      <div className="mt-1 text-sm font-extrabold text-black">
+                                        {formatBooleanState(Boolean(operational.liveReady))}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-white p-3">
+                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                        Schedule valid
+                                      </div>
+                                      <div className="mt-1 text-sm font-extrabold text-black">
+                                        {formatBooleanState(
+                                          Boolean(operational.schedule?.valid),
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-white p-3">
+                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                        Allowed now
+                                      </div>
+                                      <div className="mt-1 text-sm font-extrabold text-black">
+                                        {formatBooleanState(
+                                          Boolean(operational.schedule?.allowedNow),
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-white p-3">
+                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                        Cooldown
+                                      </div>
+                                      <div className="mt-1 text-sm font-extrabold text-black">
+                                        {Boolean(operational.cooldown?.active)
+                                          ? "активен"
+                                          : "нет"}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-white p-3">
+                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                        Next schedule start
+                                      </div>
+                                      <div className="mt-1 text-xs font-extrabold text-black/75">
+                                        {formatDateTime(
+                                          operational.schedule?.nextStartAt ?? null,
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-white p-3">
+                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                        Cooldown until
+                                      </div>
+                                      <div className="mt-1 text-xs font-extrabold text-black/75">
+                                        {formatDateTime(
+                                          operational.cooldown?.until ?? null,
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-white p-3">
+                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                        Last order status check
+                                      </div>
+                                      <div className="mt-1 text-xs font-extrabold text-black/75">
+                                        {formatDateTime(
+                                          operational.promotion?.lastOrderStatusCheckedAt ??
+                                            null,
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-white p-3">
+                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
+                                        Next runner check
+                                      </div>
+                                      <div className="mt-1 text-xs font-extrabold text-black/75">
+                                        {formatDateTime(
+                                          operational.runner?.nextCheckAt ?? null,
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+
                             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.06] bg-black/[0.018] px-4 py-3 text-xs sm:px-5">
                               <span className="font-semibold text-black/45">
                                 Диапазон ставки: {formatMoney(bidder.minBid)}–
@@ -4129,6 +5047,25 @@ setExpandedBidderId(savedBidder.id);
                   )}
                 </section>
 
+                                <section className="rounded-3xl border border-black/[0.07] bg-black/[0.018] p-4 sm:p-5">
+                  <div className="flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-sm font-extrabold text-[#03bd48]">
+                      i
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-extrabold text-black">
+                        Manual live controls
+                      </h4>
+                      <p className="mt-1 text-sm leading-6 text-black/50">
+                        Ручные действия Promotion API доступны для каждого
+                        конкретного бидера внутри его карточки. Выберите нужный
+                        бидер и используйте кнопки services / suggests /
+                        forecast / apply / order status прямо в карточке.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
                 <section className="rounded-3xl border border-black/[0.07] bg-black/[0.018] p-4 sm:p-5">
                   <div className="flex gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-sm font-extrabold text-[#03bd48]">
@@ -4147,6 +5084,25 @@ setExpandedBidderId(savedBidder.id);
                     </div>
                   </div>
                 </section>
+
+                {liveApplyConfirmBidder && (
+                  <div className="fixed inset-0 z-[10002] overflow-y-auto bg-black/60 p-3 backdrop-blur-sm sm:p-6">
+                    <div className="mx-auto flex min-h-full w-full max-w-lg items-center">
+                      <section className="my-auto w-full overflow-hidden rounded-[30px] bg-white shadow-[0_28px_80px_rgba(0,0,0,0.3)]">
+                        <div className="bg-red-600 p-5 text-white sm:p-7">
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-white/70">Подтверждение боевого действия</div>
+                          <h3 className="mt-2 text-2xl font-extrabold tracking-[-0.04em]">Создать live Promotion order?</h3>
+                        </div>
+                        <div className="space-y-5 p-5 sm:p-7">
+                          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold leading-6 text-red-800">Это действие отправит заявку в Avito Promotion API. Оно может привести к реальным расходам в рекламном кабинете.</div>
+                          <div className="rounded-2xl bg-black/[0.03] p-4 text-sm"><div className="text-black/45">Bidder</div><div className="mt-1 font-extrabold text-black">{liveApplyConfirmBidder.title}</div><div className="mt-3 text-black/45">Avito Item ID</div><div className="mt-1 break-all font-extrabold text-black">{liveApplyConfirmBidder.avitoItemId || "—"}</div></div>
+                          <label className="block"><span className="mb-2 block text-xs font-bold text-black/55">Введите LIVE для подтверждения</span><input value={liveApplyConfirmation} onChange={(event) => setLiveApplyConfirmation(event.target.value.toUpperCase())} autoFocus className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-extrabold outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100" placeholder="LIVE" /></label>
+                          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => { setLiveApplyConfirmBidder(null); setLiveApplyConfirmation(""); }} disabled={promotionActionLoading !== null} className="rounded-xl px-4 py-3 text-sm font-extrabold text-black/55 transition hover:bg-black/[0.05]">Отмена</button><button type="button" onClick={() => void confirmLiveApply()} disabled={liveApplyConfirmation.trim() !== "LIVE" || promotionActionLoading !== null} className="rounded-xl bg-red-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">{promotionActionLoading === "apply" ? "Отправляем..." : "Подтвердить live apply"}</button></div>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                )}
 
                 {isAvitoConnectionOpen && (
                   <div className="fixed inset-0 z-[10001] overflow-y-auto bg-black/55 p-3 backdrop-blur-sm sm:p-6">
@@ -4462,12 +5418,12 @@ setExpandedBidderId(savedBidder.id);
                                     type="number"
                                     min="1"
                                     value={bidderDraft.targetFrom}
-                                    onChange={(e) =>
-                                      setBidderDraft({
-                                        ...bidderDraft,
-                                        targetFrom: Number(e.target.value) || 1,
-                                      })
-                                    }
+onChange={(e) =>
+  setBidderDraft((current) => ({
+    ...current,
+    targetFrom: e.target.value,
+  }))
+}
                                     className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
                                   />
                                 </label>
@@ -4479,12 +5435,12 @@ setExpandedBidderId(savedBidder.id);
                                     type="number"
                                     min="1"
                                     value={bidderDraft.targetTo}
-                                    onChange={(e) =>
-                                      setBidderDraft({
-                                        ...bidderDraft,
-                                        targetTo: Number(e.target.value) || 1,
-                                      })
-                                    }
+onChange={(e) =>
+  setBidderDraft((current) => ({
+    ...current,
+    targetTo: e.target.value,
+  }))
+}
                                     className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
                                   />
                                 </label>
@@ -4516,12 +5472,12 @@ setExpandedBidderId(savedBidder.id);
                                     type="number"
                                     min="0"
                                     value={bidderDraft.minBid}
-                                    onChange={(e) =>
-                                      setBidderDraft({
-                                        ...bidderDraft,
-                                        minBid: Number(e.target.value) || 0,
-                                      })
-                                    }
+onChange={(e) =>
+  setBidderDraft((current) => ({
+    ...current,
+    minBid: e.target.value,
+  }))
+}
                                     className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
                                   />
                                 </label>
@@ -4533,12 +5489,12 @@ setExpandedBidderId(savedBidder.id);
                                     type="number"
                                     min="0"
                                     value={bidderDraft.maxBid}
-                                    onChange={(e) =>
-                                      setBidderDraft({
-                                        ...bidderDraft,
-                                        maxBid: Number(e.target.value) || 0,
-                                      })
-                                    }
+onChange={(e) =>
+  setBidderDraft((current) => ({
+    ...current,
+    maxBid: e.target.value,
+  }))
+}
                                     className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
                                   />
                                 </label>
@@ -4547,13 +5503,13 @@ setExpandedBidderId(savedBidder.id);
                                     Проверка каждые, мин.
                                   </span>
                                   <select
-                                    value={bidderDraft.interval}
-                                    onChange={(e) =>
-                                      setBidderDraft({
-                                        ...bidderDraft,
-                                        interval: Number(e.target.value),
-                                      })
-                                    }
+                                    value={bidderDraft.checkInterval}
+onChange={(e) =>
+  setBidderDraft((current) => ({
+    ...current,
+    checkInterval: e.target.value,
+  }))
+}
                                     className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
                                   >
                                     <option value="5">5 минут</option>
@@ -4661,8 +5617,8 @@ setExpandedBidderId(savedBidder.id);
                                 <div className="flex justify-between gap-4 border-b border-black/7 pb-3 text-sm">
                                   <span className="text-black/45">Ставка</span>
                                   <span className="font-extrabold text-black">
-                                    {formatMoney(bidderDraft.minBid)}–
-                                    {formatMoney(bidderDraft.maxBid)} ₽
+                                    {formatMoney(Number.parseInt(bidderDraft.minBid, 10) || 0)}–
+{formatMoney(Number.parseInt(bidderDraft.maxBid, 10) || 0)} ₽
                                   </span>
                                 </div>
                                 <div className="flex justify-between gap-4 text-sm">

@@ -7,6 +7,14 @@ import { getAvitoItemByIdForUser } from "@/lib/avito-api";
 import { calculateBidderDecision } from "@/lib/avito-bidder-decision";
 import { getBidderPosition } from "@/lib/avito-bidder-position";
 import { applyBid } from "@/lib/avito-bid-apply";
+import {
+  extractOrderMeta,
+  getPromotionOrderStatus,
+} from "@/lib/avito-promotion-api";
+import {
+  getNextScheduleStart,
+  isTimeWithinBidderSchedule,
+} from "@/lib/avito-bidder-schedule";
 
 type RunnerResult = {
   bidderId: number;
@@ -25,6 +33,16 @@ function getNextCheckAt(intervalMinutes: number) {
 function isBidderDue(nextCheckAt: Date | null) {
   if (!nextCheckAt) return true;
   return nextCheckAt.getTime() <= Date.now();
+}
+
+function getTodayDateKey() {
+  const date = new Date();
+  const offset = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function isCooldownActive(value: Date | null) {
+  return Boolean(value && value.getTime() > Date.now());
 }
 
 export async function runSingleBidder(params: {
@@ -76,6 +94,45 @@ export async function runSingleBidder(params: {
     };
   }
 
+    const now = new Date();
+
+  if (!isTimeWithinBidderSchedule(bidder.schedule, now)) {
+    const nextCheckAt =
+      getNextScheduleStart(bidder.schedule, now) ??
+      getNextCheckAt(bidder.checkInterval);
+
+    const updatedBidder = await prisma.avitoBidder.update({
+      where: { id: bidder.id },
+      data: {
+        nextCheckAt,
+        lastError: null,
+      },
+    });
+
+    await createBidderEvent({
+      bidderId: bidder.id,
+      type: "runner_schedule_skip",
+      message: `Проверка пропущена: текущее время вне рабочего окна (${bidder.schedule}). Следующая попытка: ${nextCheckAt.toLocaleString("ru-RU")}.`,
+    });
+
+    return {
+      bidderId: updatedBidder.id,
+      userId: updatedBidder.userId,
+      title: updatedBidder.title,
+      mode: updatedBidder.mode,
+      status: "skipped",
+      message: `Вне рабочего расписания: ${bidder.schedule}`,
+      nextCheckAt: updatedBidder.nextCheckAt?.toISOString() ?? null,
+    };
+  }
+
+  const todayKey = getTodayDateKey();
+  let effectiveSpentToday = bidder.spentToday;
+
+  if (bidder.spentTodayDate !== todayKey) {
+    effectiveSpentToday = 0;
+  }
+
   if (!bidder.avitoItemId) {
     const nextCheckAt = getNextCheckAt(bidder.checkInterval);
     const errorMessage = "У бидера нет привязанного объявления Авито.";
@@ -83,6 +140,8 @@ export async function runSingleBidder(params: {
     const updatedBidder = await prisma.avitoBidder.update({
       where: { id: bidder.id },
       data: {
+        spentToday: effectiveSpentToday,
+        spentTodayDate: todayKey,
         lastCheckedAt: new Date(),
         lastError: errorMessage,
         nextCheckAt,
@@ -110,6 +169,42 @@ export async function runSingleBidder(params: {
   try {
     const item = await getAvitoItemByIdForUser(bidder.userId, bidder.avitoItemId);
 
+    if (bidder.mode === "live" && bidder.lastPromotionOrderId) {
+      try {
+        const statusPayload = await getPromotionOrderStatus({
+          userId: bidder.userId,
+          orderId: bidder.lastPromotionOrderId,
+        });
+
+        const statusMeta = extractOrderMeta(statusPayload);
+
+        await prisma.avitoBidder.update({
+          where: { id: bidder.id },
+          data: {
+            lastPromotionStatus:
+              statusMeta.status ?? bidder.lastPromotionStatus ?? "status_checked",
+            lastPromotionPayload: JSON.stringify(statusPayload),
+            lastOrderStatusCheckedAt: new Date(),
+          },
+        });
+
+        await createBidderEvent({
+          bidderId: bidder.id,
+          type: "runner_order_status_checked",
+          message: `Автоматическая проверка статуса order: ${statusMeta.status ?? "unknown"}.`,
+        });
+      } catch (error) {
+        await createBidderEvent({
+          bidderId: bidder.id,
+          type: "runner_order_status_check_error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Не удалось автоматически проверить статус order.",
+        });
+      }
+    }
+
     const positionResult = await getBidderPosition({
       bidderId: bidder.id,
       query: bidder.query,
@@ -127,7 +222,7 @@ export async function runSingleBidder(params: {
       targetTo: bidder.targetTo,
       smartEconomyEnabled: bidder.smartEconomyEnabled,
       dailySpendLimit: bidder.dailySpendLimit,
-      spentToday: bidder.spentToday,
+      spentToday: effectiveSpentToday,
     });
 
     await createBidderEvent({
@@ -151,10 +246,13 @@ export async function runSingleBidder(params: {
           title: item.title || bidder.title,
           avitoItemUrl: item.url || bidder.avitoItemUrl,
           currentPosition: positionResult.position,
+          spentToday: effectiveSpentToday,
+          spentTodayDate: todayKey,
           lastCheckedAt: new Date(),
           lastError: decision.reason,
           nextCheckAt,
           status: "attention",
+          lastPromotionStatus: "daily_limit_reached",
         },
       });
 
@@ -175,6 +273,8 @@ export async function runSingleBidder(params: {
       };
     }
 
+    const cooldownActive = isCooldownActive(bidder.liveApplyCooldownUntil);
+
     const applyResult = await applyBid({
       mode: bidder.mode,
       bidderId: bidder.id,
@@ -182,6 +282,8 @@ export async function runSingleBidder(params: {
       avitoItemId: bidder.avitoItemId,
       currentBid: bidder.currentBid,
       recommendedBid: decision.recommendedBid,
+      promotionDurationDays: bidder.promotionDurationDays,
+      cooldownActive,
     });
 
     if (!applyResult.ok) {
@@ -193,10 +295,13 @@ export async function runSingleBidder(params: {
           title: item.title || bidder.title,
           avitoItemUrl: item.url || bidder.avitoItemUrl,
           currentPosition: positionResult.position,
+          spentToday: effectiveSpentToday,
+          spentTodayDate: todayKey,
           lastCheckedAt: new Date(),
           lastError: applyResult.message,
           nextCheckAt,
           status: "attention",
+          lastPromotionStatus: "apply_failed",
         },
       });
 
@@ -219,10 +324,14 @@ export async function runSingleBidder(params: {
 
     const bidIncreased = applyResult.appliedBid > bidder.currentBid;
     const estimatedSpentToday = bidIncreased
-      ? bidder.spentToday + (applyResult.appliedBid - bidder.currentBid)
-      : bidder.spentToday;
+      ? effectiveSpentToday + (applyResult.appliedBid - bidder.currentBid)
+      : effectiveSpentToday;
 
     const nextCheckAt = getNextCheckAt(bidder.checkInterval);
+    const cooldownUntil =
+      applyResult.status === "applied"
+        ? new Date(Date.now() + 15 * 60 * 1000)
+        : bidder.liveApplyCooldownUntil;
 
     const updatedBidder = await prisma.avitoBidder.update({
       where: { id: bidder.id },
@@ -232,10 +341,29 @@ export async function runSingleBidder(params: {
         currentPosition: positionResult.position,
         currentBid: applyResult.appliedBid,
         spentToday: estimatedSpentToday,
+        spentTodayDate: todayKey,
         lastCheckedAt: new Date(),
         lastError: null,
         nextCheckAt,
         status: "active",
+        lastPromotionPayload: applyResult.lastPromotionPayload ?? bidder.lastPromotionPayload,
+        lastForecastPayload: applyResult.lastForecastPayload ?? bidder.lastForecastPayload,
+        lastSuggestPayload: applyResult.lastSuggestPayload ?? bidder.lastSuggestPayload,
+        lastPromotionOrderId: applyResult.lastPromotionOrderId ?? bidder.lastPromotionOrderId,
+        lastPromotionRequestId:
+          applyResult.lastPromotionRequestId ?? bidder.lastPromotionRequestId,
+        lastPromotionStatus: applyResult.lastPromotionStatus ?? bidder.lastPromotionStatus,
+        lastPromotionPrice:
+          applyResult.lastPromotionPrice === undefined
+            ? bidder.lastPromotionPrice
+            : applyResult.lastPromotionPrice,
+        lastPromotionOldPrice:
+          applyResult.lastPromotionOldPrice === undefined
+            ? bidder.lastPromotionOldPrice
+            : applyResult.lastPromotionOldPrice,
+        lastAppliedAt:
+          applyResult.status === "applied" ? new Date() : bidder.lastAppliedAt,
+        liveApplyCooldownUntil: cooldownUntil,
       },
     });
 
@@ -249,6 +377,12 @@ export async function runSingleBidder(params: {
       await createBidderEvent({
         bidderId: bidder.id,
         type: "runner_bid_apply_pending_live",
+        message: applyResult.message,
+      });
+    } else if (applyResult.status === "cooldown_active") {
+      await createBidderEvent({
+        bidderId: bidder.id,
+        type: "runner_live_apply_cooldown",
         message: applyResult.message,
       });
     } else if (applyResult.status === "applied") {
@@ -274,7 +408,7 @@ export async function runSingleBidder(params: {
       message:
         updatedBidder.mode === "dry_run"
           ? `Dry-run обработан: позиция ${positionResult.position ?? "нет данных"}, решение ${decision.action}, внутренняя ставка ${applyResult.appliedBid} ₽.`
-          : `Live-режим обработан: позиция ${positionResult.position ?? "нет данных"}, решение ${decision.action}, подготовленная ставка ${applyResult.appliedBid} ₽.`,
+          : `Live-режим обработан: позиция ${positionResult.position ?? "нет данных"}, решение ${decision.action}, ставка ${applyResult.appliedBid} ₽, promotion status: ${updatedBidder.lastPromotionStatus ?? "unknown"}.`,
       nextCheckAt: updatedBidder.nextCheckAt?.toISOString() ?? null,
     };
   } catch (error) {
@@ -288,10 +422,13 @@ export async function runSingleBidder(params: {
     const updatedBidder = await prisma.avitoBidder.update({
       where: { id: bidder.id },
       data: {
+        spentToday: effectiveSpentToday,
+        spentTodayDate: todayKey,
         lastCheckedAt: new Date(),
         lastError: message,
         nextCheckAt,
         status: "attention",
+        lastPromotionStatus: "runner_exception",
       },
     });
 
