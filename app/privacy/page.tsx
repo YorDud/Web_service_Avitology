@@ -48,8 +48,7 @@ export default function PrivacyPage() {
                     <strong>ОГРНИП:</strong> 325508100326729
                   </li>
                   <li>
-                    <strong>Адрес:</strong> Московская область, Клинский район,
-                    деревня Решоткино, кв. 43
+                    <strong>Адрес:</strong> Московская область, г. Клин, Волоколамское шоссе, 44/28, офис 5
                   </li>
                   <li>
                     <strong>Email:</strong> avitology.help@yandex.ru
