@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import {
-  getPromotionOrderStatus,
-  extractOrderMeta,
+  getCpxBidsForItem,
+  pennyToRubles,
 } from "@/lib/avito-promotion-api";
 import { createBidderEvent } from "@/lib/avito-bidder-events";
 
@@ -56,6 +56,18 @@ async function getBidderId(context: RouteContext) {
   return Number.isInteger(bidderId) && bidderId > 0 ? bidderId : null;
 }
 
+function toNumericItemId(value: string | null) {
+  if (!value) return null;
+
+  const itemId = Number(value);
+
+  return Number.isInteger(itemId) && itemId > 0 ? itemId : null;
+}
+
+/**
+ * Обратная совместимость со старым URL order-status.
+ * CPX не создаёт orders; endpoint подтверждает текущую ставку через getBids.
+ */
 export async function GET(_: Request, context: RouteContext) {
   const authorization = await getAuthorizedUser();
 
@@ -80,49 +92,94 @@ export async function GET(_: Request, context: RouteContext) {
     select: {
       id: true,
       title: true,
-      lastPromotionOrderId: true,
+      avitoItemId: true,
+      currentBid: true,
     },
   });
 
   if (!bidder) {
-    return NextResponse.json({ error: "Бидер не найден" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Бидер не найден" },
+      { status: 404 },
+    );
   }
 
-  if (!bidder.lastPromotionOrderId) {
+  const itemId = toNumericItemId(bidder.avitoItemId);
+
+  if (!itemId) {
     return NextResponse.json(
-      { error: "У бидера нет сохранённого Promotion order ID." },
+      { error: "Для CPX нужен числовой avitoItemId." },
       { status: 400 },
     );
   }
 
   try {
-    const result = await getPromotionOrderStatus({
+    const cpx = await getCpxBidsForItem({
       userId: authorization.user.id,
-      orderId: bidder.lastPromotionOrderId,
+      itemId,
     });
 
-    const meta = extractOrderMeta(result);
+    const currentBidRubles = pennyToRubles(cpx.manual.bidPenny);
+    const isEqualToSavedBid =
+      currentBidRubles !== null &&
+      Math.round(currentBidRubles) === bidder.currentBid;
+
+    const status = cpx.manual.bidPenny === null
+      ? "cpx_bid_not_set"
+      : isEqualToSavedBid
+        ? "cpx_bid_confirmed"
+        : "cpx_bid_differs_from_helpsell";
 
     await prisma.avitoBidder.update({
       where: { id: bidder.id },
       data: {
-        lastPromotionStatus: meta.status ?? "status_checked",
-        lastPromotionPayload: JSON.stringify(result),
+        currentBid:
+          currentBidRubles === null
+            ? bidder.currentBid
+            : Math.round(currentBidRubles),
+        lastPromotionStatus: status,
+        lastPromotionPayload: JSON.stringify(cpx.raw),
+        lastOrderStatusCheckedAt: new Date(),
+        lastError: null,
       },
     });
 
     await createBidderEvent({
       bidderId: bidder.id,
-      type: "manual_order_status_checked",
-      message: `Статус Promotion order проверен: ${meta.status ?? "unknown"}.`,
+      type: "manual_cpx_status_checked",
+      message:
+        cpx.manual.bidPenny === null
+          ? "CPX Promo: текущая ручная ставка для объявления не установлена."
+          : `CPX Promo: текущая ставка подтверждена Avito — ${currentBidRubles} ₽.`,
     });
 
     return NextResponse.json({
       bidderId: bidder.id,
       title: bidder.title,
-      orderId: bidder.lastPromotionOrderId,
-      meta,
-      raw: result,
+      itemId,
+
+      strategy: "cpx_manual",
+      status,
+
+      currentBid: {
+        penny: cpx.manual.bidPenny,
+        rubles: currentBidRubles,
+      },
+
+      recommendedBid: {
+        penny: cpx.manual.recBidPenny,
+        rubles: pennyToRubles(cpx.manual.recBidPenny),
+      },
+
+      limit: {
+        penny: cpx.manual.limitPenny,
+        rubles: pennyToRubles(cpx.manual.limitPenny),
+      },
+
+      actionTypeId: cpx.actionTypeId,
+      selectedType: cpx.selectedType,
+
+      raw: cpx.raw,
     });
   } catch (error) {
     return NextResponse.json(
@@ -130,7 +187,7 @@ export async function GET(_: Request, context: RouteContext) {
         error:
           error instanceof Error
             ? error.message
-            : "Не удалось проверить статус заявки Promotion API.",
+            : "Не удалось проверить текущую CPX-ставку в Avito API.",
       },
       { status: 500 },
     );

@@ -6,6 +6,10 @@ import {
   isTimeWithinBidderSchedule,
   parseBidderSchedule,
 } from "@/lib/avito-bidder-schedule";
+import {
+  getCpxBidsForItem,
+  pennyToRubles,
+} from "@/lib/avito-promotion-api";
 
 type RouteContext = {
   params: Promise<{
@@ -56,6 +60,14 @@ async function getBidderId(context: RouteContext) {
   return Number.isInteger(bidderId) && bidderId > 0 ? bidderId : null;
 }
 
+function toNumericItemId(value: string | null) {
+  if (!value) return null;
+
+  const itemId = Number(value);
+
+  return Number.isInteger(itemId) && itemId > 0 ? itemId : null;
+}
+
 export async function GET(_: Request, context: RouteContext) {
   const authorization = await getAuthorizedUser();
 
@@ -80,27 +92,89 @@ export async function GET(_: Request, context: RouteContext) {
   });
 
   if (!bidder) {
-    return NextResponse.json({ error: "Бидер не найден" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Бидер не найден" },
+      { status: 404 },
+    );
   }
 
+  const now = new Date();
   const parsedSchedule = parseBidderSchedule(bidder.schedule);
   const scheduleValid = Boolean(parsedSchedule);
-  const allowedNow = isTimeWithinBidderSchedule(bidder.schedule, new Date());
-  const nextScheduleStart = getNextScheduleStart(bidder.schedule, new Date());
+  const allowedNow = isTimeWithinBidderSchedule(bidder.schedule, now);
+  const nextScheduleStart = getNextScheduleStart(bidder.schedule, now);
 
   const cooldownActive = Boolean(
     bidder.liveApplyCooldownUntil &&
       bidder.liveApplyCooldownUntil.getTime() > Date.now(),
   );
 
-  const hasPromotionOrder = Boolean(bidder.lastPromotionOrderId);
+  const itemId = toNumericItemId(bidder.avitoItemId);
+
   const liveReady = Boolean(
     bidder.mode === "live" &&
-      bidder.avitoItemId &&
       bidder.status === "active" &&
+      itemId &&
       allowedNow &&
       !cooldownActive,
   );
+
+  let cpx:
+    | {
+        ok: true;
+        actionTypeId: number | null;
+        selectedType: string | null;
+        currentBidPenny: number | null;
+        currentBidRubles: number | null;
+        recommendedBidPenny: number | null;
+        recommendedBidRubles: number | null;
+        minBidPenny: number | null;
+        minBidRubles: number | null;
+        maxBidPenny: number | null;
+        maxBidRubles: number | null;
+        limitPenny: number | null;
+        limitRubles: number | null;
+        availableBidsCount: number;
+      }
+    | {
+        ok: false;
+        error: string;
+      }
+    | null = null;
+
+  if (itemId) {
+    try {
+      const cpxResult = await getCpxBidsForItem({
+        userId: bidder.userId,
+        itemId,
+      });
+
+      cpx = {
+        ok: true,
+        actionTypeId: cpxResult.actionTypeId,
+        selectedType: cpxResult.selectedType,
+        currentBidPenny: cpxResult.manual.bidPenny,
+        currentBidRubles: pennyToRubles(cpxResult.manual.bidPenny),
+        recommendedBidPenny: cpxResult.manual.recBidPenny,
+        recommendedBidRubles: pennyToRubles(cpxResult.manual.recBidPenny),
+        minBidPenny: cpxResult.manual.minBidPenny,
+        minBidRubles: pennyToRubles(cpxResult.manual.minBidPenny),
+        maxBidPenny: cpxResult.manual.maxBidPenny,
+        maxBidRubles: pennyToRubles(cpxResult.manual.maxBidPenny),
+        limitPenny: cpxResult.manual.limitPenny,
+        limitRubles: pennyToRubles(cpxResult.manual.limitPenny),
+        availableBidsCount: cpxResult.manual.bids.length,
+      };
+    } catch (error) {
+      cpx = {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Не удалось получить CPX-данные из Avito API.",
+      };
+    }
+  }
 
   return NextResponse.json({
     bidderId: bidder.id,
@@ -108,6 +182,7 @@ export async function GET(_: Request, context: RouteContext) {
     mode: bidder.mode,
     status: bidder.status,
     avitoItemId: bidder.avitoItemId,
+
     schedule: {
       raw: bidder.schedule,
       valid: scheduleValid,
@@ -115,23 +190,31 @@ export async function GET(_: Request, context: RouteContext) {
       allowedNow,
       nextStartAt: nextScheduleStart?.toISOString() ?? null,
     },
+
     cooldown: {
       active: cooldownActive,
       until: bidder.liveApplyCooldownUntil?.toISOString() ?? null,
     },
+
     promotion: {
-      strategy: bidder.promotionStrategy,
-      durationDays: bidder.promotionDurationDays,
-      hasOrder: hasPromotionOrder,
-      orderId: bidder.lastPromotionOrderId,
-      requestId: bidder.lastPromotionRequestId,
+      strategy: "cpx_manual",
       status: bidder.lastPromotionStatus,
-      price: bidder.lastPromotionPrice,
-      oldPrice: bidder.lastPromotionOldPrice,
       lastAppliedAt: bidder.lastAppliedAt?.toISOString() ?? null,
-      lastOrderStatusCheckedAt:
-        bidder.lastOrderStatusCheckedAt?.toISOString() ?? null,
+
+      // Оставлено для совместимости текущего dashboard UI.
+      // В CPX нет order ID.
+      hasOrder: false,
+      orderId: null,
+      requestId: bidder.lastPromotionRequestId,
+
+      savedBidRubles: bidder.currentBid,
+      bidderMinBidRubles: bidder.minBid,
+      bidderMaxBidRubles: bidder.maxBid,
+      dailySpendLimitRubles: bidder.dailySpendLimit,
     },
+
+    cpx,
+
     runner: {
       nextCheckAt: bidder.nextCheckAt?.toISOString() ?? null,
       lastCheckedAt: bidder.lastCheckedAt?.toISOString() ?? null,
@@ -141,6 +224,22 @@ export async function GET(_: Request, context: RouteContext) {
       spentToday: bidder.spentToday,
       spentTodayDate: bidder.spentTodayDate,
     },
+
     liveReady,
+
+    warnings: [
+      bidder.mode === "live"
+        ? "Автоматический live-worker не применяет ставку при mock-позиции. Ручное применение CPX после подтверждения LIVE доступно."
+        : null,
+      !itemId
+        ? "У bidder-а нет корректного числового Avito item ID."
+        : null,
+      !scheduleValid
+        ? "Расписание bidder-а не удалось разобрать."
+        : null,
+      cpx && !cpx.ok
+        ? `CPX недоступен: ${cpx.error}`
+        : null,
+    ].filter(Boolean),
   });
 }

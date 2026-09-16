@@ -77,7 +77,13 @@ type BidderApi = {
   targetFrom: number;
   targetTo: number;
   currentPosition: number | null;
-  currentBid: number;
+positionSource: string | null;
+positionCheckedAt: string | null;
+positionSearchUrl: string | null;
+positionPage: number | null;
+lastPositionError: string | null;
+
+currentBid: number;
   minBid: number;
   maxBid: number;
   bidStep: number;
@@ -198,6 +204,30 @@ function formatCurrency(value: number | null | undefined) {
   return `${new Intl.NumberFormat("ru-RU").format(value)} ₽`;
 }
 
+function formatBid(value: number | null | undefined) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "—";
+  }
+
+  return `${new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value)} ₽`;
+}
+
+// ========== НАЧАЛО УСЛУГИ «БИД-МЕНЕДЖЕР АВИТО»: ФОРМАТИРОВАНИЕ ==========
+function formatBidderPosition(bidder: Pick<BidderApi, "currentPosition" | "positionSource">) {
+  if (bidder.positionSource === "avito_serp_first_page_not_found") return "> 50";
+  return typeof bidder.currentPosition === "number" ? String(bidder.currentPosition) : "—";
+}
+
+function getBidderStatusView(status: BidderStatus) {
+  if (status === "active") return { label: "Работает", className: "border-[#03bd48]/30 bg-[#03bd48]/10 text-[#027a30]", dot: "bg-[#03bd48]" };
+  if (status === "paused") return { label: "На паузе", className: "border-black/10 bg-black/[0.045] text-black/55", dot: "bg-black/35" };
+  return { label: "Требует внимания", className: "border-amber-200 bg-amber-50 text-amber-700", dot: "bg-amber-500" };
+}
+// ========== КОНЕЦ УСЛУГИ «БИД-МЕНЕДЖЕР АВИТО»: ФОРМАТИРОВАНИЕ ==========
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
 
@@ -218,12 +248,20 @@ function formatPromotionStatus(status: string | null | undefined) {
   if (!status) return "нет данных";
 
   const map: Record<string, string> = {
+    cpx_not_checked: "CPX ещё не проверен",
+    cpx_bid_not_set: "ставка CPX не установлена",
+    cpx_bid_confirmed: "ставка подтверждена Avito",
+    cpx_bid_differs_from_helpsell: "ставка Avito отличается от HelpSell",
+    cpx_manual_checked: "CPX проверен",
+    applied_confirmed: "ставка применена и подтверждена",
+    already_applied: "ставка уже установлена",
     dry_run: "dry-run",
-    created: "создана заявка",
-    apply_failed: "ошибка применения",
-    no_budget_from_suggests: "не получен бюджет",
+    cooldown_active: "ожидание cooldown",
+    blocked_mock_position: "автоизменение заблокировано: mock-позиция",
+    apply_failed: "ошибка применения CPX",
     daily_limit_reached: "дневной лимит достигнут",
     runner_exception: "ошибка runner",
+    paused_by_bulk_operation: "поставлен на паузу массово",
   };
 
   return map[status] ?? status;
@@ -296,16 +334,16 @@ const initialBidderDraft: BidderDraft = {
   avitoItemUrl: null,
   targetFrom: "3",
   targetTo: "5",
-  minBid: "150",
-  maxBid: "400",
-  bidStep: "10",
+  minBid: "2",
+  maxBid: "30",
+  bidStep: "1",
   dailySpendLimit: "0",
   smartEconomyEnabled: false,
   checkInterval: "10",
   schedule: "Ежедневно, 09:00–22:00",
   mode: "dry_run",
-  promotionStrategy: "bbip",
-  promotionDurationDays: "7",
+  promotionStrategy: "cpx_manual",
+  promotionDurationDays: "0",
 };
 
 const emptyBidderDraft: BidderDraft = {
@@ -318,16 +356,16 @@ const emptyBidderDraft: BidderDraft = {
   avitoItemUrl: null,
   targetFrom: "1",
   targetTo: "3",
-  minBid: "50",
-  maxBid: "500",
-  bidStep: "10",
+  minBid: "2",
+maxBid: "30",
+bidStep: "1",
   dailySpendLimit: "0",
   smartEconomyEnabled: false,
   checkInterval: "10",
   schedule: "Ежедневно, 09:00–22:00",
   mode: "dry_run",
-  promotionStrategy: "bbip",
-  promotionDurationDays: "7",
+  promotionStrategy: "cpx_manual",
+promotionDurationDays: "0",
 };
 
 function getSubscriptionStyle(level: string) {
@@ -923,7 +961,14 @@ export default function DashboardClientPage({
   const [avitoItemsLoading, setAvitoItemsLoading] = useState(false);
   const [avitoItemsError, setAvitoItemsError] = useState("");
 
+  // ========== НАЧАЛО УСЛУГИ «БИД-МЕНЕДЖЕР АВИТО»: СОСТОЯНИЯ UI ==========
   const [expandedBidderId, setExpandedBidderId] = useState<number | null>(null);
+  const [expandedAdvancedBidderId, setExpandedAdvancedBidderId] = useState<number | null>(null);
+  const [isFullBidderHistory, setIsFullBidderHistory] = useState<Record<number, boolean>>({});
+  const [isBidderHealthOpen, setIsBidderHealthOpen] = useState(false);
+  const [isWorkerMonitorOpen, setIsWorkerMonitorOpen] = useState(false);
+  const [isBidManagerGuideOpen, setIsBidManagerGuideOpen] = useState(false);
+  // ========== КОНЕЦ УСЛУГИ «БИД-МЕНЕДЖЕР АВИТО»: СОСТОЯНИЯ UI ==========
 const [bidderEvents, setBidderEvents] = useState<Record<number, BidderEvent[]>>(
   {},
 );
@@ -1578,8 +1623,8 @@ async function toggleBidderEvents(bidderId: number) {
   checkInterval: String(bidder.checkInterval),
   schedule: bidder.schedule,
   mode: bidder.mode,
-  promotionStrategy: bidder.promotionStrategy || "bbip",
-  promotionDurationDays: String(bidder.promotionDurationDays || 7),
+  promotionStrategy: bidder.promotionStrategy || "cpx_manual",
+promotionDurationDays: "0",
 });
     setBidderWizardStep(1);
     setIsBidderWizardOpen(true);
@@ -1816,9 +1861,17 @@ async function toggleBidderEvents(bidderId: number) {
         return;
       }
 
-      showBidderMessage(data?.result?.message || "Bidder выполнен вручную.");
-      await loadBidderOperational(bidderId);
-      await loadBidderEvents(bidderId);
+      if (data?.bidder) {
+  setBidders((current) =>
+    current.map((item) =>
+      item.id === bidderId ? toBidder(data.bidder) : item,
+    ),
+  );
+}
+
+showBidderMessage(data?.result?.message || "Bidder выполнен вручную.");
+await loadBidderOperational(bidderId);
+await loadBidderEvents(bidderId);
     } catch (error) {
       console.error(error);
       setPromotionActionError("Ошибка сети. Не удалось запустить bidder вручную.");
@@ -1988,24 +2041,21 @@ async function toggleBidderEvents(bidderId: number) {
     const payload = {
   title: bidderDraft.title.trim(),
   groupName: bidderDraft.groupName.trim() || null,
-  city: bidderDraft.city.trim(),
-  query: bidderDraft.query.trim(),
   searchUrl: bidderDraft.searchUrl.trim() || null,
   avitoItemId: bidderDraft.avitoItemId,
   avitoItemUrl: bidderDraft.avitoItemUrl,
   targetFrom: Number.parseInt(bidderDraft.targetFrom, 10) || 1,
   targetTo: Number.parseInt(bidderDraft.targetTo, 10) || 1,
-  minBid: Number.parseInt(bidderDraft.minBid, 10) || 0,
-  maxBid: Number.parseInt(bidderDraft.maxBid, 10) || 0,
-  bidStep: Number.parseInt(bidderDraft.bidStep, 10) || 10,
-  dailySpendLimit: Number.parseInt(bidderDraft.dailySpendLimit, 10) || 0,
+  minBid: Math.max(0, Math.round(Number(bidderDraft.minBid) || 0)),
+  maxBid: Math.max(0, Math.round(Number(bidderDraft.maxBid) || 0)),
+  bidStep: Math.max(1, Math.round(Number(bidderDraft.bidStep) || 1)),
+  dailySpendLimit: Math.max(0, Math.round(Number(bidderDraft.dailySpendLimit) || 0)),
   smartEconomyEnabled: bidderDraft.smartEconomyEnabled,
   checkInterval: Number.parseInt(bidderDraft.checkInterval, 10) || 10,
   schedule: bidderDraft.schedule.trim(),
   mode: bidderDraft.mode,
-  promotionStrategy: bidderDraft.promotionStrategy.trim() || "bbip",
-  promotionDurationDays:
-    Number.parseInt(bidderDraft.promotionDurationDays, 10) || 7,
+  promotionStrategy: "cpx_manual",
+promotionDurationDays: 0,
 };
 
     setBidderSaving(true);
@@ -4110,1000 +4160,59 @@ setExpandedBidderId(savedBidder.id);
               </div>
             )}
 
+            {/* ========== НАЧАЛО УСЛУГИ «БИД-МЕНЕДЖЕР АВИТО» ========== */}
             {activeSection === "bid-manager" && hasAccess && (
-              <div className="space-y-6">
-                <section className="relative overflow-hidden rounded-[32px] bg-[#101010] p-4 text-white shadow-[0_24px_65px_rgba(16,24,40,0.22)] sm:p-6 md:p-8">
+              <div className="bid-manager-buttons space-y-6 [&_button]:transition-all [&_button]:duration-300 [&_button]:ease-out [&_button:hover:not(:disabled)]:-translate-y-0.5 [&_button:hover:not(:disabled)]:shadow-[0_10px_20px_rgba(16,24,40,0.12)] [&_button:active:not(:disabled)]:translate-y-0 [&_button:focus-visible]:outline-none [&_button:focus-visible]:ring-4 [&_button:focus-visible]:ring-[#03bd48]/20">
+                <section className="relative overflow-hidden rounded-[32px] bg-[#101010] p-5 text-white shadow-[0_24px_65px_rgba(16,24,40,0.22)] sm:p-7 md:p-8">
                   <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#03bd48]/20 blur-3xl" />
-                  <div className="pointer-events-none absolute bottom-0 left-1/4 h-48 w-48 rounded-full bg-white/[0.04] blur-3xl" />
                   <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/75">
-                        <span className="h-2 w-2 rounded-full bg-[#03bd48] shadow-[0_0_0_5px_rgba(3,189,72,0.14)]" />
-                        Инструменты HelpSell
-                      </div>
-                      <h2 className="text-[30px] font-extrabold leading-[1.03] tracking-[-0.055em] sm:text-4xl md:text-5xl">
-                        Бид-менеджер
-                        <span className="text-[#03bd48]"> Авито</span>
-                      </h2>
-                      <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62 md:text-[15px]">
-                        Подключайте кабинет Авито, выбирайте реальные объявления
-                        и сохраняйте несколько независимых стратегий продвижения
-                        — настройки останутся в вашем кабинете.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={openBidderWizard}
-                      className="btn-primary w-full shrink-0 sm:w-auto"
-                    >
-                      <span className="text-lg leading-none">+</span>
-                      Создать бидер
-                    </button>
+                    <div className="min-w-0"><div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-white/75"><span className="h-2 w-2 rounded-full bg-[#03bd48]"/>Автоматизация продвижения</div><h2 className="text-3xl font-extrabold tracking-[-.055em] sm:text-4xl md:text-5xl">Бид-менеджер <span className="text-[#03bd48]">Авито</span></h2><p className="mt-4 max-w-2xl text-sm leading-7 text-white/62">Активные стратегии автоматически проверяют позицию и управляют CPX-ставкой в рамках заданных лимитов.</p></div>
+                    <button type="button" onClick={openBidderWizard} className="btn-primary w-full shrink-0 sm:w-auto"><span className="text-lg">+</span>Создать стратегию</button>
                   </div>
                 </section>
 
-                <section className="rounded-[28px] border border-black/[0.08] bg-white p-4 shadow-[0_12px_32px_rgba(16,24,40,0.05)] sm:p-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div
-                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-extrabold ${avitoConnection ? "bg-[#03bd48]/10 text-[#028c36]" : "bg-amber-50 text-amber-700"}`}
-                      >
-                        {avitoConnection ? "✓" : "!"}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-extrabold uppercase tracking-[0.1em] text-black/42">
-                          Аккаунт Авито
-                        </div>
-                        {avitoConnection ? (
-                          <>
-                            <div className="mt-1 font-extrabold text-black">
-                              Аккаунт подключён
-                            </div>
-                            <div className="mt-1 text-xs font-semibold text-black/48">
-                              Client ID: {avitoConnection.clientIdMasked} ·
-                              Проверен:{" "}
-                              {formatConnectionDate(
-                                avitoConnection.lastCheckedAt,
-                              )}
-                            </div>
-                            {avitoConnection.lastError && (
-                              <div className="mt-1 text-xs font-bold text-red-600">
-                                {avitoConnection.lastError}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <div className="mt-1 font-extrabold text-black">
-                              Аккаунт Авито не подключён
-                            </div>
-                            <div className="mt-1 text-xs font-semibold text-black/48">
-                              Подключите кабинет, чтобы позже выбирать реальные
-                              объявления и управлять продвижением.
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={openAvitoConnection}
-                        disabled={avitoConnectionSaving}
-                        className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {avitoConnection
-                          ? "Переподключить"
-                          : "Подключить Авито"}
-                      </button>
-                      {avitoConnection && (
-                        <button
-                          type="button"
-                          onClick={disconnectAvitoConnection}
-                          disabled={avitoConnectionSaving}
-                          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Отключить
-                        </button>
-                      )}
-                    </div>
+                <section className="rounded-[28px] border border-black/[.08] bg-white p-4 shadow-[0_12px_32px_rgba(16,24,40,.05)] sm:p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-extrabold ${avitoConnection ? "bg-[#03bd48]/10 text-[#028c36]" : "bg-amber-50 text-amber-700"}`}>{avitoConnection ? "✓" : "!"}</div><div><div className="text-xs font-extrabold uppercase tracking-[.1em] text-black/42">Кабинет Авито</div><div className="mt-1 font-extrabold text-black">{avitoConnection ? "Подключён и готов к работе" : "Не подключён"}</div><div className="mt-1 text-xs font-semibold text-black/48">{avitoConnection ? `Client ID: ${avitoConnection.clientIdMasked}` : "Подключите кабинет, чтобы выбирать объявления и управлять CPX."}</div></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={openAvitoConnection} disabled={avitoConnectionSaving} className="btn-primary disabled:opacity-60">{avitoConnection ? "Переподключить" : "Подключить Авито"}</button>{avitoConnection && <button type="button" onClick={disconnectAvitoConnection} className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-extrabold text-red-600">Отключить</button>}</div></div></section>
+
+                <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricCard title="Работают автоматически" className="border-[#03bd48]/20 bg-[#03bd48]/[.055] p-4 sm:p-5"><div className="text-3xl font-extrabold text-[#028c36]">{bidders.filter((item) => item.status === "active").length}</div><div className="mt-1 text-xs font-bold text-[#027a30]/65">активных стратегий</div></MetricCard><MetricCard title="На паузе" className="p-4 sm:p-5"><div className="text-3xl font-extrabold">{bidders.filter((item) => item.status === "paused").length}</div><div className="mt-1 text-xs font-bold text-black/42">не выполняются</div></MetricCard><MetricCard title="Требуют внимания" className="border-amber-200 bg-amber-50 p-4 sm:p-5"><div className="text-3xl font-extrabold text-amber-700">{bidders.filter((item) => item.status === "attention").length}</div><div className="mt-1 text-xs font-bold text-amber-700/65">проверьте настройки</div></MetricCard><MetricCard title="Изменений ставки сегодня" className="bg-black p-4 text-white sm:p-5"><div className="text-3xl font-extrabold text-[#03bd48]">{bidders.reduce((sum, item) => sum + item.changesToday, 0)}</div><div className="mt-1 text-xs font-bold text-white/45">во всех стратегиях</div></MetricCard></section>
+
+                {bidderMessage && <div className="flex items-start gap-2 rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-4 py-3 text-sm font-bold text-[#027a30]"><span>✓</span>{bidderMessage}</div>}
+
+                {/* ========== НАЧАЛО БЛОКА «БИДЕРЫ ОБЪЯВЛЕНИЙ» ========== */}
+                <section className="overflow-hidden rounded-[32px] border border-black/[.07] bg-white p-4 shadow-[0_18px_45px_rgba(16,24,40,.07)] sm:p-6 md:p-8"><div className="border-b border-black/[.07] pb-5"><div className="badge-green mb-3">Ваши стратегии</div><h3 className="text-2xl font-extrabold tracking-[-.04em] text-black sm:text-3xl">Бидеры объявлений</h3><p className="mt-2 max-w-2xl text-sm leading-7 text-black/50">Основные показатели — здесь. Технические данные, ручные действия и история доступны внутри каждой стратегии.</p></div>
+                  {bidders.length === 0 ? <div className="mt-6 rounded-3xl border border-dashed border-black/15 bg-black/[.02] px-5 py-14 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#03bd48]/10 text-2xl font-extrabold text-[#028c36]">+</div><h4 className="mt-4 text-xl font-extrabold">Пока нет стратегий</h4><p className="mx-auto mt-2 max-w-md text-sm leading-7 text-black/50">Создайте первую стратегию для объявления Авито.</p><button type="button" onClick={openBidderWizard} className="btn-primary mt-5">Создать стратегию</button></div> : <div className="mt-5 space-y-4">{bidders.map((bidder) => { const status=getBidderStatusView(bidder.status); const isAdvanced=expandedAdvancedBidderId===bidder.id; const isHistory=expandedBidderId===bidder.id; const events=bidderEvents[bidder.id]??[]; const fullHistory=Boolean(isFullBidderHistory[bidder.id]); return <article key={bidder.id} className="overflow-hidden rounded-3xl border border-black/[.08] bg-white transition duration-300 hover:border-[#03bd48]/35 hover:shadow-[0_14px_32px_rgba(16,24,40,.07)]"><div className="p-4 sm:p-5"><div className="flex flex-col gap-4 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#101010,#303337)] text-sm font-extrabold tracking-[.08em] text-[#03bd48]">{bidder.imageLabel}</div><div className="min-w-0"><div className="flex flex-wrap items-start gap-2"><h4 className="min-w-0 break-words text-lg font-extrabold leading-6 text-black">{bidder.title}</h4><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[.07em] ${status.className}`}><span className={`h-1.5 w-1.5 rounded-full ${status.dot}`}/>{status.label}</span><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase ${bidder.mode === "live" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>{bidder.mode === "live" ? "Боевой режим" : "Тестовый режим"}</span></div>{bidder.avitoItemUrl && <a href={bidder.avitoItemUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-extrabold text-[#028c36] hover:text-[#03bd48]">Открыть объявление на Авито ↗</a>}<div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-2xl bg-black/[.025] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Целевая позиция</div><div className="mt-1 text-sm font-extrabold">{bidder.targetFrom}–{bidder.targetTo}</div></div><div className="rounded-2xl bg-[#03bd48]/[.07] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Позиция в поиске</div><div className="mt-1 text-lg font-extrabold text-[#028c36]">{formatBidderPosition(bidder)} <span className="text-xs">{bidder.positionSource === "avito_serp_first_page_not_found" ? "мест" : "место"}</span></div></div><div className="rounded-2xl bg-black/[.025] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Текущая CPX-ставка</div><div className="mt-1 text-sm font-extrabold">{formatBid(bidder.currentBid)}</div></div><div className="rounded-2xl bg-black/[.025] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Следующая проверка</div><div className="mt-1 text-sm font-extrabold text-black/70">{bidder.nextCheck}</div></div></div></div><div className="grid grid-cols-2 gap-2 lg:flex lg:flex-col"><button type="button" onClick={()=>openBidderEditor(bidder)} className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70">Настроить</button><button type="button" onClick={()=>toggleBidderStatus(bidder.id)} className={`rounded-xl px-3 py-2.5 text-xs font-extrabold ${bidder.status === "active" ? "border border-amber-200 bg-amber-50 text-amber-700" : "bg-[#03bd48] text-white"}`}>{bidder.status === "active" ? "Пауза" : "Запустить"}</button></div></div></div>
+                    <div className="border-t border-black/[.06] bg-black/[.018]"><button type="button" onClick={()=>setExpandedAdvancedBidderId(isAdvanced?null:bidder.id)} aria-expanded={isAdvanced} className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left sm:px-5"><span><span className="block text-sm font-extrabold text-black">Расширенные данные и настройки</span><span className="mt-1 block text-xs font-semibold text-black/45">Ручное управление CPX, техническая информация и действия</span></span><span className={`text-xl transition-transform duration-300 ${isAdvanced?"rotate-180":""}`}>⌄</span></button><CollapsibleContent isOpen={isAdvanced}><div className="border-t border-black/[.06] p-4 sm:p-5"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><button type="button" onClick={()=>runPromotionAction(bidder,"services")} disabled={promotionActionLoading!==null} className="rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold">Параметры CPX</button><button type="button" onClick={()=>runPromotionAction(bidder,"suggests")} disabled={promotionActionLoading!==null} className="rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold">Доступные ставки</button><button type="button" onClick={()=>runPromotionAction(bidder,"forecast")} disabled={promotionActionLoading!==null} className="rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold">Прогноз CPX</button><button type="button" onClick={()=>{if(bidder.mode!=="live"){setPromotionActionError("Ручное применение доступно только в боевом режиме.");return;}setLiveApplyConfirmation("");setLiveApplyConfirmBidder(bidder);}} disabled={bidder.mode!=="live"||promotionActionLoading!==null} className="rounded-xl bg-[#03bd48] px-3 py-3 text-xs font-extrabold text-white disabled:opacity-50">Применить CPX</button><button type="button" onClick={()=>runPromotionAction(bidder,"order-status")} disabled={promotionActionLoading!==null} className="rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold">Проверить CPX</button></div><div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"><InfoCard title="Статус CPX"><b>{formatPromotionStatus(bidder.lastPromotionStatus)}</b></InfoCard><InfoCard title="Диапазон ставки"><b>{formatBid(bidder.minBid)} – {formatBid(bidder.maxBid)}</b></InfoCard><InfoCard title="Последнее применение"><b>{formatDateTime(bidder.lastAppliedAt)}</b></InfoCard><InfoCard title="Изменений сегодня" accent><b>{bidder.changesToday}</b></InfoCard></div><div className="mt-4 flex flex-wrap gap-2 border-t border-black/[.06] pt-4"><button type="button" onClick={()=>checkBidderItem(bidder.id)} className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold">Проверить объявление</button><button type="button" onClick={()=>loadBidderOperational(bidder.id)} className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold">Состояние стратегии</button><button type="button" onClick={()=>runBidderNow(bidder.id)} className="rounded-xl bg-black px-3 py-2.5 text-xs font-extrabold text-white">Запустить сейчас</button><button type="button" onClick={()=>deleteBidder(bidder.id)} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600">Удалить</button></div>{getOperationalRecord(bidderOperational,bidder.id)&&<pre className="mt-3 max-h-48 overflow-auto rounded-xl bg-black p-3 text-[11px] text-white/75">{stringifyPretty(getOperationalRecord(bidderOperational,bidder.id))}</pre>}{promotionActionError&&<div className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">{promotionActionError}</div>}{promotionActionResult&&<pre className="mt-3 max-h-60 overflow-auto rounded-xl bg-black/[.03] p-3 text-[11px]">{promotionActionResult}</pre>}</div></CollapsibleContent></div>
+                    <div className="border-t border-black/[.06]"><button type="button" onClick={()=>void toggleBidderEvents(bidder.id)} className="flex w-full items-center justify-between px-4 py-4 text-left sm:px-5"><span><span className="block text-sm font-extrabold">История работы</span><span className="mt-1 block text-xs font-semibold text-black/45">Проверки, решения и сообщения системы</span></span><span className={`text-xl transition-transform duration-300 ${isHistory?"rotate-180":""}`}>⌄</span></button><CollapsibleContent isOpen={isHistory}><div className="border-t border-black/[.06] bg-black/[.018] p-4 sm:p-5"><div className="flex justify-end"><button type="button" onClick={()=>void loadBidderEvents(bidder.id)} className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-extrabold">Обновить</button></div><div className={`mt-3 space-y-2 overflow-y-auto pr-1 ${fullHistory?"max-h-none":"max-h-80"}`}>{events.length===0?<div className="rounded-xl border border-dashed border-black/15 bg-white p-5 text-sm text-black/50">История пока пуста.</div>:events.map((event)=><div key={event.id} className="rounded-xl border border-black/[.07] bg-white p-3"><div className="flex gap-3"><div className="min-w-0 flex-1 text-sm font-bold leading-5 text-black">{event.message}</div><div className="shrink-0 text-[11px] font-semibold text-black/40">{formatDateTime(event.createdAt)}</div></div></div>)}</div>{events.length>0&&<button type="button" onClick={()=>setIsFullBidderHistory(current=>({...current,[bidder.id]:!fullHistory}))} className="mt-3 text-xs font-extrabold text-[#028c36]">{fullHistory?"Свернуть историю":"Раскрыть всю историю"}</button>}</div></CollapsibleContent></div></article>})}</div>}</section>
+                {/* ========== КОНЕЦ БЛОКА «БИДЕРЫ ОБЪЯВЛЕНИЙ» ========== */}
+
+                <section className="overflow-hidden rounded-[28px] border border-black/[.08] bg-white shadow-[0_18px_45px_rgba(16,24,40,.07)]"><div className="flex items-center justify-between bg-black p-5 text-white sm:p-6"><div><div className="text-[10px] font-extrabold uppercase tracking-[.12em] text-white/55">Bidder health center</div><h3 className="mt-1 text-xl font-extrabold">Состояние бид-менеджера</h3></div><CollapseButton dark isOpen={isBidderHealthOpen} onClick={()=>setIsBidderHealthOpen(v=>!v)} label="Свернуть или раскрыть состояние бид-менеджера"/></div><CollapsibleContent isOpen={isBidderHealthOpen}><div className="p-4 sm:p-6"><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>void loadBidderHealth()} className="btn-secondary">{bidderHealthLoading?"Обновляем…":"Обновить"}</button><button type="button" onClick={()=>void runBulkBidderOperation("run_due")} className="btn-primary">Запустить готовые стратегии</button><button type="button" onClick={()=>void runBulkBidderOperation("pause_all")} className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-extrabold text-red-600">Пауза всех</button></div>{bidderHealthError&&<div className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{bidderHealthError}</div>}{bidderHealth?.totals&&<div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">{Object.entries(bidderHealth.totals).map(([key,value])=><InfoCard key={key} title={key}><b className="text-xl">{String(value)}</b></InfoCard>)}</div>}</div></CollapsibleContent></section>
+
+                {/* ========== НАЧАЛО БЛОКА «КАК ПОЛЬЗОВАТЬСЯ БИД-МЕНЕДЖЕРОМ» ========== */}
+                <section className="overflow-hidden rounded-[28px] border border-[#03bd48]/20 bg-[linear-gradient(135deg,rgba(3,189,72,.09),rgba(255,255,255,1)_58%)] shadow-[0_18px_45px_rgba(16,24,40,.06)]">
+                  <div className="flex items-center justify-between gap-4 p-5 sm:p-6">
+                    <div className="min-w-0"><div className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#027a30]/65">Справка</div><h3 className="mt-1 text-xl font-extrabold tracking-[-.03em] text-black">Как работает бид-менеджер</h3><p className="mt-1 text-sm leading-6 text-black/55">Откройте инструкцию, чтобы безопасно настроить и запустить стратегию.</p></div>
+                    <CollapseButton isOpen={isBidManagerGuideOpen} onClick={() => setIsBidManagerGuideOpen((value) => !value)} label="Свернуть или раскрыть инструкцию по бид-менеджеру" />
                   </div>
+                  <CollapsibleContent isOpen={isBidManagerGuideOpen}>
+                    <div className="border-t border-[#03bd48]/15 p-5 sm:p-6"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <InfoCard title="1. Подключите Авито" accent><p className="text-sm leading-6 text-black/65">Подключите кабинет Авито. После этого выберите объявление, для которого нужна стратегия.</p></InfoCard>
+                      <InfoCard title="2. Задайте цель"><p className="text-sm leading-6 text-black/65">Вставьте ссылку поисковой выдачи, укажите целевой диапазон позиций и безопасные лимиты CPX-ставки.</p></InfoCard>
+                      <InfoCard title="3. Начните с теста"><p className="text-sm leading-6 text-black/65"><b>Тестовый режим</b> рассчитывает действия без изменения ставки. Проверьте историю, затем при необходимости включите боевой режим.</p></InfoCard>
+                      <InfoCard title="4. Автоматическая работа"><p className="text-sm leading-6 text-black/65">Активная стратегия проверяется по расписанию. Если объявления нет среди первых 50 карточек, алгоритм использует позицию 51.</p></InfoCard>
+                    </div><div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><b>Важно.</b> При CAPTCHA или временном ограничении Авито ставка не меняется, а последняя подтверждённая позиция остаётся в карточке. Подробность такой ситуации доступна только в истории работы стратегии.</div></div>
+                  </CollapsibleContent>
                 </section>
+                {/* ========== КОНЕЦ БЛОКА «КАК ПОЛЬЗОВАТЬСЯ БИД-МЕНЕДЖЕРОМ» ========== */}
 
-                <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <MetricCard
-                    title="Активные бидеры"
-                    className="border-[#03bd48]/20 bg-[#03bd48]/[0.055] p-4 sm:p-5"
-                  >
-                    <div className="text-3xl font-extrabold tracking-[-0.05em] text-[#028c36]">
-                      {
-                        bidders.filter((item) => item.status === "active")
-                          .length
-                      }
-                    </div>
-                    <div className="mt-1 text-xs font-bold text-[#027a30]/65">
-                      автоматически работают
-                    </div>
-                  </MetricCard>
-                  <MetricCard title="На паузе" className="p-4 sm:p-5">
-                    <div className="text-3xl font-extrabold tracking-[-0.05em] text-black">
-                      {
-                        bidders.filter((item) => item.status === "paused")
-                          .length
-                      }
-                    </div>
-                    <div className="mt-1 text-xs font-bold text-black/42">
-                      можно запустить в любой момент
-                    </div>
-                  </MetricCard>
-                  <MetricCard
-                    title="Требуют внимания"
-                    className="border-amber-200 bg-amber-50 p-4 sm:p-5"
-                  >
-                    <div className="text-3xl font-extrabold tracking-[-0.05em] text-amber-700">
-                      {
-                        bidders.filter((item) => item.status === "attention")
-                          .length
-                      }
-                    </div>
-                    <div className="mt-1 text-xs font-bold text-amber-700/65">
-                      позиция ниже целевого диапазона
-                    </div>
-                  </MetricCard>
-                  <MetricCard
-                    title="Изменений сегодня"
-                    className="bg-black p-4 text-white sm:p-5"
-                  >
-                    <div className="text-3xl font-extrabold tracking-[-0.05em] text-[#03bd48]">
-                      {bidders.reduce(
-                        (sum, item) => sum + item.changesToday,
-                        0,
-                      )}
-                    </div>
-                    <div className="mt-1 text-xs font-bold text-white/45">
-                      история появится после подключения Авито
-                    </div>
-                  </MetricCard>
-                </section>
-
-                <section className="overflow-hidden rounded-[32px] border border-black/[0.08] bg-white shadow-[0_18px_45px_rgba(16,24,40,0.07)]">
-                  <div className="bg-black p-5 text-white sm:p-6">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                      <div>
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70">
-                          <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
-                          Bidder health center
-                        </div>
-                        <h3 className="mt-3 text-2xl font-extrabold tracking-[-0.04em] sm:text-3xl">
-                          Центр управления bidder-ами
-                        </h3>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-                          Оперативная сводка рабочего состояния, массовый запуск активных стратегий и безопасная остановка всех bidder-ов.
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void loadBidderHealth()}
-                          disabled={bidderHealthLoading || bulkBidderAction !== null}
-                          className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-extrabold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {bidderHealthLoading ? "Обновляем..." : "Обновить health"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void runBulkBidderOperation("run_due")}
-                          disabled={bidderHealthLoading || bulkBidderAction !== null}
-                          className="rounded-xl bg-[#03bd48] px-4 py-3 text-xs font-extrabold text-white transition hover:bg-[#02963a] disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {bulkBidderAction === "run_due" ? "Запускаем..." : "Запустить due bidder-ы"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void runBulkBidderOperation("pause_all")}
-                          disabled={bidderHealthLoading || bulkBidderAction !== null}
-                          className="rounded-xl border border-red-300/50 bg-red-500/15 px-4 py-3 text-xs font-extrabold text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {bulkBidderAction === "pause_all" ? "Ставим на паузу..." : "Пауза всех"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 sm:p-6">
-                    {bidderHealthError && (
-                      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700">
-                        {bidderHealthError}
-                      </div>
-                    )}
-
-                    {bulkBidderResult && (
-                      <div className="rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-4 py-3 text-sm font-bold leading-6 text-[#027a30]">
-                        {bulkBidderResult}
-                      </div>
-                    )}
-
-                    {!bidderHealth && !bidderHealthLoading && !bidderHealthError && (
-                      <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-8 text-center">
-                        <div className="text-lg font-extrabold text-black">Health summary ещё не загружен</div>
-                        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-black/48">
-                          Нажмите «Обновить health», чтобы проверить расписания, cooldown, готовность live-стратегий и наличие ошибок.
-                        </p>
-                      </div>
-                    )}
-
-                    {bidderHealthLoading && !bidderHealth && (
-                      <div className="rounded-3xl border border-black/[0.08] bg-black/[0.02] px-5 py-8 text-center text-sm font-bold text-black/50">
-                        Загружаем health summary...
-                      </div>
-                    )}
-
-                    {bidderHealth?.totals && (
-                      <>
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-                          <InfoCard title="Всего bidder-ов">
-                            <div className="text-2xl font-extrabold text-black">{bidderHealth.totals.all ?? 0}</div>
-                          </InfoCard>
-                          <InfoCard title="Активны" accent>
-                            <div className="text-2xl font-extrabold text-[#028c36]">{bidderHealth.totals.active ?? 0}</div>
-                          </InfoCard>
-                          <InfoCard title="Live готовы">
-                            <div className="text-2xl font-extrabold text-blue-700">{bidderHealth.totals.liveReady ?? 0}</div>
-                          </InfoCard>
-                          <InfoCard title="Cooldown">
-                            <div className="text-2xl font-extrabold text-amber-700">{bidderHealth.totals.cooldownActive ?? 0}</div>
-                          </InfoCard>
-                          <InfoCard title="Вне расписания">
-                            <div className="text-2xl font-extrabold text-black">{bidderHealth.totals.outsideSchedule ?? 0}</div>
-                          </InfoCard>
-                          <InfoCard title="С ошибками">
-                            <div className="text-2xl font-extrabold text-red-600">{bidderHealth.totals.withErrors ?? 0}</div>
-                          </InfoCard>
-                        </div>
-
-                        <details className="mt-4 rounded-2xl border border-black/[0.08] bg-black/[0.018] p-4">
-                          <summary className="cursor-pointer text-sm font-extrabold text-black">
-                            Детализация health по bidder-ам ({Array.isArray(bidderHealth.bidders) ? bidderHealth.bidders.length : 0})
-                          </summary>
-                          <div className="mt-4 space-y-2">
-                            {Array.isArray(bidderHealth.bidders) && bidderHealth.bidders.map((item: Record<string, any>) => (
-                              <div key={item.bidderId} className="grid gap-2 rounded-xl border border-black/[0.07] bg-white p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center">
-                                <div className="min-w-0">
-                                  <div className="truncate font-extrabold text-black">{item.title}</div>
-                                  <div className="mt-1 text-black/45">#{item.bidderId} · {item.mode} · {item.status}</div>
-                                </div>
-                                <span className={`w-fit rounded-full px-2.5 py-1 font-extrabold ${item.liveReady ? "bg-[#03bd48]/10 text-[#028c36]" : "bg-black/[0.05] text-black/55"}`}>
-                                  {item.liveReady ? "live ready" : "не готов"}
-                                </span>
-                                <span className={`w-fit rounded-full px-2.5 py-1 font-extrabold ${item.cooldown?.active ? "bg-amber-50 text-amber-700" : "bg-black/[0.05] text-black/55"}`}>
-                                  {item.cooldown?.active ? "cooldown" : "без cooldown"}
-                                </span>
-                                <span className={`w-fit rounded-full px-2.5 py-1 font-extrabold ${item.hasError ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-700"}`}>
-                                  {item.hasError ? "есть ошибка" : item.schedule?.allowedNow ? "в расписании" : "вне окна"}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </details>
-
-                        <div className="mt-3 text-xs font-semibold text-black/40">
-                          Сводка сформирована: {formatDateTime(bidderHealth.generatedAt ?? null)}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </section>
-
-                <section className="overflow-hidden rounded-[32px] border border-black/[0.08] bg-white shadow-[0_18px_45px_rgba(16,24,40,0.07)]">
-                  <div className="flex flex-col gap-4 bg-black p-5 text-white sm:flex-row sm:items-end sm:justify-between sm:p-6">
-                    <div>
-                      <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70">
-                        <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
-                        Worker monitor
-                      </div>
-                      <h3 className="mt-3 text-2xl font-extrabold tracking-[-0.04em]">Журнал запусков worker-а</h3>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-                        Контроль автоматических и ручных запусков: обработанные bidder-ы, пропуски, ошибки и состояние фонового процесса.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => void loadWorkerRuns()} disabled={workerRunsLoading || workerRunNowLoading} className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-extrabold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50">
-                        {workerRunsLoading ? "Обновляем..." : "Обновить журнал"}
-                      </button>
-                      <button type="button" onClick={() => void runWorkerNowFromDashboard()} disabled={workerRunsLoading || workerRunNowLoading} className="rounded-xl bg-[#03bd48] px-4 py-3 text-xs font-extrabold text-white transition hover:bg-[#02963a] disabled:cursor-not-allowed disabled:opacity-50">
-                        {workerRunNowLoading ? "Запускаем..." : "Запустить worker сейчас"}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="p-4 sm:p-6">
-                    {workerRunsError && <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{workerRunsError}</div>}
-                    {!workerRunsLoading && workerRuns.length === 0 && !workerRunsError && <div className="rounded-2xl border border-dashed border-black/15 bg-black/[0.02] px-4 py-7 text-center text-sm font-semibold text-black/48">Журнал ещё не загружен или запусков пока нет.</div>}
-                    {workerRuns.length > 0 && <div className="space-y-2">
-                      {workerRuns.map((run) => <div key={run.id} className="grid gap-3 rounded-2xl border border-black/[0.08] bg-black/[0.018] p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${run.status === "completed" ? "bg-[#03bd48]/10 text-[#028c36]" : run.status === "failed" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>{run.status}</span>
-                            <span className="text-xs font-bold text-black/45">{run.source}</span>
-                          </div>
-                          <div className="mt-2 text-sm font-bold text-black">{run.message || "Worker run"}</div>
-                          {run.error && <div className="mt-1 text-xs font-bold text-red-600">{run.error}</div>}
-                          <div className="mt-1 text-xs text-black/42">Старт: {formatDateTime(run.startedAt)} · Завершение: {formatDateTime(run.finishedAt)}</div>
-                        </div>
-                        <div className="rounded-xl bg-white px-3 py-2 text-center"><div className="text-[9px] font-extrabold uppercase text-black/35">Обработано</div><div className="mt-1 text-lg font-extrabold text-[#028c36]">{run.processed}</div></div>
-                        <div className="flex gap-2"><div className="rounded-xl bg-white px-3 py-2 text-center"><div className="text-[9px] font-extrabold uppercase text-black/35">Пропуск</div><div className="mt-1 text-lg font-extrabold text-black">{run.skipped}</div></div><div className="rounded-xl bg-white px-3 py-2 text-center"><div className="text-[9px] font-extrabold uppercase text-black/35">Ошибки</div><div className="mt-1 text-lg font-extrabold text-red-600">{run.failed}</div></div></div>
-                      </div>)}
-                    </div>}
-                  </div>
-                </section>
-
-                {bidderMessage && (
-                  <div className="flex items-start gap-2 rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-4 py-3 text-sm font-bold leading-6 text-[#027a30]">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#03bd48] text-xs text-white">
-                      ✓
-                    </span>
-                    {bidderMessage}
-                  </div>
+                {isAdmin && (
+                <section className="overflow-hidden rounded-[28px] border border-black/[.08] bg-white shadow-[0_18px_45px_rgba(16,24,40,.07)]"><div className="flex items-center justify-between bg-black p-5 text-white sm:p-6"><div><div className="text-[10px] font-extrabold uppercase tracking-[.12em] text-white/55">Worker monitor</div><h3 className="mt-1 text-xl font-extrabold">Мониторинг автоматической работы</h3></div><CollapseButton dark isOpen={isWorkerMonitorOpen} onClick={()=>setIsWorkerMonitorOpen(v=>!v)} label="Свернуть или раскрыть мониторинг worker"/></div><CollapsibleContent isOpen={isWorkerMonitorOpen}><div className="p-4 sm:p-6"><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>void loadWorkerRuns()} className="btn-secondary">{workerRunsLoading?"Обновляем…":"Обновить журнал"}</button><button type="button" onClick={()=>void runWorkerNowFromDashboard()} className="btn-primary">Запустить worker сейчас</button></div>{workerRunsError&&<div className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{workerRunsError}</div>}<div className="mt-4 max-h-96 space-y-2 overflow-y-auto">{workerRuns.length===0?<div className="rounded-xl border border-dashed border-black/15 p-5 text-sm text-black/50">Журнал ещё не загружен.</div>:workerRuns.map(run=><div key={run.id} className="rounded-xl border border-black/[.08] bg-black/[.018] p-3 text-sm"><b>{run.source} · {run.status}</b><div className="mt-1 text-black/60">{run.message}</div><div className="mt-1 text-xs text-black/40">{formatDateTime(run.startedAt)} · обработано: {run.processed}, ошибок: {run.failed}</div></div>)}</div></div></CollapsibleContent></section>
                 )}
 
-                <section className="overflow-hidden rounded-[32px] border border-black/[0.07] bg-white p-4 shadow-[0_18px_45px_rgba(16,24,40,0.07)] sm:p-6 md:p-8">
-                  <div className="flex flex-col gap-4 border-b border-black/[0.07] pb-5 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <div className="badge-green mb-3">Ваши стратегии</div>
-                      <h3 className="text-2xl font-extrabold tracking-[-0.04em] text-black sm:text-3xl">
-                        Бидеры объявлений
-                      </h3>
-                      <p className="mt-2 max-w-2xl text-sm leading-7 text-black/50">
-                        Каждый бидер управляет отдельным объявлением и поисковым
-                        запросом. Можно создавать несколько независимых
-                        стратегий.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={openBidderWizard}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-black/10 bg-black/[0.025] px-5 py-4 text-sm font-extrabold text-black transition hover:border-[#03bd48]/50 hover:bg-[#03bd48]/[0.07] hover:text-[#028c36] sm:w-auto"
-                    >
-                      + Новый бидер
-                    </button>
-                  </div>
-
-                  {bidders.length === 0 ? (
-                    <div className="mt-6 rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-14 text-center">
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#03bd48]/10 text-2xl font-extrabold text-[#028c36]">
-                        +
-                      </div>
-                      <h4 className="mt-4 text-xl font-extrabold text-black">
-                        Пока нет бидеров
-                      </h4>
-                      <p className="mx-auto mt-2 max-w-md text-sm leading-7 text-black/50">
-                        Создайте первый бидер: выберите объявление, цель по
-                        позиции и безопасные границы ставки.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={openBidderWizard}
-                        className="btn-primary mt-5"
-                      >
-                        Создать первый бидер
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="mt-5 space-y-3">
-                      {bidders.map((bidder) => {
-                        const status =
-                          bidder.status === "active"
-                            ? {
-                                label: "Активен",
-                                className:
-                                  "bg-[#03bd48]/12 text-[#028c36] border-[#03bd48]/25",
-                              }
-                            : bidder.status === "paused"
-                              ? {
-                                  label: "На паузе",
-                                  className:
-                                    "bg-black/[0.045] text-black/55 border-black/10",
-                                }
-                              : {
-                                  label: "Нужно внимание",
-                                  className:
-                                    "bg-amber-50 text-amber-700 border-amber-200",
-                                };
-                        const positionsText =
-                          bidder.targetFrom === bidder.targetTo
-                            ? `Топ-${bidder.targetFrom}`
-                            : `${bidder.targetFrom}–${bidder.targetTo} место`;
-                        return (
-                          <article
-                            key={bidder.id}
-                            className="overflow-hidden rounded-3xl border border-black/[0.08] bg-white transition hover:border-[#03bd48]/30 hover:shadow-[0_14px_32px_rgba(16,24,40,0.07)]"
-                          >
-                            <div className="flex flex-col gap-4 p-4 sm:p-5 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start">
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#101010,#303337)] text-sm font-extrabold tracking-[0.08em] text-[#03bd48]">
-                                {bidder.imageLabel}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-start justify-between gap-2 lg:justify-start">
-                                  <h4 className="break-words text-lg font-extrabold leading-6 text-black">
-                                    {bidder.title}
-                                  </h4>
-                                  <span
-                                    className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.07em] ${status.className}`}
-                                  >
-                                    {status.label}
-                                  </span>
-                                </div>
-                                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-black/48">
-                                  <span>{bidder.query}</span>
-                                  <span className="hidden h-1 w-1 self-center rounded-full bg-black/25 sm:block" />
-                                  <span>{bidder.city}</span>
-                                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.07em] ${
-                                    bidder.mode === "live"
-                                      ? "bg-blue-50 text-blue-700"
-                                      : "bg-amber-50 text-amber-700"
-                                  }`}>
-                                    {bidder.mode === "live" ? "Live" : "Dry-run"}
-                                  </span>
-                                  {bidder.avitoItemId && (
-                                    <>
-                                      <span className="hidden h-1 w-1 self-center rounded-full bg-black/25 sm:block" />
-                                      <span>ID: {bidder.avitoItemId}</span>
-                                    </>
-                                  )}
-                                </div>
-                                {bidder.avitoItemUrl && (
-                                  <a
-                                    href={bidder.avitoItemUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="mt-2 inline-flex text-xs font-extrabold text-[#028c36] transition hover:text-[#03bd48]"
-                                  >
-                                    Открыть объявление на Авито
-                                  </a>
-                                )}
-                                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-black/45">
-  <span>
-    Последняя проверка:{" "}
-    {bidder.lastCheckedAt
-      ? formatConnectionDate(bidder.lastCheckedAt)
-      : "ещё не выполнялась"}
-  </span>
-
-  {bidder.lastError && (
-    <span className="text-red-600">Ошибка: {bidder.lastError}</span>
-  )}
-</div>
-                                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                  <div className="rounded-xl bg-black/[0.025] p-2.5">
-                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
-                                      Цель
-                                    </div>
-                                    <div className="mt-1 whitespace-nowrap text-sm font-extrabold text-black">
-                                      {positionsText}
-                                    </div>
-                                  </div>
-                                  <div
-                                    className={`rounded-xl p-2.5 ${bidder.status === "attention" ? "bg-amber-50" : "bg-[#03bd48]/[0.07]"}`}
-                                  >
-                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
-                                      Позиция
-                                    </div>
-                                    <div
-                                      className={`mt-1 text-sm font-extrabold ${bidder.status === "attention" ? "text-amber-700" : "text-[#028c36]"}`}
-                                    >
-                                      {bidder.position
-                                        ? `${bidder.position} место`
-                                        : "—"}
-                                    </div>
-                                  </div>
-                                  <div className="rounded-xl bg-black/[0.025] p-2.5">
-                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
-                                      {bidder.mode === "live" ? "Ставка live" : "Ставка dry-run"}
-                                    </div>
-                                    <div className="mt-1 whitespace-nowrap text-sm font-extrabold text-black">
-                                      {formatMoney(bidder.currentBid)} ₽
-                                    </div>
-                                  </div>
-                                  <div className="rounded-xl bg-black/[0.025] p-2.5">
-                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">
-                                      Проверка
-                                    </div>
-                                    <div className="mt-1 whitespace-nowrap text-xs font-extrabold text-black/65">
-                                      {bidder.nextCheck}
-                                    </div>
-                                  </div>
-                                  
-                                </div>
-                              </div>
 
 
-                              
-                              <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-col">
-                                <button
-                                  type="button"
-                                  onClick={() => openBidderEditor(bidder)}
-                                  disabled={bidderSaving}
-                                  className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  Редактировать
-                                </button>
-                                <button
-  type="button"
-  onClick={() => checkBidderItem(bidder.id)}
-  disabled={
-    bidderSaving ||
-    checkingBidderId !== null ||
-    !bidder.avitoItemId
-  }
-  className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
->
-  {checkingBidderId === bidder.id ? "Проверяем..." : "Проверить объявление"}
-</button>
-<button
-  type="button"
-  onClick={() => void toggleBidderEvents(bidder.id)}
-  disabled={bidderEventsLoadingId === bidder.id}
-  className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.06] hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
->
-  {expandedBidderId === bidder.id
-    ? "Скрыть историю"
-    : bidderEventsLoadingId === bidder.id
-      ? "Загружаем..."
-      : "История событий"}
-</button>
-
-
-                                <button
-                                  type="button"
-                                  onClick={() => toggleBidderStatus(bidder.id)}
-                                  disabled={bidderSaving}
-                                  className={`rounded-xl px-3 py-2.5 text-xs font-extrabold transition ${bidder.status === "active" ? "border border-black/10 bg-white text-black/70 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700" : "bg-[#03bd48] text-white hover:bg-[#02963a]"}`}
-                                >
-                                  {bidder.status === "active"
-                                    ? "Пауза"
-                                    : "Запустить"}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteBidder(bidder.id)}
-                                  disabled={bidderSaving}
-                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
-                                >
-                                  Удалить
-                                </button>
-                              </div>
-                            </div>
-
-
-                            
-                            <div className="border-t border-black/[0.06] bg-white px-4 py-4 sm:px-5">
-                              <div className="flex flex-col gap-3">
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                  <div>
-                                    <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/35">
-                                      Manual live controls
-                                    </div>
-                                    <div className="mt-1 text-sm font-bold text-black/65">
-                                      Promotion API для bidder #{bidder.id}
-                                    </div>
-                                  </div>
-                                  <div className="rounded-full bg-black/[0.04] px-3 py-1.5 text-[11px] font-extrabold text-black/55">
-                                    {bidder.mode === "live" ? "live" : "dry-run"}
-                                  </div>
-                                </div>
-
-                                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                                  <button
-                                    type="button"
-                                    onClick={() => runPromotionAction(bidder, "services")}
-                                    disabled={promotionActionLoading !== null}
-                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/75 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    {promotionActionLoading === "services"
-                                      ? "Загрузка..."
-                                      : "Services"}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => runPromotionAction(bidder, "suggests")}
-                                    disabled={promotionActionLoading !== null}
-                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/75 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    {promotionActionLoading === "suggests"
-                                      ? "Загрузка..."
-                                      : "Suggests"}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => runPromotionAction(bidder, "forecast")}
-                                    disabled={promotionActionLoading !== null}
-                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/75 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    {promotionActionLoading === "forecast"
-                                      ? "Загрузка..."
-                                      : "Forecast"}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (bidder.mode !== "live") {
-                                        setPromotionActionError(
-                                          "Manual live apply доступен только для bidder-а в режиме live.",
-                                        );
-                                        return;
-                                      }
-                                      setLiveApplyConfirmation("");
-                                      setLiveApplyConfirmBidder(bidder);
-                                    }}
-                                    disabled={promotionActionLoading !== null || bidder.mode !== "live"}
-                                    className="rounded-xl bg-[#03bd48] px-3 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#02963a] disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    {promotionActionLoading === "apply"
-                                      ? "Отправка..."
-                                      : "Live apply"}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => runPromotionAction(bidder, "order-status")}
-                                    disabled={promotionActionLoading !== null}
-                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/75 transition hover:border-[#03bd48]/40 hover:bg-[#03bd48]/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    {promotionActionLoading === "order-status"
-                                      ? "Проверка..."
-                                      : "Order status"}
-                                  </button>
-                                </div>
-
-                                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                                  <div className="rounded-xl bg-black/[0.025] p-3">
-                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                      Promotion status
-                                    </div>
-                                    <div className="mt-1 text-sm font-extrabold text-black">
-                                      {formatPromotionStatus(bidder.lastPromotionStatus)}
-                                    </div>
-                                  </div>
-                                  <div className="rounded-xl bg-black/[0.025] p-3">
-                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                      Order ID
-                                    </div>
-                                    <div className="mt-1 break-all text-xs font-extrabold text-black/75">
-                                      {bidder.lastPromotionOrderId || "—"}
-                                    </div>
-                                  </div>
-                                  <div className="rounded-xl bg-black/[0.025] p-3">
-                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                      Цена
-                                    </div>
-                                    <div className="mt-1 text-sm font-extrabold text-black">
-                                      {formatCurrency(bidder.lastPromotionPrice)}
-                                    </div>
-                                  </div>
-                                  <div className="rounded-xl bg-black/[0.025] p-3">
-                                    <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                      Last apply
-                                    </div>
-                                    <div className="mt-1 text-xs font-extrabold text-black/75">
-                                      {formatDateTime(bidder.lastAppliedAt)}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {promotionActionError && (
-                                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-xs font-bold leading-5 text-red-700">
-                                    {promotionActionError}
-                                  </div>
-                                )}
-
-                                {promotionActionResult && (
-                                  <details className="rounded-xl border border-black/10 bg-black/[0.02] p-3">
-                                    <summary className="cursor-pointer text-xs font-extrabold text-black">
-                                      Ответ Promotion API
-                                    </summary>
-                                    <pre className="mt-3 max-h-[340px] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-white p-3 text-[11px] leading-5 text-black/75">
-                                      {promotionActionResult}
-                                    </pre>
-                                  </details>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="border-t border-black/[0.06] bg-black/[0.015] px-4 py-4 sm:px-5">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                  <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/35">
-                                    Operational control
-                                  </div>
-                                  <div className="mt-1 text-sm font-bold text-black/60">
-                                    Сводка состояния bidder и ручное управление runner
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => loadBidderOperational(bidder.id)}
-                                    disabled={operationalLoadingBidderId !== null}
-                                    className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/35 hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    {operationalLoadingBidderId === bidder.id
-                                      ? "Обновляем..."
-                                      : "Обновить состояние"}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => runBidderNow(bidder.id)}
-                                    disabled={runNowBidderId !== null}
-                                    className="rounded-xl bg-black px-3 py-2.5 text-xs font-extrabold text-white transition hover:bg-[#03bd48] disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    {runNowBidderId === bidder.id
-                                      ? "Запуск..."
-                                      : "Run now"}
-                                  </button>
-                                </div>
-                              </div>
-
-                              {(() => {
-                                const operational = getOperationalRecord(
-                                  bidderOperational,
-                                  bidder.id,
-                                );
-
-                                if (!operational) {
-                                  return (
-                                    <div className="mt-3 rounded-2xl border border-dashed border-black/15 bg-white px-4 py-4 text-sm font-semibold text-black/45">
-                                      Operational summary ещё не загружен.
-                                    </div>
-                                  );
-                                }
-
-                                return (
-                                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                    <div className="rounded-xl bg-white p-3">
-                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                        Live ready
-                                      </div>
-                                      <div className="mt-1 text-sm font-extrabold text-black">
-                                        {formatBooleanState(Boolean(operational.liveReady))}
-                                      </div>
-                                    </div>
-
-                                    <div className="rounded-xl bg-white p-3">
-                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                        Schedule valid
-                                      </div>
-                                      <div className="mt-1 text-sm font-extrabold text-black">
-                                        {formatBooleanState(
-                                          Boolean(operational.schedule?.valid),
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="rounded-xl bg-white p-3">
-                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                        Allowed now
-                                      </div>
-                                      <div className="mt-1 text-sm font-extrabold text-black">
-                                        {formatBooleanState(
-                                          Boolean(operational.schedule?.allowedNow),
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="rounded-xl bg-white p-3">
-                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                        Cooldown
-                                      </div>
-                                      <div className="mt-1 text-sm font-extrabold text-black">
-                                        {Boolean(operational.cooldown?.active)
-                                          ? "активен"
-                                          : "нет"}
-                                      </div>
-                                    </div>
-
-                                    <div className="rounded-xl bg-white p-3">
-                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                        Next schedule start
-                                      </div>
-                                      <div className="mt-1 text-xs font-extrabold text-black/75">
-                                        {formatDateTime(
-                                          operational.schedule?.nextStartAt ?? null,
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="rounded-xl bg-white p-3">
-                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                        Cooldown until
-                                      </div>
-                                      <div className="mt-1 text-xs font-extrabold text-black/75">
-                                        {formatDateTime(
-                                          operational.cooldown?.until ?? null,
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="rounded-xl bg-white p-3">
-                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                        Last order status check
-                                      </div>
-                                      <div className="mt-1 text-xs font-extrabold text-black/75">
-                                        {formatDateTime(
-                                          operational.promotion?.lastOrderStatusCheckedAt ??
-                                            null,
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="rounded-xl bg-white p-3">
-                                      <div className="text-[9px] font-extrabold uppercase tracking-wide text-black/35">
-                                        Next runner check
-                                      </div>
-                                      <div className="mt-1 text-xs font-extrabold text-black/75">
-                                        {formatDateTime(
-                                          operational.runner?.nextCheckAt ?? null,
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.06] bg-black/[0.018] px-4 py-3 text-xs sm:px-5">
-                              <span className="font-semibold text-black/45">
-                                Диапазон ставки: {formatMoney(bidder.minBid)}–
-                                {formatMoney(bidder.maxBid)} ₽
-                              </span>
-                              <span className="font-extrabold text-[#028c36]">
-                                Изменений сегодня: {bidder.changesToday}
-                              </span>
-                            </div>
-                            {expandedBidderId === bidder.id && (
-  <div className="border-t border-black/[0.06] bg-black/[0.02] px-4 py-4 sm:px-5">
-    <div className="flex items-center justify-between gap-3">
-      <div>
-        <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
-          История событий
-        </div>
-        <div className="mt-1 text-sm font-bold text-black/55">
-          Последние действия по этому бидеру
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => void loadBidderEvents(bidder.id)}
-        disabled={bidderEventsLoadingId === bidder.id}
-        className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-extrabold text-black/70 transition hover:border-[#03bd48]/35 hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {bidderEventsLoadingId === bidder.id ? "Обновляем..." : "Обновить"}
-      </button>
-    </div>
-
-    <div className="mt-4 space-y-3">
-      {(bidderEvents[bidder.id] ?? []).length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-black/15 bg-white px-4 py-6 text-sm font-semibold text-black/45">
-          История событий пока пуста.
-        </div>
-      ) : (
-        (bidderEvents[bidder.id] ?? []).map((event, index) => (
-          <div
-            key={event.id}
-            className="relative rounded-2xl border border-black/[0.06] bg-white px-4 py-4"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] ${
-                      event.type === "manual_check_success"
-                        ? "bg-[#03bd48]/12 text-[#028c36]"
-                        : event.type === "manual_check_error"
-                          ? "bg-red-50 text-red-600"
-                          : event.type === "bidder_deleted"
-                            ? "bg-black/[0.07] text-black/55"
-                            : "bg-blue-50 text-blue-700"
-                    }`}
-                  >
-                    {event.type === "manual_check_success"
-                      ? "Проверка OK"
-                      : event.type === "manual_check_error"
-                        ? "Ошибка проверки"
-                        : event.type === "bidder_deleted"
-                          ? "Удаление"
-                          : "Событие"}
-                  </span>
-                </div>
-
-                <div className="mt-2 text-sm font-bold leading-6 text-black">
-                  {event.message}
-                </div>
-              </div>
-
-              <div className="shrink-0 text-xs font-semibold text-black/40">
-                {formatConnectionDate(event.createdAt)}
-              </div>
-            </div>
-
-            {index < (bidderEvents[bidder.id] ?? []).length - 1 && (
-              <div className="mt-3 border-b border-dashed border-black/10" />
-            )}
-          </div>
-        ))
-      )}
-    </div>
-  </div>
-)}
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
-
-                                <section className="rounded-3xl border border-black/[0.07] bg-black/[0.018] p-4 sm:p-5">
-                  <div className="flex gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-sm font-extrabold text-[#03bd48]">
-                      i
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-extrabold text-black">
-                        Manual live controls
-                      </h4>
-                      <p className="mt-1 text-sm leading-6 text-black/50">
-                        Ручные действия Promotion API доступны для каждого
-                        конкретного бидера внутри его карточки. Выберите нужный
-                        бидер и используйте кнопки services / suggests /
-                        forecast / apply / order status прямо в карточке.
-                      </p>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="rounded-3xl border border-black/[0.07] bg-black/[0.018] p-4 sm:p-5">
-                  <div className="flex gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-sm font-extrabold text-[#03bd48]">
-                      i
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-extrabold text-black">
-                        Первый этап Бид-менеджера
-                      </h4>
-                      <p className="mt-1 text-sm leading-6 text-black/50">
-                        Бидеры пока не подключены к кабинету Авито: позиции и
-                        ставки показаны как тестовые данные. На следующем этапе
-                        добавим подключение кабинета, сохранение стратегий и
-                        фоновую проверку ставок.
-                      </p>
-                    </div>
-                  </div>
-                </section>
-
+                {/* Existing modal windows are deliberately retained below. */}
                 {liveApplyConfirmBidder && (
-                  <div className="fixed inset-0 z-[10002] overflow-y-auto bg-black/60 p-3 backdrop-blur-sm sm:p-6">
-                    <div className="mx-auto flex min-h-full w-full max-w-lg items-center">
-                      <section className="my-auto w-full overflow-hidden rounded-[30px] bg-white shadow-[0_28px_80px_rgba(0,0,0,0.3)]">
-                        <div className="bg-red-600 p-5 text-white sm:p-7">
-                          <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-white/70">Подтверждение боевого действия</div>
-                          <h3 className="mt-2 text-2xl font-extrabold tracking-[-0.04em]">Создать live Promotion order?</h3>
-                        </div>
-                        <div className="space-y-5 p-5 sm:p-7">
-                          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold leading-6 text-red-800">Это действие отправит заявку в Avito Promotion API. Оно может привести к реальным расходам в рекламном кабинете.</div>
-                          <div className="rounded-2xl bg-black/[0.03] p-4 text-sm"><div className="text-black/45">Bidder</div><div className="mt-1 font-extrabold text-black">{liveApplyConfirmBidder.title}</div><div className="mt-3 text-black/45">Avito Item ID</div><div className="mt-1 break-all font-extrabold text-black">{liveApplyConfirmBidder.avitoItemId || "—"}</div></div>
-                          <label className="block"><span className="mb-2 block text-xs font-bold text-black/55">Введите LIVE для подтверждения</span><input value={liveApplyConfirmation} onChange={(event) => setLiveApplyConfirmation(event.target.value.toUpperCase())} autoFocus className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-extrabold outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100" placeholder="LIVE" /></label>
-                          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => { setLiveApplyConfirmBidder(null); setLiveApplyConfirmation(""); }} disabled={promotionActionLoading !== null} className="rounded-xl px-4 py-3 text-sm font-extrabold text-black/55 transition hover:bg-black/[0.05]">Отмена</button><button type="button" onClick={() => void confirmLiveApply()} disabled={liveApplyConfirmation.trim() !== "LIVE" || promotionActionLoading !== null} className="rounded-xl bg-red-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">{promotionActionLoading === "apply" ? "Отправляем..." : "Подтвердить live apply"}</button></div>
-                        </div>
-                      </section>
-                    </div>
-                  </div>
+                  <div className="fixed inset-0 z-[10002] overflow-y-auto bg-black/60 p-3 backdrop-blur-sm sm:p-6"><div className="mx-auto flex min-h-full w-full max-w-lg items-center"><section className="my-auto w-full overflow-hidden rounded-[30px] bg-white shadow-[0_28px_80px_rgba(0,0,0,.3)]"><div className="bg-red-600 p-5 text-white sm:p-7"><div className="text-[10px] font-extrabold uppercase tracking-[.13em] text-white/70">Подтверждение боевого действия</div><h3 className="mt-2 text-2xl font-extrabold">Применить CPX-ставку в Авито?</h3></div><div className="space-y-5 p-5 sm:p-7"><p className="rounded-2xl bg-red-50 p-4 text-sm font-bold text-red-800">Действие отправит ставку в Avito CPX Promo и может привести к реальным расходам.</p><label className="block"><span className="mb-2 block text-xs font-bold">Введите LIVE для подтверждения</span><input value={liveApplyConfirmation} onChange={e=>setLiveApplyConfirmation(e.target.value.toUpperCase())} className="w-full rounded-xl border border-black/10 px-4 py-3 font-extrabold" placeholder="LIVE"/></label><div className="flex justify-end gap-2"><button type="button" onClick={()=>setLiveApplyConfirmBidder(null)} className="rounded-xl px-4 py-3 font-extrabold">Отмена</button><button type="button" onClick={()=>void confirmLiveApply()} disabled={liveApplyConfirmation.trim()!=="LIVE"} className="rounded-xl bg-red-600 px-4 py-3 font-extrabold text-white disabled:opacity-50">Подтвердить</button></div></div></section></div></div>
                 )}
-
                 {isAvitoConnectionOpen && (
                   <div className="fixed inset-0 z-[10001] overflow-y-auto bg-black/55 p-3 backdrop-blur-sm sm:p-6">
                     <div className="mx-auto flex min-h-full w-full max-w-lg items-center">
@@ -5380,36 +4489,31 @@ setExpandedBidderId(savedBidder.id);
                                 Настройте позицию в поиске
                               </h4>
                               <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                                <label className="block">
-                                  <span className="mb-2 block text-xs font-bold text-black/50">
-                                    Поисковый запрос
-                                  </span>
-                                  <input
-                                    value={bidderDraft.query}
-                                    onChange={(e) =>
-                                      setBidderDraft({
-                                        ...bidderDraft,
-                                        query: e.target.value,
-                                      })
-                                    }
-                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
-                                  />
-                                </label>
-                                <label className="block">
-                                  <span className="mb-2 block text-xs font-bold text-black/50">
-                                    Город
-                                  </span>
-                                  <input
-                                    value={bidderDraft.city}
-                                    onChange={(e) =>
-                                      setBidderDraft({
-                                        ...bidderDraft,
-                                        city: e.target.value,
-                                      })
-                                    }
-                                    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
-                                  />
-                                </label>
+<label className="block sm:col-span-2">
+  <span className="mb-2 block text-xs font-bold text-black/50">
+    Ссылка поисковой выдачи Авито
+  </span>
+
+  <input
+    type="url"
+    value={bidderDraft.searchUrl}
+    onChange={(e) =>
+      setBidderDraft((current) => ({
+        ...current,
+        searchUrl: e.target.value,
+      }))
+    }
+    placeholder="https://www.avito.ru/moskva?q=airpods"
+    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+  />
+
+  <span className="mt-2 block text-xs leading-5 text-black/45">
+    Вставьте ссылку именно на поисковую выдачу Авито с нужными городом,
+    категорией и фильтрами. По ней bidder автоматически определяет позицию
+    объявления.
+  </span>
+</label>
+
                                 <label className="block">
                                   <span className="mb-2 block text-xs font-bold text-black/50">
                                     Позиция от
@@ -5498,6 +4602,45 @@ onChange={(e) =>
                                     className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
                                   />
                                 </label>
+
+<label className="block">
+  <span className="mb-2 block text-xs font-bold text-black/50">
+    Шаг изменения, ₽
+  </span>
+  <input
+    type="number"
+    min="1"
+    step="1"
+    value={bidderDraft.bidStep}
+    onChange={(e) =>
+      setBidderDraft((current) => ({
+        ...current,
+        bidStep: e.target.value,
+      }))
+    }
+    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+  />
+</label>
+
+<label className="block">
+  <span className="mb-2 block text-xs font-bold text-black/50">
+    Дневной лимит CPX, ₽
+  </span>
+  <input
+    type="number"
+    min="0"
+    step="1"
+    value={bidderDraft.dailySpendLimit}
+    onChange={(e) =>
+      setBidderDraft((current) => ({
+        ...current,
+        dailySpendLimit: e.target.value,
+      }))
+    }
+    className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#03bd48]"
+  />
+</label>
+
                                 <label className="block">
                                   <span className="mb-2 block text-xs font-bold text-black/50">
                                     Проверка каждые, мин.
@@ -5602,12 +4745,6 @@ onChange={(e) =>
                                   </span>
                                 </div>
                                 <div className="flex justify-between gap-4 border-b border-black/7 pb-3 text-sm">
-                                  <span className="text-black/45">Поиск</span>
-                                  <span className="text-right font-extrabold text-black">
-                                    {bidderDraft.query} · {bidderDraft.city}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between gap-4 border-b border-black/7 pb-3 text-sm">
                                   <span className="text-black/45">Цель</span>
                                   <span className="font-extrabold text-[#028c36]">
                                     Позиции {bidderDraft.targetFrom}–
@@ -5682,8 +4819,10 @@ onChange={(e) =>
                     </div>
                   </div>
                 )}
+
               </div>
             )}
+            {/* ========== КОНЕЦ УСЛУГИ «БИД-МЕНЕДЖЕР АВИТО» ========== */}
 
             {activeSection === "popular-queries" && hasAccess && (
               <div className="space-y-6">

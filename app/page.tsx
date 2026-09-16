@@ -320,7 +320,7 @@ function Features() {
         <div className="grid gap-4 md:grid-cols-3">
           {features.map((item, index) => (
             <div
-              key={item.title}
+              key={item.icon}
               className="feature-premium-card reveal-on-scroll"
               style={{ transitionDelay: `${index * 80}ms` }}
             >

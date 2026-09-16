@@ -155,8 +155,14 @@ model AvitoBidder {
   targetFrom Int
   targetTo   Int
 
-  currentPosition Int?
-  currentBid      Int  @default(0)
+  currentPosition    Int?
+  positionSource     String?
+  positionCheckedAt  DateTime?
+  positionSearchUrl  String?
+  positionPage       Int?
+  lastPositionError  String?
+
+  currentBid         Int  @default(0)
   minBid          Int
   maxBid          Int
   bidStep         Int  @default(10)

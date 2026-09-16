@@ -87,6 +87,17 @@ function serializeBidder(bidder: {
   nextCheckAt: Date | null;
   lastCheckedAt: Date | null;
   lastError: string | null;
+  promotionStrategy: string;
+  promotionDurationDays: number;
+  lastPromotionOrderId: string | null;
+  lastPromotionRequestId: string | null;
+  lastPromotionStatus: string | null;
+  lastPromotionPrice: number | null;
+  lastPromotionOldPrice: number | null;
+  lastPromotionPayload: string | null;
+  lastForecastPayload: string | null;
+  lastSuggestPayload: string | null;
+  lastAppliedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -94,6 +105,7 @@ function serializeBidder(bidder: {
     ...bidder,
     nextCheckAt: bidder.nextCheckAt?.toISOString() ?? null,
     lastCheckedAt: bidder.lastCheckedAt?.toISOString() ?? null,
+    lastAppliedAt: bidder.lastAppliedAt?.toISOString() ?? null,
     createdAt: bidder.createdAt.toISOString(),
     updatedAt: bidder.updatedAt.toISOString(),
   };
@@ -128,9 +140,7 @@ async function getAuthorizedUser() {
     };
   }
 
-  return {
-    user,
-  };
+  return { user };
 }
 
 async function getBidderId(context: RouteContext) {
@@ -170,32 +180,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  let body: {
-    title?: unknown;
-    groupName?: unknown;
-    city?: unknown;
-    query?: unknown;
-    searchUrl?: unknown;
-    avitoItemId?: unknown;
-    avitoItemUrl?: unknown;
-    targetFrom?: unknown;
-    targetTo?: unknown;
-    minBid?: unknown;
-    maxBid?: unknown;
-    bidStep?: unknown;
-    dailySpendLimit?: unknown;
-    spentToday?: unknown;
-    smartEconomyEnabled?: unknown;
-    checkInterval?: unknown;
-    schedule?: unknown;
-    status?: unknown;
-    mode?: unknown;
-    lastError?: unknown;
-    lastCheckedAt?: unknown;
-  };
+  let body: Record<string, unknown>;
 
   try {
-    body = await request.json();
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json(
       { error: "Некорректный формат данных" },
@@ -203,40 +191,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  const data: {
-    title?: string;
-    groupName?: string | null;
-    city?: string;
-    query?: string;
-    searchUrl?: string | null;
-    avitoItemId?: string | null;
-    avitoItemUrl?: string | null;
-    targetFrom?: number;
-    targetTo?: number;
-    minBid?: number;
-    maxBid?: number;
-    currentBid?: number;
-    bidStep?: number;
-    dailySpendLimit?: number;
-    spentToday?: number;
-    smartEconomyEnabled?: boolean;
-    checkInterval?: number;
-    schedule?: string;
-    status?: BidderStatus;
-    mode?: BidderMode;
-    nextCheckAt?: Date | null;
-    lastError?: string | null;
-    lastCheckedAt?: Date | null;
-  } = {};
-
+  const data: Record<string, unknown> = {};
   const eventMessages: string[] = [];
-  let shouldWriteManualCheckSuccessEvent = false;
-  let shouldWriteManualCheckErrorEvent = false;
 
   if (body.title !== undefined) {
     if (!isNonEmptyString(body.title, 300)) {
       return NextResponse.json(
-        { error: "Укажите корректное название объявления" },
+        { error: "Укажите корректное название объявления." },
         { status: 400 },
       );
     }
@@ -249,16 +210,16 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   if (body.groupName !== undefined) {
-    data.groupName =
-      typeof body.groupName === "string" && body.groupName.trim().length > 0
+    const groupName =
+      typeof body.groupName === "string" && body.groupName.trim()
         ? body.groupName.trim()
         : null;
 
-    if (data.groupName !== existingBidder.groupName) {
+    data.groupName = groupName;
+
+    if (groupName !== existingBidder.groupName) {
       eventMessages.push(
-        data.groupName
-          ? `Группа изменена: ${data.groupName}.`
-          : "Группа бидера очищена.",
+        groupName ? `Группа изменена: ${groupName}.` : "Группа удалена.",
       );
     }
   }
@@ -266,7 +227,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (body.city !== undefined) {
     if (!isNonEmptyString(body.city, 120)) {
       return NextResponse.json(
-        { error: "Укажите корректный город" },
+        { error: "Укажите корректный город." },
         { status: 400 },
       );
     }
@@ -281,7 +242,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (body.query !== undefined) {
     if (!isNonEmptyString(body.query, 300)) {
       return NextResponse.json(
-        { error: "Укажите корректный поисковый запрос" },
+        { error: "Укажите корректный поисковый запрос." },
         { status: 400 },
       );
     }
@@ -295,29 +256,34 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (body.searchUrl !== undefined) {
     data.searchUrl =
-      typeof body.searchUrl === "string" && body.searchUrl.trim().length > 0
+      typeof body.searchUrl === "string" && body.searchUrl.trim()
         ? body.searchUrl.trim()
         : null;
-
-    if (data.searchUrl !== existingBidder.searchUrl) {
-      eventMessages.push(
-        data.searchUrl
-          ? "Ссылка на поиск обновлена."
-          : "Ссылка на поиск удалена.",
-      );
-    }
   }
 
   if (body.avitoItemId !== undefined) {
-    data.avitoItemId =
-      typeof body.avitoItemId === "string" && body.avitoItemId.trim().length > 0
+    const avitoItemId =
+      typeof body.avitoItemId === "string" && body.avitoItemId.trim()
         ? body.avitoItemId.trim()
         : null;
 
-    if (data.avitoItemId !== existingBidder.avitoItemId) {
+    if (avitoItemId) {
+      const numericId = Number(avitoItemId);
+
+      if (!Number.isInteger(numericId) || numericId <= 0) {
+        return NextResponse.json(
+          { error: "Avito Item ID должен быть положительным целым числом." },
+          { status: 400 },
+        );
+      }
+    }
+
+    data.avitoItemId = avitoItemId;
+
+    if (avitoItemId !== existingBidder.avitoItemId) {
       eventMessages.push(
-        data.avitoItemId
-          ? `Привязано объявление Avito ID ${data.avitoItemId}.`
+        avitoItemId
+          ? `Привязано объявление Avito ID ${avitoItemId}.`
           : "Привязка к объявлению Авито удалена.",
       );
     }
@@ -325,8 +291,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (body.avitoItemUrl !== undefined) {
     data.avitoItemUrl =
-      typeof body.avitoItemUrl === "string" &&
-      body.avitoItemUrl.trim().length > 0
+      typeof body.avitoItemUrl === "string" && body.avitoItemUrl.trim()
         ? body.avitoItemUrl.trim()
         : null;
   }
@@ -334,66 +299,37 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (body.mode !== undefined) {
     if (!isValidMode(body.mode)) {
       return NextResponse.json(
-        { error: "Некорректный режим бидера" },
+        { error: "Некорректный режим bidder-а." },
         { status: 400 },
       );
     }
 
     data.mode = body.mode;
 
-    if (data.mode !== existingBidder.mode) {
+    if (body.mode !== existingBidder.mode) {
       eventMessages.push(
-        data.mode === "live"
-          ? "Режим работы переключён в live."
-          : "Режим работы переключён в dry-run.",
+        body.mode === "live"
+          ? "Включён live-режим CPX. Автоприменение заблокировано при mock-позиции; ручное применение доступно после LIVE-подтверждения."
+          : "Включён dry-run режим.",
       );
     }
   }
 
   if (body.smartEconomyEnabled !== undefined) {
-    data.smartEconomyEnabled = body.smartEconomyEnabled === true;
+    const enabled = body.smartEconomyEnabled === true;
+    data.smartEconomyEnabled = enabled;
 
-    if (data.smartEconomyEnabled !== existingBidder.smartEconomyEnabled) {
+    if (enabled !== existingBidder.smartEconomyEnabled) {
       eventMessages.push(
-        data.smartEconomyEnabled
-          ? "Умная экономия бюджета включена."
-          : "Умная экономия бюджета отключена.",
-      );
-    }
-  }
-
-  if (body.lastError !== undefined) {
-    data.lastError =
-      typeof body.lastError === "string" && body.lastError.trim().length > 0
-        ? body.lastError.trim()
-        : null;
-
-    if (data.lastError) {
-      shouldWriteManualCheckErrorEvent = true;
-    } else if (body.lastCheckedAt !== undefined) {
-      shouldWriteManualCheckSuccessEvent = true;
-    }
-  }
-
-  if (body.lastCheckedAt !== undefined) {
-    if (body.lastCheckedAt === null) {
-      data.lastCheckedAt = null;
-    } else if (
-      typeof body.lastCheckedAt === "string" &&
-      !Number.isNaN(Date.parse(body.lastCheckedAt))
-    ) {
-      data.lastCheckedAt = new Date(body.lastCheckedAt);
-    } else {
-      return NextResponse.json(
-        { error: "Некорректная дата последней проверки" },
-        { status: 400 },
+        enabled
+          ? "Умная экономия включена."
+          : "Умная экономия отключена.",
       );
     }
   }
 
   const targetFrom =
     body.targetFrom === undefined ? existingBidder.targetFrom : body.targetFrom;
-
   const targetTo =
     body.targetTo === undefined ? existingBidder.targetTo : body.targetTo;
 
@@ -404,7 +340,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       targetFrom > targetTo
     ) {
       return NextResponse.json(
-        { error: "Укажите корректный диапазон целевых позиций" },
+        { error: "Укажите корректный диапазон целевых позиций." },
         { status: 400 },
       );
     }
@@ -416,13 +352,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       targetFrom !== existingBidder.targetFrom ||
       targetTo !== existingBidder.targetTo
     ) {
-      eventMessages.push(`Целевой диапазон изменён: ${targetFrom}–${targetTo}.`);
+      eventMessages.push(`Целевой диапазон: ${targetFrom}–${targetTo}.`);
     }
   }
 
   const minBid =
     body.minBid === undefined ? existingBidder.minBid : body.minBid;
-
   const maxBid =
     body.maxBid === undefined ? existingBidder.maxBid : body.maxBid;
 
@@ -433,7 +368,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       minBid > maxBid
     ) {
       return NextResponse.json(
-        { error: "Укажите корректный диапазон ставок" },
+        { error: "Укажите корректный диапазон CPX-ставок." },
         { status: 400 },
       );
     }
@@ -445,39 +380,54 @@ export async function PATCH(request: Request, context: RouteContext) {
       maxBid,
     );
 
-    if (minBid !== existingBidder.minBid || maxBid !== existingBidder.maxBid) {
-      eventMessages.push(`Лимиты ставок изменены: ${minBid}–${maxBid} ₽.`);
-    }
+    eventMessages.push(`CPX-лимиты: ${minBid}–${maxBid} ₽.`);
   }
 
   if (body.bidStep !== undefined) {
     if (!isPositiveInteger(body.bidStep)) {
       return NextResponse.json(
-        { error: "Укажите корректный шаг изменения ставки" },
+        { error: "Шаг ставки должен быть целым числом от 1 ₽." },
+        { status: 400 },
+      );
+    }
+
+    const effectiveMin = typeof data.minBid === "number"
+      ? data.minBid
+      : existingBidder.minBid;
+    const effectiveMax = typeof data.maxBid === "number"
+      ? data.maxBid
+      : existingBidder.maxBid;
+
+    if (
+      effectiveMax > effectiveMin &&
+      body.bidStep > effectiveMax - effectiveMin
+    ) {
+      return NextResponse.json(
+        { error: "Шаг ставки больше допустимого диапазона." },
         { status: 400 },
       );
     }
 
     data.bidStep = body.bidStep;
 
-    if (data.bidStep !== existingBidder.bidStep) {
-      eventMessages.push(`Шаг изменения ставки обновлён: ${data.bidStep} ₽.`);
+    if (body.bidStep !== existingBidder.bidStep) {
+      eventMessages.push(`Шаг CPX-ставки: ${body.bidStep} ₽.`);
     }
   }
 
   if (body.dailySpendLimit !== undefined) {
     if (!isNonNegativeInteger(body.dailySpendLimit)) {
       return NextResponse.json(
-        { error: "Укажите корректный дневной лимит расходов" },
+        { error: "Укажите корректный дневной лимит CPX." },
         { status: 400 },
       );
     }
 
     data.dailySpendLimit = body.dailySpendLimit;
 
-    if (data.dailySpendLimit !== existingBidder.dailySpendLimit) {
+    if (body.dailySpendLimit !== existingBidder.dailySpendLimit) {
       eventMessages.push(
-        `Дневной лимит расходов обновлён: ${data.dailySpendLimit} ₽.`,
+        `Дневной лимит CPX: ${body.dailySpendLimit} ₽.`,
       );
     }
   }
@@ -485,7 +435,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (body.spentToday !== undefined) {
     if (!isNonNegativeInteger(body.spentToday)) {
       return NextResponse.json(
-        { error: "Укажите корректную сумму расходов за сегодня" },
+        { error: "Укажите корректные расходы за сегодня." },
         { status: 400 },
       );
     }
@@ -496,16 +446,16 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (body.checkInterval !== undefined) {
     if (!isValidCheckInterval(body.checkInterval)) {
       return NextResponse.json(
-        { error: "Выберите корректный интервал проверки" },
+        { error: "Выберите корректный интервал проверки." },
         { status: 400 },
       );
     }
 
     data.checkInterval = body.checkInterval;
 
-    if (data.checkInterval !== existingBidder.checkInterval) {
+    if (body.checkInterval !== existingBidder.checkInterval) {
       eventMessages.push(
-        `Интервал проверки изменён: ${data.checkInterval} мин.`,
+        `Интервал проверки: ${body.checkInterval} мин.`,
       );
     }
   }
@@ -513,7 +463,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (body.schedule !== undefined) {
     if (!isNonEmptyString(body.schedule, 200)) {
       return NextResponse.json(
-        { error: "Укажите корректное расписание" },
+        { error: "Укажите корректное расписание." },
         { status: 400 },
       );
     }
@@ -521,14 +471,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     data.schedule = body.schedule.trim();
 
     if (data.schedule !== existingBidder.schedule) {
-      eventMessages.push(`Расписание изменено: ${data.schedule}.`);
+      eventMessages.push(`Расписание: ${data.schedule}.`);
     }
   }
 
   if (body.status !== undefined) {
     if (!isValidStatus(body.status)) {
       return NextResponse.json(
-        { error: "Некорректный статус бидера" },
+        { error: "Некорректный статус bidder-а." },
         { status: 400 },
       );
     }
@@ -551,7 +501,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       if (activeBiddersCount >= BASIC_ACTIVE_BIDDERS_LIMIT) {
         return NextResponse.json(
           {
-            error: `На подписке Basic доступно не более ${BASIC_ACTIVE_BIDDERS_LIMIT} активных бидеров.`,
+            error: `На подписке Basic доступно не более ${BASIC_ACTIVE_BIDDERS_LIMIT} активных bidder-ов.`,
           },
           { status: 403 },
         );
@@ -561,7 +511,11 @@ export async function PATCH(request: Request, context: RouteContext) {
     data.status = body.status;
 
     if (body.status === "active") {
-      const interval = data.checkInterval ?? existingBidder.checkInterval;
+      const interval =
+        typeof data.checkInterval === "number"
+          ? data.checkInterval
+          : existingBidder.checkInterval;
+
       data.nextCheckAt = getNextCheckAt(interval);
     }
 
@@ -574,17 +528,42 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
   }
 
+  if (body.lastError !== undefined) {
+    data.lastError =
+      typeof body.lastError === "string" && body.lastError.trim()
+        ? body.lastError.trim()
+        : null;
+  }
+
+  if (body.lastCheckedAt !== undefined) {
+    if (body.lastCheckedAt === null) {
+      data.lastCheckedAt = null;
+    } else if (
+      typeof body.lastCheckedAt === "string" &&
+      !Number.isNaN(Date.parse(body.lastCheckedAt))
+    ) {
+      data.lastCheckedAt = new Date(body.lastCheckedAt);
+    } else {
+      return NextResponse.json(
+        { error: "Некорректная дата последней проверки." },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Принудительно фиксируем новую стратегию и отключаем BBIP duration.
+  data.promotionStrategy = "cpx_manual";
+  data.promotionDurationDays = 0;
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json(
-      { error: "Нет данных для обновления" },
+      { error: "Нет данных для обновления." },
       { status: 400 },
     );
   }
 
   const bidder = await prisma.avitoBidder.update({
-    where: {
-      id,
-    },
+    where: { id },
     data,
   });
 
@@ -593,22 +572,6 @@ export async function PATCH(request: Request, context: RouteContext) {
       bidderId: bidder.id,
       type: "bidder_updated",
       message,
-    });
-  }
-
-  if (shouldWriteManualCheckSuccessEvent) {
-    await createBidderEvent({
-      bidderId: bidder.id,
-      type: "manual_check_success",
-      message: `Объявление «${bidder.title}» успешно проверено.`,
-    });
-  }
-
-  if (shouldWriteManualCheckErrorEvent) {
-    await createBidderEvent({
-      bidderId: bidder.id,
-      type: "manual_check_error",
-      message: bidder.lastError || "Ошибка ручной проверки объявления.",
     });
   }
 
@@ -628,7 +591,7 @@ export async function DELETE(_: Request, context: RouteContext) {
 
   if (!id) {
     return NextResponse.json(
-      { error: "Некорректный идентификатор бидера" },
+      { error: "Некорректный идентификатор bidder-а" },
       { status: 400 },
     );
   }
@@ -654,7 +617,7 @@ export async function DELETE(_: Request, context: RouteContext) {
   await createBidderEvent({
     bidderId: existingBidder.id,
     type: "bidder_deleted",
-    message: `Бидер «${existingBidder.title}» удалён.`,
+    message: `CPX bidder «${existingBidder.title}» удалён.`,
   });
 
   await prisma.avitoBidder.delete({

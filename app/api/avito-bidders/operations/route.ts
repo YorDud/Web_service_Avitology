@@ -49,6 +49,14 @@ function isCooldownActive(value: Date | null) {
   return Boolean(value && value.getTime() > Date.now());
 }
 
+function toNumericItemId(value: string | null) {
+  if (!value) return null;
+
+  const itemId = Number(value);
+
+  return Number.isInteger(itemId) && itemId > 0 ? itemId : null;
+}
+
 async function getHealthSummary(userId: number) {
   const bidders = await prisma.avitoBidder.findMany({
     where: { userId },
@@ -61,11 +69,12 @@ async function getHealthSummary(userId: number) {
     const scheduleParsed = parseBidderSchedule(bidder.schedule);
     const scheduleAllowed = isTimeWithinBidderSchedule(bidder.schedule, now);
     const cooldownActive = isCooldownActive(bidder.liveApplyCooldownUntil);
+    const itemId = toNumericItemId(bidder.avitoItemId);
 
     const liveReady = Boolean(
       bidder.mode === "live" &&
         bidder.status === "active" &&
-        bidder.avitoItemId &&
+        itemId &&
         scheduleAllowed &&
         !cooldownActive,
     );
@@ -75,24 +84,37 @@ async function getHealthSummary(userId: number) {
       title: bidder.title,
       status: bidder.status,
       mode: bidder.mode,
-      hasAvitoItem: Boolean(bidder.avitoItemId),
-      hasOrder: Boolean(bidder.lastPromotionOrderId),
+
+      strategy: "cpx_manual",
+      hasAvitoItem: Boolean(itemId),
       hasError: Boolean(bidder.lastError),
+
       schedule: {
         raw: bidder.schedule,
         valid: Boolean(scheduleParsed),
         allowedNow: scheduleAllowed,
-        nextStartAt: getNextScheduleStart(bidder.schedule, now)?.toISOString() ?? null,
+        nextStartAt:
+          getNextScheduleStart(bidder.schedule, now)?.toISOString() ?? null,
       },
+
       cooldown: {
         active: cooldownActive,
         until: bidder.liveApplyCooldownUntil?.toISOString() ?? null,
       },
+
       liveReady,
       nextCheckAt: bidder.nextCheckAt?.toISOString() ?? null,
       lastCheckedAt: bidder.lastCheckedAt?.toISOString() ?? null,
       lastError: bidder.lastError,
-      promotionStatus: bidder.lastPromotionStatus,
+
+      cpx: {
+        status: bidder.lastPromotionStatus,
+        savedBidRubles: bidder.currentBid,
+        minBidRubles: bidder.minBid,
+        maxBidRubles: bidder.maxBid,
+        dailySpendLimitRubles: bidder.dailySpendLimit,
+        lastAppliedAt: bidder.lastAppliedAt?.toISOString() ?? null,
+      },
     };
   });
 
@@ -103,20 +125,23 @@ async function getHealthSummary(userId: number) {
       all: bidders.length,
       active: bidders.filter((bidder) => bidder.status === "active").length,
       paused: bidders.filter((bidder) => bidder.status === "paused").length,
-      attention: bidders.filter((bidder) => bidder.status === "attention").length,
+      attention: bidders.filter((bidder) => bidder.status === "attention")
+        .length,
 
       live: bidders.filter((bidder) => bidder.mode === "live").length,
       dryRun: bidders.filter((bidder) => bidder.mode === "dry_run").length,
 
       liveReady: details.filter((item) => item.liveReady).length,
       cooldownActive: details.filter((item) => item.cooldown.active).length,
-      outsideSchedule: details.filter(
-        (item) => !item.schedule.allowedNow,
-      ).length,
+      outsideSchedule: details.filter((item) => !item.schedule.allowedNow)
+        .length,
 
       withErrors: details.filter((item) => item.hasError).length,
       withoutAvitoItem: details.filter((item) => !item.hasAvitoItem).length,
-      withPromotionOrder: details.filter((item) => item.hasOrder).length,
+
+      // Поле сохранено, чтобы не ломать dashboard;
+      // в CPX manual order-ов не существует.
+      withPromotionOrder: 0,
     },
 
     bidders: details,
@@ -125,8 +150,7 @@ async function getHealthSummary(userId: number) {
 
 /**
  * GET /api/avito-bidders/operations
- *
- * Возвращает health summary всех bidder-ов текущего пользователя.
+ * Возвращает health summary текущего пользователя.
  */
 export async function GET() {
   const authorization = await getAuthorizedUser();
@@ -230,6 +254,7 @@ export async function POST(request: Request) {
       status: "paused",
       nextCheckAt: null,
       lastError: null,
+      lastPromotionStatus: "paused_by_bulk_operation",
     },
   });
 

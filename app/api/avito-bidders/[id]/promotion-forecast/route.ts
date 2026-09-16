@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import {
-  getBbipForecastsForItem,
-  getBbipSuggestsForItem,
-  normalizeSuggestedBudget,
+  findAllowedCpxBid,
+  getCpxBidsForItem,
+  pennyToRubles,
+  rublesToPenny,
 } from "@/lib/avito-promotion-api";
 
 type RouteContext = {
@@ -58,11 +59,17 @@ async function getBidderId(context: RouteContext) {
 
 function toNumericItemId(value: string | null) {
   if (!value) return null;
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+
+  const itemId = Number(value);
+
+  return Number.isInteger(itemId) && itemId > 0 ? itemId : null;
 }
 
-export async function GET(_: Request, context: RouteContext) {
+/**
+ * Старое имя route сохранено.
+ * CPX прогноз уже содержится в getBids → manual.bids[].
+ */
+export async function GET(request: Request, context: RouteContext) {
   const authorization = await getAuthorizedUser();
 
   if ("error" in authorization) {
@@ -87,74 +94,105 @@ export async function GET(_: Request, context: RouteContext) {
       id: true,
       title: true,
       avitoItemId: true,
-      promotionDurationDays: true,
+      currentBid: true,
+      minBid: true,
+      maxBid: true,
     },
   });
 
   if (!bidder) {
-    return NextResponse.json({ error: "Бидер не найден" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Бидер не найден" },
+      { status: 404 },
+    );
   }
 
   const itemId = toNumericItemId(bidder.avitoItemId);
 
   if (!itemId) {
     return NextResponse.json(
-      {
-        error:
-          "Для получения forecast нужен числовой avitoItemId, совместимый с Promotion API.",
-      },
+      { error: "Для CPX нужен числовой avitoItemId." },
       { status: 400 },
     );
   }
 
+  const url = new URL(request.url);
+  const requestedBidRublesValue = Number(url.searchParams.get("bid"));
+
+  const desiredBidRubles =
+    Number.isFinite(requestedBidRublesValue) &&
+    requestedBidRublesValue >= bidder.minBid &&
+    requestedBidRublesValue <= bidder.maxBid
+      ? Math.round(requestedBidRublesValue)
+      : bidder.currentBid;
+
   try {
-    const suggests = await getBbipSuggestsForItem({
+    const cpx = await getCpxBidsForItem({
       userId: authorization.user.id,
       itemId,
     });
 
-    const suggest =
-      suggests.suggests.find((item) => {
-        const current =
-          typeof item.itemId === "number" || typeof item.itemId === "string"
-            ? String(item.itemId)
-            : null;
+    const selectedBid = findAllowedCpxBid({
+      desiredBidPenny: rublesToPenny(desiredBidRubles),
+      minBidPenny: rublesToPenny(bidder.minBid),
+      maxBidPenny: rublesToPenny(bidder.maxBid),
+      availableBids: cpx.manual.bids,
+    });
 
-        return current === String(itemId);
-      }) ?? suggests.suggests[0];
-
-    const budget = normalizeSuggestedBudget(suggest);
-
-    if (!budget?.price || !budget.oldPrice) {
+    if (!selectedBid) {
       return NextResponse.json(
         {
           error:
-            "Promotion API не вернул подходящий бюджет для построения прогноза.",
+            "Avito не вернул CPX-ставок, подходящих под заданные лимиты bidder-а.",
         },
         { status: 400 },
       );
     }
 
-    const duration =
-      bidder.promotionDurationDays > 0 ? bidder.promotionDurationDays : 7;
-
-    const forecast = await getBbipForecastsForItem({
-      userId: authorization.user.id,
-      itemId,
-      duration,
-      price: budget.price,
-      oldPrice: budget.oldPrice,
-    });
+    const allForecasts = cpx.manual.bids
+      .filter(
+        (bid) =>
+          bid.valuePenny >= rublesToPenny(bidder.minBid) &&
+          bid.valuePenny <= rublesToPenny(bidder.maxBid),
+      )
+      .map((bid) => ({
+        bidPenny: bid.valuePenny,
+        bidRubles: pennyToRubles(bid.valuePenny),
+        minForecast: bid.minForecast,
+        maxForecast: bid.maxForecast,
+        compare: bid.compare,
+        isCurrent: bid.valuePenny === cpx.manual.bidPenny,
+        isRecommended: bid.valuePenny === cpx.manual.recBidPenny,
+      }));
 
     return NextResponse.json({
       bidderId: bidder.id,
       title: bidder.title,
       itemId,
-      duration,
-      selectedBudget: budget,
-      suggestsRaw: suggests.raw,
-      forecastRaw: forecast.raw,
-      forecasts: forecast.forecasts,
+      strategy: "cpx_manual",
+
+      requestedBidRubles: desiredBidRubles,
+
+      selectedBid: {
+        bidPenny: selectedBid.valuePenny,
+        bidRubles: pennyToRubles(selectedBid.valuePenny),
+        minForecast: selectedBid.minForecast,
+        maxForecast: selectedBid.maxForecast,
+        compare: selectedBid.compare,
+      },
+
+      avitoCurrentBid: {
+        bidPenny: cpx.manual.bidPenny,
+        bidRubles: pennyToRubles(cpx.manual.bidPenny),
+      },
+
+      avitoRecommendedBid: {
+        bidPenny: cpx.manual.recBidPenny,
+        bidRubles: pennyToRubles(cpx.manual.recBidPenny),
+      },
+
+      forecasts: allForecasts,
+      raw: cpx.raw,
     });
   } catch (error) {
     return NextResponse.json(
@@ -162,7 +200,7 @@ export async function GET(_: Request, context: RouteContext) {
         error:
           error instanceof Error
             ? error.message
-            : "Не удалось получить BBIP forecast.",
+            : "Не удалось получить CPX-прогноз из Avito API.",
       },
       { status: 500 },
     );

@@ -85,14 +85,23 @@ export async function POST(_: Request, context: RouteContext) {
 
   try {
     const result = await runSingleBidder({
-      bidderId: bidder.id,
-      userId: bidder.userId,
-    });
+  bidderId: bidder.id,
+  userId: bidder.userId,
+  force: true,
+});
 
-    return NextResponse.json({
-      success: true,
-      result,
-    });
+const updatedBidder = await prisma.avitoBidder.findFirst({
+  where: {
+    id: bidder.id,
+    userId: authorization.user.id,
+  },
+});
+
+return NextResponse.json({
+  success: true,
+  result,
+  bidder: updatedBidder,
+});
   } catch (error) {
     return NextResponse.json(
       {

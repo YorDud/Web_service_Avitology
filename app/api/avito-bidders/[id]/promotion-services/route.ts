@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { getPromotionServicesForItem } from "@/lib/avito-promotion-api";
+import {
+  getCpxBidsForItem,
+  pennyToRubles,
+} from "@/lib/avito-promotion-api";
 
 type RouteContext = {
   params: Promise<{
@@ -54,10 +57,16 @@ async function getBidderId(context: RouteContext) {
 
 function toNumericItemId(value: string | null) {
   if (!value) return null;
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+
+  const itemId = Number(value);
+
+  return Number.isInteger(itemId) && itemId > 0 ? itemId : null;
 }
 
+/**
+ * Старый URL сохранён для совместимости с интерфейсом.
+ * Теперь он возвращает параметры CPX Promo, а не устаревшие Promotion services / BBIP.
+ */
 export async function GET(_: Request, context: RouteContext) {
   const authorization = await getAuthorizedUser();
 
@@ -81,13 +90,20 @@ export async function GET(_: Request, context: RouteContext) {
     },
     select: {
       id: true,
-      avitoItemId: true,
       title: true,
+      avitoItemId: true,
+      minBid: true,
+      maxBid: true,
+      dailySpendLimit: true,
+      promotionStrategy: true,
     },
   });
 
   if (!bidder) {
-    return NextResponse.json({ error: "Бидер не найден" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Бидер не найден" },
+      { status: 404 },
+    );
   }
 
   const itemId = toNumericItemId(bidder.avitoItemId);
@@ -96,24 +112,74 @@ export async function GET(_: Request, context: RouteContext) {
     return NextResponse.json(
       {
         error:
-          "Для получения promotion services нужен числовой avitoItemId, совместимый с Promotion API.",
+          "Для получения параметров CPX нужен числовой avitoItemId.",
       },
       { status: 400 },
     );
   }
 
   try {
-    const result = await getPromotionServicesForItem({
+    const cpx = await getCpxBidsForItem({
       userId: authorization.user.id,
       itemId,
+    });
+
+    const allowedBids = cpx.manual.bids.map((bid) => ({
+      bidPenny: bid.valuePenny,
+      bidRubles: pennyToRubles(bid.valuePenny),
+      minForecast: bid.minForecast,
+      maxForecast: bid.maxForecast,
+      compare: bid.compare,
+    }));
+
+    const bidsWithinBidderLimits = allowedBids.filter((bid) => {
+      const bidRubles = bid.bidRubles;
+
+      return (
+        bidRubles !== null &&
+        bidRubles >= bidder.minBid &&
+        bidRubles <= bidder.maxBid
+      );
     });
 
     return NextResponse.json({
       bidderId: bidder.id,
       title: bidder.title,
       itemId,
-      services: result.services,
-      raw: result.raw,
+
+      strategy: "cpx_manual",
+      oldStrategy: bidder.promotionStrategy,
+
+      bidderLimits: {
+        minBidRubles: bidder.minBid,
+        maxBidRubles: bidder.maxBid,
+        dailySpendLimitRubles: bidder.dailySpendLimit,
+      },
+
+      cpx: {
+        actionTypeId: cpx.actionTypeId,
+        selectedType: cpx.selectedType,
+
+        currentBidPenny: cpx.manual.bidPenny,
+        currentBidRubles: pennyToRubles(cpx.manual.bidPenny),
+
+        recommendedBidPenny: cpx.manual.recBidPenny,
+        recommendedBidRubles: pennyToRubles(cpx.manual.recBidPenny),
+
+        minBidPenny: cpx.manual.minBidPenny,
+        minBidRubles: pennyToRubles(cpx.manual.minBidPenny),
+
+        maxBidPenny: cpx.manual.maxBidPenny,
+        maxBidRubles: pennyToRubles(cpx.manual.maxBidPenny),
+
+        currentLimitPenny: cpx.manual.limitPenny,
+        currentLimitRubles: pennyToRubles(cpx.manual.limitPenny),
+
+        availableBids: allowedBids,
+        availableBidsWithinBidderLimits: bidsWithinBidderLimits,
+      },
+
+      raw: cpx.raw,
     });
   } catch (error) {
     return NextResponse.json(
@@ -121,7 +187,7 @@ export async function GET(_: Request, context: RouteContext) {
         error:
           error instanceof Error
             ? error.message
-            : "Не удалось получить services из Promotion API.",
+            : "Не удалось получить параметры CPX Promo из Avito API.",
       },
       { status: 500 },
     );

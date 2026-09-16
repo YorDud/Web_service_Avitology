@@ -13,7 +13,9 @@ export default async function DashboardPage() {
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: sessionUser.id },
+    where: {
+      id: sessionUser.id,
+    },
     select: {
       id: true,
       publicId: true,
@@ -23,16 +25,19 @@ export default async function DashboardPage() {
       subscriptionPrice: true,
       subscriptionPaidAt: true,
       subscriptionEndsAt: true,
+
       financialRecords: {
         orderBy: {
           recordDate: "asc",
         },
       },
+
       avitoBidders: {
         orderBy: {
           updatedAt: "desc",
         },
       },
+
       avitoAccountConnection: {
         select: {
           clientId: true,
@@ -55,7 +60,7 @@ export default async function DashboardPage() {
     expense: record.expense,
   }));
 
-    const initialBidders = user.avitoBidders.map((bidder) => ({
+  const initialBidders = user.avitoBidders.map((bidder) => ({
     id: bidder.id,
     title: bidder.title,
     groupName: bidder.groupName,
@@ -64,26 +69,43 @@ export default async function DashboardPage() {
     searchUrl: bidder.searchUrl,
     avitoItemId: bidder.avitoItemId,
     avitoItemUrl: bidder.avitoItemUrl,
+
     targetFrom: bidder.targetFrom,
     targetTo: bidder.targetTo,
     currentPosition: bidder.currentPosition,
+
+    positionSource: bidder.positionSource,
+positionCheckedAt: bidder.positionCheckedAt?.toISOString() ?? null,
+positionSearchUrl: bidder.positionSearchUrl,
+positionPage: bidder.positionPage,
+lastPositionError: bidder.lastPositionError,
+
+    // Вариант A: данные в БД хранятся в целых рублях.
     currentBid: bidder.currentBid,
     minBid: bidder.minBid,
     maxBid: bidder.maxBid,
     bidStep: bidder.bidStep,
     dailySpendLimit: bidder.dailySpendLimit,
     spentToday: bidder.spentToday,
+
     smartEconomyEnabled: bidder.smartEconomyEnabled,
     checkInterval: bidder.checkInterval,
     schedule: bidder.schedule,
     status: bidder.status,
     mode: bidder.mode,
     changesToday: bidder.changesToday,
+
     nextCheckAt: bidder.nextCheckAt?.toISOString() ?? null,
     lastCheckedAt: bidder.lastCheckedAt?.toISOString() ?? null,
     lastError: bidder.lastError,
+
+    // После обновления новые bidder-ы имеют "cpx_manual".
     promotionStrategy: bidder.promotionStrategy,
     promotionDurationDays: bidder.promotionDurationDays,
+
+    // Старые поля временно сохраняем для совместимости
+    // с существующим клиентским компонентом.
+    // CPX не создаёт order ID.
     lastPromotionOrderId: bidder.lastPromotionOrderId,
     lastPromotionRequestId: bidder.lastPromotionRequestId,
     lastPromotionStatus: bidder.lastPromotionStatus,
@@ -92,6 +114,7 @@ export default async function DashboardPage() {
     lastPromotionPayload: bidder.lastPromotionPayload,
     lastForecastPayload: bidder.lastForecastPayload,
     lastSuggestPayload: bidder.lastSuggestPayload,
+
     lastAppliedAt: bidder.lastAppliedAt?.toISOString() ?? null,
     createdAt: bidder.createdAt.toISOString(),
     updatedAt: bidder.updatedAt.toISOString(),
@@ -102,7 +125,10 @@ export default async function DashboardPage() {
         clientIdMasked:
           user.avitoAccountConnection.clientId.length <= 6
             ? user.avitoAccountConnection.clientId
-            : `${user.avitoAccountConnection.clientId.slice(0, 3)}***${user.avitoAccountConnection.clientId.slice(-3)}`,
+            : `${user.avitoAccountConnection.clientId.slice(
+                0,
+                3,
+              )}***${user.avitoAccountConnection.clientId.slice(-3)}`,
         tokenExpiresAt:
           user.avitoAccountConnection.tokenExpiresAt?.toISOString() ?? null,
         lastCheckedAt:
@@ -120,7 +146,9 @@ export default async function DashboardPage() {
         subscriptionLevel: user.subscriptionLevel,
         subscriptionPriceText:
           user.subscriptionPrice > 0
-            ? `${new Intl.NumberFormat("ru-RU").format(user.subscriptionPrice)} ₽/мес`
+            ? `${new Intl.NumberFormat("ru-RU").format(
+                user.subscriptionPrice,
+              )} ₽/мес`
             : "Бесплатно",
         subscriptionPaidAt: user.subscriptionPaidAt
           ? new Intl.DateTimeFormat("ru-RU", {
