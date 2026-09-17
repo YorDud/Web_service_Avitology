@@ -6,7 +6,7 @@ import { encryptAvitoSecret } from "@/lib/avito-credentials";
 export const runtime = "nodejs";
 
 function hasBidderAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return level === "pro" || level === "admin";
 }
 
 function isNonEmptyString(value: unknown, maxLength: number): value is string {
@@ -72,7 +72,7 @@ async function getAuthorizedUser() {
   if (!user || !hasBidderAccess(user.subscriptionLevel)) {
     return {
       error: NextResponse.json(
-        { error: "Подключение Авито доступно с подпиской Basic" },
+        { error: "Подключение Авито доступно с подпиской Pro" },
         { status: 403 },
       ),
     };

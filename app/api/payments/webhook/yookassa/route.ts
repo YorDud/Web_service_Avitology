@@ -1,6 +1,7 @@
+import { getSubscriptionPlan } from "@/lib/subscription-plans";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { activateBasicSubscription } from "@/lib/payments/activate-basic-subscription";
+import { activateSubscription } from "@/lib/payments/activate-subscription";
 
 type YookassaWebhookBody = {
   event?: string;
@@ -52,10 +53,7 @@ export async function POST(req: Request) {
 
     if (event === "payment.succeeded" || status === "succeeded") {
       if (payment.status !== "succeeded") {
-        await activateBasicSubscription(payment.userId, {
-          months: payment.durationMonths || 1,
-          price: payment.amount,
-        });
+        await activateSubscription(payment.userId, getSubscriptionPlan(payment.planCode).tier, { months: payment.durationMonths || 1, price: payment.amount });
 
         await prisma.payment.update({
           where: { id: payment.id },

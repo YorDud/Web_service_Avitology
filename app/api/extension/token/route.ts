@@ -11,7 +11,7 @@ function withCors(response: NextResponse) {
 }
 
 function hasAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return level === "basic" || level === "pro" || level === "admin";
 }
 
 export async function OPTIONS() {
@@ -39,7 +39,7 @@ export async function GET() {
 
   if (!user || !user.isActive || !hasAccess(user.subscriptionLevel)) {
     return withCors(
-      NextResponse.json({ error: "Нужна подписка Basic" }, { status: 403 })
+      NextResponse.json({ error: "Нужна подписка Basic или Pro" }, { status: 403 })
     );
   }
 

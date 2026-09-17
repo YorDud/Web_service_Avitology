@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { runDueBidders, runSingleBidder } from "@/lib/avito-bidder-runner";
 
 function hasBidderAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return level === "pro" || level === "admin";
 }
 
 async function getAuthorizedUser() {
@@ -13,7 +13,7 @@ async function getAuthorizedUser() {
   if (!sessionUser) {
     return {
       error: NextResponse.json(
-        { error: "Требуется авторизация" },
+        { error: "РўСЂРµР±СѓРµС‚СЃСЏ Р°РІС‚РѕСЂРёР·Р°С†РёСЏ" },
         { status: 401 },
       ),
     };
@@ -30,7 +30,7 @@ async function getAuthorizedUser() {
   if (!user || !hasBidderAccess(user.subscriptionLevel)) {
     return {
       error: NextResponse.json(
-        { error: "Бид-менеджер доступен с подпиской Basic" },
+        { error: "Р‘РёРґ-РјРµРЅРµРґР¶РµСЂ РґРѕСЃС‚СѓРїРµРЅ СЃ РїРѕРґРїРёСЃРєРѕР№ Pro" },
         { status: 403 },
       ),
     };
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
     const message =
       error instanceof Error
         ? error.message
-        : "Не удалось выполнить цикл проверки бидеров.";
+        : "РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ С†РёРєР» РїСЂРѕРІРµСЂРєРё Р±РёРґРµСЂРѕРІ.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

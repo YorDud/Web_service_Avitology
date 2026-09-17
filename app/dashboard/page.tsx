@@ -145,11 +145,13 @@ lastPositionError: bidder.lastPositionError,
         email: user.email,
         subscriptionLevel: user.subscriptionLevel,
         subscriptionPriceText:
-          user.subscriptionPrice > 0
-            ? `${new Intl.NumberFormat("ru-RU").format(
-                user.subscriptionPrice,
-              )} ₽/мес`
-            : "Бесплатно",
+  user.subscriptionLevel === "basic"
+    ? "299 ₽/мес"
+    : user.subscriptionLevel === "pro"
+      ? "799 ₽/мес"
+      : user.subscriptionLevel === "admin"
+        ? "Полный доступ"
+        : "Бесплатно",
         subscriptionPaidAt: user.subscriptionPaidAt
           ? new Intl.DateTimeFormat("ru-RU", {
               day: "2-digit",

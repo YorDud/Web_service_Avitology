@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     const subscriptionLevel = String(body.subscriptionLevel || "free") as
       | "free"
       | "basic"
+      | "pro"
       | "admin";
 
     if (!email || !name || !password) {
@@ -57,7 +58,7 @@ const createdUser = await prisma.user.create({
     name,
     passwordHash,
     subscriptionLevel,
-    subscriptionPrice: subscriptionLevel === "basic" ? 299 : 0,
+    subscriptionPrice: subscriptionLevel === "basic" ? 299 : subscriptionLevel === "pro" ? 799 : 0,
     isActive: true,
   },
 });

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getPaymentMode } from "@/lib/payment-mode";
-import { activateBasicSubscription } from "@/lib/payments/activate-basic-subscription";
+import { activateSubscription } from "@/lib/payments/activate-subscription";
 import { createYookassaPayment } from "@/lib/payments/yookassa";
 import { getSubscriptionPlan } from "@/lib/subscription-plans";
 
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => null);
-    const planCode = body?.planCode || "1m";
+    const planCode = body?.planCode || "basic_1m";
     const plan = getSubscriptionPlan(planCode);
 
     const user = await prisma.user.findUnique({
@@ -36,10 +36,7 @@ export async function POST(req: Request) {
     console.log("PAYMENT MODE:", paymentMode, "PLAN:", plan.code);
 
     if (paymentMode === "test") {
-      const updatedUser = await activateBasicSubscription(user.id, {
-        months: plan.months,
-        price: plan.price,
-      });
+      const updatedUser = await activateSubscription(user.id, plan.tier, { months: plan.months, price: plan.price });
 
       const payment = await prisma.payment.create({
         data: {
@@ -48,7 +45,7 @@ export async function POST(req: Request) {
           status: "succeeded",
           amount: updatedUser.subscriptionLevel === "admin" ? 0 : plan.price,
           currency: "RUB",
-          description: `Тестовая активация подписки Basic (${plan.title})`,
+          description: `Тестовая активация подписки ${plan.tier === "pro" ? "Pro" : "Basic"} (${plan.title})`,
           planCode: plan.code,
           durationMonths: plan.months,
           paidAt: new Date(),
@@ -56,6 +53,7 @@ export async function POST(req: Request) {
             source: "web-pricing",
             mode: "test",
             planCode: plan.code,
+            tier: plan.tier,
           }),
         },
       });
@@ -82,6 +80,7 @@ export async function POST(req: Request) {
           source: "web-pricing",
           mode: "yookassa",
           planCode: plan.code,
+          tier: plan.tier,
         }),
       },
     });
@@ -119,6 +118,7 @@ export async function POST(req: Request) {
             mode: "yookassa",
             yookassaStatus,
             planCode: plan.code,
+            tier: plan.tier,
           }),
         },
       });

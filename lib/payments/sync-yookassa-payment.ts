@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { activateBasicSubscription } from "@/lib/payments/activate-basic-subscription";
+import { activateSubscription } from "@/lib/payments/activate-subscription";
 import { getYookassaPayment } from "@/lib/payments/yookassa";
+import { getSubscriptionPlan } from "@/lib/subscription-plans";
 
 export async function syncYookassaPaymentByInternalId(internalPaymentId: number) {
   const payment = await prisma.payment.findUnique({
@@ -26,7 +27,7 @@ export async function syncYookassaPaymentByInternalId(internalPaymentId: number)
 
   if (status === "succeeded" || paid === true) {
     if (payment.status !== "succeeded") {
-      await activateBasicSubscription(payment.userId);
+      await activateSubscription(payment.userId, getSubscriptionPlan(payment.planCode).tier, { months: payment.durationMonths || 1, price: payment.amount });
 
       return await prisma.payment.update({
         where: { id: payment.id },

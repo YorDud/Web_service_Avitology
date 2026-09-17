@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-const BIDDER_EVENTS_RETENTION_DAYS = 3;
+const BIDDER_EVENTS_RETENTION_DAYS = 7;
 
 function getBidderEventsCutoffDate() {
   return new Date(

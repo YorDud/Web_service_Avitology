@@ -9,7 +9,7 @@ type UserItem = {
   publicId: number | null;
   email: string;
   name: string;
-  subscriptionLevel: "free" | "basic" | "admin";
+  subscriptionLevel: "free" | "basic" | "pro" | "admin";
   subscriptionPrice: number;
   subscriptionPaidAt: string | null;
   subscriptionEndsAt: string | null;
@@ -98,8 +98,8 @@ function getSubscriptionClass(level: UserItem["subscriptionLevel"]) {
   switch (level) {
     case "admin":
       return "border-violet-200 bg-violet-50 text-violet-700";
-    case "basic":
-      return "border-[#03bd48]/30 bg-[#03bd48]/10 text-[#028c36]";
+    case "basic": return "border-[#03bd48]/30 bg-[#03bd48]/10 text-[#028c36]";
+    case "pro": return "border-blue-200 bg-blue-50 text-blue-700";
     default:
       return "border-black/10 bg-black/[0.03] text-black/60";
   }
@@ -157,7 +157,7 @@ export default function AdminUsersClient({
   const [createEmail, setCreateEmail] = useState("");
   const [createPassword, setCreatePassword] = useState("");
   const [createSubscriptionLevel, setCreateSubscriptionLevel] = useState<
-    "free" | "basic" | "admin"
+    "free" | "basic" | "pro" | "admin"
   >("free");
 
   const [serviceSettings, setServiceSettings] = useState(
@@ -809,6 +809,7 @@ export default function AdminUsersClient({
                               subscriptionLevel: event.target.value as
                                 | "free"
                                 | "basic"
+                                | "pro"
                                 | "admin",
                             })
                           }
@@ -816,6 +817,7 @@ export default function AdminUsersClient({
                         >
                           <option value="free">free</option>
                           <option value="basic">basic</option>
+                          <option value="pro">pro</option>
                           <option value="admin">admin</option>
                         </select>
                       </div>
@@ -1110,6 +1112,7 @@ export default function AdminUsersClient({
                             event.target.value as
                               | "free"
                               | "basic"
+                              | "pro"
                               | "admin"
                           )
                         }

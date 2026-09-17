@@ -15,7 +15,7 @@ type BidderStatus = "active" | "paused" | "attention";
 type BidderMode = "dry_run" | "live";
 
 function hasBidderAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return level === "pro" || level === "admin";
 }
 
 function isNonEmptyString(value: unknown, maxLength = 300): value is string {
@@ -134,7 +134,7 @@ async function getAuthorizedUser() {
   if (!user || !hasBidderAccess(user.subscriptionLevel)) {
     return {
       error: NextResponse.json(
-        { error: "Бид-менеджер доступен с подпиской Basic" },
+        { error: "Бид-менеджер доступен с подпиской Pro" },
         { status: 403 },
       ),
     };

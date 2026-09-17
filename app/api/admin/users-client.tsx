@@ -8,7 +8,7 @@ type UserItem = {
   publicId: number | null;
   email: string;
   name: string;
-  subscriptionLevel: "free" | "basic" | "admin";
+  subscriptionLevel: "free" | "basic" | "pro" | "admin";
   subscriptionPrice: number;
   subscriptionPaidAt: string | null;
   subscriptionEndsAt: string | null;
@@ -47,7 +47,7 @@ export default function AdminUsersClient({
   const [createEmail, setCreateEmail] = useState("");
   const [createPassword, setCreatePassword] = useState("");
   const [createSubscriptionLevel, setCreateSubscriptionLevel] = useState<
-    "free" | "basic" | "admin"
+    "free" | "basic" | "pro" | "admin"
   >("free");
 
   const filteredUsers = useMemo(() => {
@@ -359,6 +359,7 @@ export default function AdminUsersClient({
       >
         <option value="free">free</option>
         <option value="basic">basic</option>
+        <option value="pro">pro</option>
         <option value="admin">admin</option>
       </select>
     </div>
@@ -518,13 +519,14 @@ export default function AdminUsersClient({
                     value={createSubscriptionLevel}
                     onChange={(e) =>
                       setCreateSubscriptionLevel(
-                        e.target.value as "free" | "basic" | "admin"
+                        e.target.value as "free" | "basic" | "pro" | "admin"
                       )
                     }
                     className="w-full rounded-2xl border border-gray-200 px-4 py-4 outline-none transition focus:border-green-500"
                   >
                     <option value="free">free</option>
                     <option value="basic">basic</option>
+                    <option value="pro">pro</option>
                     <option value="admin">admin</option>
                   </select>
                 </div>

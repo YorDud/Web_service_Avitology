@@ -13,7 +13,7 @@ function withCors(response: NextResponse) {
 }
 
 function hasAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return level === "basic" || level === "pro" || level === "admin";
 }
 
 function text(value: unknown, maxLength = MAX_TEXT) {
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   if (!user || !user.isActive || !hasAccess(user.subscriptionLevel)) {
     return withCors(
       NextResponse.json(
-        { error: "Сохранение аналитики доступно с подпиской Basic" },
+        { error: "Сохранение аналитики доступно с подпиской Basic или Pro" },
         { status: 403 }
       )
     );

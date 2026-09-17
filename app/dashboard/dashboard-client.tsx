@@ -374,6 +374,8 @@ function getSubscriptionStyle(level: string) {
       return "border-violet-200 bg-violet-50 text-violet-700";
     case "basic":
       return "border-[#03bd48]/30 bg-[#03bd48]/10 text-[#028c36]";
+    case "pro":
+      return "border-blue-200 bg-blue-50 text-blue-700";
     default:
       return "border-black/10 bg-black/[0.03] text-black/60";
   }
@@ -977,8 +979,8 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
 );
 
   const subscriptionLevel = user.subscriptionLevel.toLowerCase();
-  const hasAccess =
-    subscriptionLevel === "basic" || subscriptionLevel === "admin";
+  const hasAccess = subscriptionLevel === "basic" || subscriptionLevel === "pro" || subscriptionLevel === "admin";
+  const hasBidderAccess = subscriptionLevel === "pro" || subscriptionLevel === "admin";
   const isAdmin = subscriptionLevel === "admin";
 
   const toggleSection = (section: Exclude<DashboardSection, null>) =>
@@ -991,6 +993,7 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
     description: string;
     available: boolean;
     inDevelopment?: boolean;
+    beta?: boolean;
   }[] = [
     {
       id: "profile",
@@ -1021,10 +1024,9 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
       id: "bid-manager",
       index: "04",
       title: "Бид-менеджер Авито",
-      description: hasAccess
-        ? "Автоматическое управление ставками"
-        : "Доступно с подпиской Basic",
-      available: hasAccess,
+      description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
+      available: hasBidderAccess,
+      beta: true,
     },
     {
       id: "popular-queries",
@@ -2176,6 +2178,7 @@ setExpandedBidderId(savedBidder.id);
                         <span className="flex flex-wrap items-center gap-2 text-sm font-extrabold">
                           <span>{item.title}</span>
 
+                          {item.beta && (<span className="rounded-full border border-blue-300/30 bg-blue-400/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-blue-200">BETA</span>)}
                           {item.inDevelopment && (
                             <span
                               className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] ${
@@ -2221,6 +2224,7 @@ setExpandedBidderId(savedBidder.id);
                       <span className="flex flex-wrap items-center gap-2 text-sm font-extrabold">
                         <span>{item.title}</span>
 
+                        {item.beta && (<span className="rounded-full border border-blue-300/30 bg-blue-400/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-blue-200">BETA</span>)}
                         {item.inDevelopment && (
                           <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-amber-200/70">
                             В разработке
@@ -4161,12 +4165,15 @@ setExpandedBidderId(savedBidder.id);
             )}
 
             {/* ========== НАЧАЛО УСЛУГИ «БИД-МЕНЕДЖЕР АВИТО» ========== */}
-            {activeSection === "bid-manager" && hasAccess && (
+            {activeSection === "bid-manager" && !hasBidderAccess && (
+              <section className="overflow-hidden rounded-[32px] bg-black p-6 text-white shadow-[0_24px_65px_rgba(16,24,40,.2)] md:p-8"><div className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">BETA · Pro</div><h2 className="mt-5 text-3xl font-extrabold tracking-[-.05em] md:text-5xl">Бид-менеджер <span className="text-[#03bd48]">Авито</span></h2><p className="mt-4 max-w-2xl text-sm leading-7 text-white/65">Автоматическое управление CPX-ставками доступно на тарифе Pro. В Pro можно одновременно хранить до 10 созданных стратегий.</p><Link href="/pricing" className="btn-primary mt-6 inline-flex">Выбрать Pro</Link></section>
+            )}
+            {activeSection === "bid-manager" && hasBidderAccess && (
               <div className="bid-manager-buttons space-y-6 [&_button]:transition-all [&_button]:duration-300 [&_button]:ease-out [&_button:hover:not(:disabled)]:-translate-y-0.5 [&_button:hover:not(:disabled)]:shadow-[0_10px_20px_rgba(16,24,40,0.12)] [&_button:active:not(:disabled)]:translate-y-0 [&_button:focus-visible]:outline-none [&_button:focus-visible]:ring-4 [&_button:focus-visible]:ring-[#03bd48]/20">
                 <section className="relative overflow-hidden rounded-[32px] bg-[#101010] p-5 text-white shadow-[0_24px_65px_rgba(16,24,40,0.22)] sm:p-7 md:p-8">
                   <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#03bd48]/20 blur-3xl" />
                   <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                    <div className="min-w-0"><div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-white/75"><span className="h-2 w-2 rounded-full bg-[#03bd48]"/>Автоматизация продвижения</div><h2 className="text-3xl font-extrabold tracking-[-.055em] sm:text-4xl md:text-5xl">Бид-менеджер <span className="text-[#03bd48]">Авито</span></h2><p className="mt-4 max-w-2xl text-sm leading-7 text-white/62">Активные стратегии автоматически проверяют позицию и управляют CPX-ставкой в рамках заданных лимитов.</p></div>
+                    <div className="min-w-0"><div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-white/75"><span className="h-2 w-2 rounded-full bg-[#03bd48]"/>Автоматизация продвижения</div><div className="mb-3 inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">BETA</div><h2 className="text-3xl font-extrabold tracking-[-.055em] sm:text-4xl md:text-5xl">Бид-менеджер <span className="text-[#03bd48]">Авито</span></h2><p className="mt-4 max-w-2xl text-sm leading-7 text-white/62">Активные стратегии автоматически проверяют позицию и управляют CPX-ставкой в рамках заданных лимитов.</p></div>
                     <button type="button" onClick={openBidderWizard} className="btn-primary w-full shrink-0 sm:w-auto"><span className="text-lg">+</span>Создать стратегию</button>
                   </div>
                 </section>
@@ -4179,7 +4186,7 @@ setExpandedBidderId(savedBidder.id);
 
                 {/* ========== НАЧАЛО БЛОКА «БИДЕРЫ ОБЪЯВЛЕНИЙ» ========== */}
                 <section className="overflow-hidden rounded-[32px] border border-black/[.07] bg-white p-4 shadow-[0_18px_45px_rgba(16,24,40,.07)] sm:p-6 md:p-8"><div className="border-b border-black/[.07] pb-5"><div className="badge-green mb-3">Ваши стратегии</div><h3 className="text-2xl font-extrabold tracking-[-.04em] text-black sm:text-3xl">Бидеры объявлений</h3><p className="mt-2 max-w-2xl text-sm leading-7 text-black/50">Основные показатели — здесь. Технические данные, ручные действия и история доступны внутри каждой стратегии.</p></div>
-                  {bidders.length === 0 ? <div className="mt-6 rounded-3xl border border-dashed border-black/15 bg-black/[.02] px-5 py-14 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#03bd48]/10 text-2xl font-extrabold text-[#028c36]">+</div><h4 className="mt-4 text-xl font-extrabold">Пока нет стратегий</h4><p className="mx-auto mt-2 max-w-md text-sm leading-7 text-black/50">Создайте первую стратегию для объявления Авито.</p><button type="button" onClick={openBidderWizard} className="btn-primary mt-5">Создать стратегию</button></div> : <div className="mt-5 space-y-4">{bidders.map((bidder) => { const status=getBidderStatusView(bidder.status); const isAdvanced=expandedAdvancedBidderId===bidder.id; const isHistory=expandedBidderId===bidder.id; const events=bidderEvents[bidder.id]??[]; const fullHistory=Boolean(isFullBidderHistory[bidder.id]); return <article key={bidder.id} className="overflow-hidden rounded-3xl border border-black/[.08] bg-white transition duration-300 hover:border-[#03bd48]/35 hover:shadow-[0_14px_32px_rgba(16,24,40,.07)]"><div className="p-4 sm:p-5"><div className="flex flex-col gap-4 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#101010,#303337)] text-sm font-extrabold tracking-[.08em] text-[#03bd48]">{bidder.imageLabel}</div><div className="min-w-0"><div className="flex flex-wrap items-start gap-2"><h4 className="min-w-0 break-words text-lg font-extrabold leading-6 text-black">{bidder.title}</h4><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[.07em] ${status.className}`}><span className={`h-1.5 w-1.5 rounded-full ${status.dot}`}/>{status.label}</span><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase ${bidder.mode === "live" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>{bidder.mode === "live" ? "Боевой режим" : "Тестовый режим"}</span></div>{bidder.avitoItemUrl && <a href={bidder.avitoItemUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-extrabold text-[#028c36] hover:text-[#03bd48]">Открыть объявление на Авито ↗</a>}<div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-2xl bg-black/[.025] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Целевая позиция</div><div className="mt-1 text-sm font-extrabold">{bidder.targetFrom}–{bidder.targetTo}</div></div><div className="rounded-2xl bg-[#03bd48]/[.07] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Позиция в поиске</div><div className="mt-1 text-lg font-extrabold text-[#028c36]">{formatBidderPosition(bidder)} <span className="text-xs">{bidder.positionSource === "avito_serp_first_page_not_found" ? "мест" : "место"}</span></div></div><div className="rounded-2xl bg-black/[.025] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Текущая CPX-ставка</div><div className="mt-1 text-sm font-extrabold">{formatBid(bidder.currentBid)}</div></div><div className="rounded-2xl bg-black/[.025] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Следующая проверка</div><div className="mt-1 text-sm font-extrabold text-black/70">{bidder.nextCheck}</div></div></div></div><div className="grid grid-cols-2 gap-2 lg:flex lg:flex-col"><button type="button" onClick={()=>openBidderEditor(bidder)} className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70">Настроить</button><button type="button" onClick={()=>toggleBidderStatus(bidder.id)} className={`rounded-xl px-3 py-2.5 text-xs font-extrabold ${bidder.status === "active" ? "border border-amber-200 bg-amber-50 text-amber-700" : "bg-[#03bd48] text-white"}`}>{bidder.status === "active" ? "Пауза" : "Запустить"}</button></div></div></div>
+                  {bidders.length === 0 ? <div className="mt-6 rounded-3xl border border-dashed border-black/15 bg-black/[.02] px-5 py-14 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#03bd48]/10 text-2xl font-extrabold text-[#028c36]">+</div><h4 className="mt-4 text-xl font-extrabold">Пока нет стратегий</h4><p className="mx-auto mt-2 max-w-md text-sm leading-7 text-black/50">Создайте первую стратегию для объявления Авито.</p><button type="button" onClick={openBidderWizard} className="btn-primary mt-5">Создать стратегию</button></div> : <div className="mt-5 space-y-4">{bidders.map((bidder) => { const status=getBidderStatusView(bidder.status); const isAdvanced=expandedAdvancedBidderId===bidder.id; const isHistory=expandedBidderId===bidder.id; const events=bidderEvents[bidder.id]??[]; const fullHistory=Boolean(isFullBidderHistory[bidder.id]); return <article key={bidder.id} className="overflow-hidden rounded-3xl border border-black/[.08] bg-white transition duration-300 hover:border-[#03bd48]/35 hover:shadow-[0_14px_32px_rgba(16,24,40,.07)]"><div className="p-4 sm:p-5"><div className="flex flex-col gap-4 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#101010,#303337)] text-sm font-extrabold tracking-[.08em] text-[#03bd48]">{bidder.imageLabel}</div><div className="min-w-0"><div className="flex flex-wrap items-start gap-2"><h4 className="min-w-0 break-words text-lg font-extrabold leading-6 text-black">{bidder.title}</h4><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[.07em] ${status.className}`}><span className={`h-1.5 w-1.5 rounded-full ${status.dot}`}/>{status.label}</span><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase ${bidder.mode === "live" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>{bidder.mode === "live" ? "LIVE" : "TEST"}</span></div>{bidder.avitoItemUrl && <a href={bidder.avitoItemUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-extrabold text-[#028c36] hover:text-[#03bd48]">Открыть объявление на Авито ↗</a>}<div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-2xl bg-black/[.025] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Целевая позиция</div><div className="mt-1 text-sm font-extrabold">{bidder.targetFrom}–{bidder.targetTo}</div></div><div className="rounded-2xl bg-[#03bd48]/[.07] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Позиция в поиске</div><div className="mt-1 text-lg font-extrabold text-[#028c36]">{formatBidderPosition(bidder)} <span className="text-xs">{bidder.positionSource === "avito_serp_first_page_not_found" ? "мест" : "место"}</span></div></div><div className="rounded-2xl bg-black/[.025] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Текущая CPX-ставка</div><div className="mt-1 text-sm font-extrabold">{formatBid(bidder.currentBid)}</div></div><div className="rounded-2xl bg-black/[.025] p-3"><div className="text-[9px] font-extrabold uppercase tracking-wide text-black/40">Следующая проверка</div><div className="mt-1 text-sm font-extrabold text-black/70">{bidder.nextCheck}</div></div></div></div><div className="grid grid-cols-2 gap-2 lg:flex lg:flex-col"><button type="button" onClick={()=>openBidderEditor(bidder)} className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold text-black/70">Настроить</button><button type="button" onClick={()=>toggleBidderStatus(bidder.id)} className={`rounded-xl px-3 py-2.5 text-xs font-extrabold ${bidder.status === "active" ? "border border-amber-200 bg-amber-50 text-amber-700" : "bg-[#03bd48] text-white"}`}>{bidder.status === "active" ? "Пауза" : "Запустить"}</button></div></div></div>
                     <div className="border-t border-black/[.06] bg-black/[.018]"><button type="button" onClick={()=>setExpandedAdvancedBidderId(isAdvanced?null:bidder.id)} aria-expanded={isAdvanced} className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left sm:px-5"><span><span className="block text-sm font-extrabold text-black">Расширенные данные и настройки</span><span className="mt-1 block text-xs font-semibold text-black/45">Ручное управление CPX, техническая информация и действия</span></span><span className={`text-xl transition-transform duration-300 ${isAdvanced?"rotate-180":""}`}>⌄</span></button><CollapsibleContent isOpen={isAdvanced}><div className="border-t border-black/[.06] p-4 sm:p-5"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5"><button type="button" onClick={()=>runPromotionAction(bidder,"services")} disabled={promotionActionLoading!==null} className="rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold">Параметры CPX</button><button type="button" onClick={()=>runPromotionAction(bidder,"suggests")} disabled={promotionActionLoading!==null} className="rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold">Доступные ставки</button><button type="button" onClick={()=>runPromotionAction(bidder,"forecast")} disabled={promotionActionLoading!==null} className="rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold">Прогноз CPX</button><button type="button" onClick={()=>{if(bidder.mode!=="live"){setPromotionActionError("Ручное применение доступно только в боевом режиме.");return;}setLiveApplyConfirmation("");setLiveApplyConfirmBidder(bidder);}} disabled={bidder.mode!=="live"||promotionActionLoading!==null} className="rounded-xl bg-[#03bd48] px-3 py-3 text-xs font-extrabold text-white disabled:opacity-50">Применить CPX</button><button type="button" onClick={()=>runPromotionAction(bidder,"order-status")} disabled={promotionActionLoading!==null} className="rounded-xl border border-black/10 bg-white px-3 py-3 text-xs font-extrabold">Проверить CPX</button></div><div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"><InfoCard title="Статус CPX"><b>{formatPromotionStatus(bidder.lastPromotionStatus)}</b></InfoCard><InfoCard title="Диапазон ставки"><b>{formatBid(bidder.minBid)} – {formatBid(bidder.maxBid)}</b></InfoCard><InfoCard title="Последнее применение"><b>{formatDateTime(bidder.lastAppliedAt)}</b></InfoCard><InfoCard title="Изменений сегодня" accent><b>{bidder.changesToday}</b></InfoCard></div><div className="mt-4 flex flex-wrap gap-2 border-t border-black/[.06] pt-4"><button type="button" onClick={()=>checkBidderItem(bidder.id)} className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold">Проверить объявление</button><button type="button" onClick={()=>loadBidderOperational(bidder.id)} className="rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-extrabold">Состояние стратегии</button><button type="button" onClick={()=>runBidderNow(bidder.id)} className="rounded-xl bg-black px-3 py-2.5 text-xs font-extrabold text-white">Запустить сейчас</button><button type="button" onClick={()=>deleteBidder(bidder.id)} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600">Удалить</button></div>{getOperationalRecord(bidderOperational,bidder.id)&&<pre className="mt-3 max-h-48 overflow-auto rounded-xl bg-black p-3 text-[11px] text-white/75">{stringifyPretty(getOperationalRecord(bidderOperational,bidder.id))}</pre>}{promotionActionError&&<div className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">{promotionActionError}</div>}{promotionActionResult&&<pre className="mt-3 max-h-60 overflow-auto rounded-xl bg-black/[.03] p-3 text-[11px]">{promotionActionResult}</pre>}</div></CollapsibleContent></div>
                     <div className="border-t border-black/[.06]"><button type="button" onClick={()=>void toggleBidderEvents(bidder.id)} className="flex w-full items-center justify-between px-4 py-4 text-left sm:px-5"><span><span className="block text-sm font-extrabold">История работы</span><span className="mt-1 block text-xs font-semibold text-black/45">Проверки, решения и сообщения системы</span></span><span className={`text-xl transition-transform duration-300 ${isHistory?"rotate-180":""}`}>⌄</span></button><CollapsibleContent isOpen={isHistory}><div className="border-t border-black/[.06] bg-black/[.018] p-4 sm:p-5"><div className="flex justify-end"><button type="button" onClick={()=>void loadBidderEvents(bidder.id)} className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-extrabold">Обновить</button></div><div className={`mt-3 space-y-2 overflow-y-auto pr-1 ${fullHistory?"max-h-none":"max-h-80"}`}>{events.length===0?<div className="rounded-xl border border-dashed border-black/15 bg-white p-5 text-sm text-black/50">История пока пуста.</div>:events.map((event)=><div key={event.id} className="rounded-xl border border-black/[.07] bg-white p-3"><div className="flex gap-3"><div className="min-w-0 flex-1 text-sm font-bold leading-5 text-black">{event.message}</div><div className="shrink-0 text-[11px] font-semibold text-black/40">{formatDateTime(event.createdAt)}</div></div></div>)}</div>{events.length>0&&<button type="button" onClick={()=>setIsFullBidderHistory(current=>({...current,[bidder.id]:!fullHistory}))} className="mt-3 text-xs font-extrabold text-[#028c36]">{fullHistory?"Свернуть историю":"Раскрыть всю историю"}</button>}</div></CollapsibleContent></div></article>})}</div>}</section>
                 {/* ========== КОНЕЦ БЛОКА «БИДЕРЫ ОБЪЯВЛЕНИЙ» ========== */}
@@ -4196,9 +4203,9 @@ setExpandedBidderId(savedBidder.id);
                     <div className="border-t border-[#03bd48]/15 p-5 sm:p-6"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                       <InfoCard title="1. Подключите Авито" accent><p className="text-sm leading-6 text-black/65">Подключите кабинет Авито. После этого выберите объявление, для которого нужна стратегия.</p></InfoCard>
                       <InfoCard title="2. Задайте цель"><p className="text-sm leading-6 text-black/65">Вставьте ссылку поисковой выдачи, укажите целевой диапазон позиций и безопасные лимиты CPX-ставки.</p></InfoCard>
-                      <InfoCard title="3. Начните с теста"><p className="text-sm leading-6 text-black/65"><b>Тестовый режим</b> рассчитывает действия без изменения ставки. Проверьте историю, затем при необходимости включите боевой режим.</p></InfoCard>
-                      <InfoCard title="4. Автоматическая работа"><p className="text-sm leading-6 text-black/65">Активная стратегия проверяется по расписанию. Если объявления нет среди первых 50 карточек, алгоритм использует позицию 51.</p></InfoCard>
-                    </div><div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><b>Важно.</b> При CAPTCHA или временном ограничении Авито ставка не меняется, а последняя подтверждённая позиция остаётся в карточке. Подробность такой ситуации доступна только в истории работы стратегии.</div></div>
+                      <InfoCard title="3. Начните с теста"><p className="text-sm leading-6 text-black/65"><b>Тестовый режим</b> рассчитывает действия без изменения ставки. Проверьте историю, затем при необходимости включите LIVE режим.</p></InfoCard>
+                      <InfoCard title="4. Автоматическая работа"><p className="text-sm leading-6 text-black/65">Активная стратегия проверяется по расписанию. Если объявления нет среди первых 50 карточек, алгоритм повышает ставку автоматически.</p></InfoCard>
+                    </div><div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900"><b>Лимит Pro.</b> На одном аккаунте можно хранить до 10 созданных bidder-стратегий. Активные, приостановленные и требующие внимания стратегии учитываются в этом лимите.</div></div>
                   </CollapsibleContent>
                 </section>
                 {/* ========== КОНЕЦ БЛОКА «КАК ПОЛЬЗОВАТЬСЯ БИД-МЕНЕДЖЕРОМ» ========== */}
@@ -4696,10 +4703,10 @@ onChange={(e) =>
                                     }`}
                                   >
                                     <div className="text-sm font-extrabold text-black">
-                                      Dry-run
+                                      TEST
                                     </div>
                                     <div className="mt-1 text-xs font-semibold leading-5 text-black/55">
-                                      Только расчёт позиции и рекомендуемой ставки внутри системы без боевого применения в Avito.
+                                      Только расчёт позиции и рекомендуемой ставки внутри системы без применения в Avito.
                                     </div>
                                   </button>
                                   <button
@@ -4720,7 +4727,7 @@ onChange={(e) =>
                                       Live
                                     </div>
                                     <div className="mt-1 text-xs font-semibold leading-5 text-black/55">
-                                      Режим боевой готовности: worker будет рассчитывать ставку как подготовленную к применению через Avito API.
+                                      Режим автоматического управления: будет рассчитывать ставку и применять через Avito API.
                                     </div>
                                   </button>
                                 </div>
@@ -4769,12 +4776,12 @@ onChange={(e) =>
                                   >
                                     {bidderDraft.mode === "live"
                                       ? "Live"
-                                      : "Dry-run"}
+                                      : "TEST"}
                                   </span>
                                 </div>
                               </div>
                               <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-                                <b>Режим работы.</b> В dry-run система только рассчитывает позицию и рекомендуемую ставку внутри платформы. В live режиме бидер помечается как готовый к боевому применению через Avito API.
+                                <b>Режим работы.</b> В TEST система только рассчитывает позицию и рекомендуемую ставку внутри платформы. В LIVE режиме бидер помечается как готовый к боевому применению через Avito API.
                               </div>
                             </div>
                           )}

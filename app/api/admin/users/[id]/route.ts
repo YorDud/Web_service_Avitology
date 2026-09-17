@@ -32,7 +32,9 @@ export async function PATCH(req: Request, { params }: Params) {
     const subscriptionLevel = String(body.subscriptionLevel || "free") as
       | "free"
       | "basic"
+      | "pro"
       | "admin";
+    if (!["free", "basic", "pro", "admin"].includes(subscriptionLevel)) return NextResponse.json({ error: "Некорректный уровень подписки" }, { status: 400 });
     const subscriptionPrice = Number(body.subscriptionPrice || 0);
     const isActive = Boolean(body.isActive);
     const notes = body.notes ? String(body.notes) : null;

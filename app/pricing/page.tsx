@@ -88,12 +88,11 @@ export default async function PricingPage() {
             <div className="badge-green mb-3">Подключение платформы</div>
 
             <h2 className="text-2xl font-extrabold tracking-[-0.04em] text-black">
-              Один тариф — все основные инструменты
+              Два тарифа — доступ под ваши задачи
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm leading-7 text-black/50">
-              Подписка Basic открывает доступ к рабочим модулям, личному
-              кабинету и текущим сервисам HelpSell.
+              Basic открывает аналитику и расширение. Pro включает всё из Basic, а также бид-менеджер Авито.
             </p>
           </section>
 

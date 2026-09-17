@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { runDueBidders } from "@/lib/avito-bidder-runner";
@@ -10,7 +10,7 @@ import {
 import { createBidderEvent } from "@/lib/avito-bidder-events";
 
 function hasBidderAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return level === "pro" || level === "admin";
 }
 
 async function getAuthorizedUser() {
@@ -19,7 +19,7 @@ async function getAuthorizedUser() {
   if (!sessionUser) {
     return {
       error: NextResponse.json(
-        { error: "Требуется авторизация." },
+        { error: "РўСЂРµР±СѓРµС‚СЃСЏ Р°РІС‚РѕСЂРёР·Р°С†РёСЏ." },
         { status: 401 },
       ),
     };
@@ -36,7 +36,7 @@ async function getAuthorizedUser() {
   if (!user || !hasBidderAccess(user.subscriptionLevel)) {
     return {
       error: NextResponse.json(
-        { error: "Бид-менеджер доступен с подпиской Basic." },
+        { error: "Р‘РёРґ-РјРµРЅРµРґР¶РµСЂ РґРѕСЃС‚СѓРїРµРЅ СЃ РїРѕРґРїРёСЃРєРѕР№ Pro." },
         { status: 403 },
       ),
     };
@@ -139,8 +139,8 @@ async function getHealthSummary(userId: number) {
       withErrors: details.filter((item) => item.hasError).length,
       withoutAvitoItem: details.filter((item) => !item.hasAvitoItem).length,
 
-      // Поле сохранено, чтобы не ломать dashboard;
-      // в CPX manual order-ов не существует.
+      // РџРѕР»Рµ СЃРѕС…СЂР°РЅРµРЅРѕ, С‡С‚РѕР±С‹ РЅРµ Р»РѕРјР°С‚СЊ dashboard;
+      // РІ CPX manual order-РѕРІ РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚.
       withPromotionOrder: 0,
     },
 
@@ -150,7 +150,7 @@ async function getHealthSummary(userId: number) {
 
 /**
  * GET /api/avito-bidders/operations
- * Возвращает health summary текущего пользователя.
+ * Р’РѕР·РІСЂР°С‰Р°РµС‚ health summary С‚РµРєСѓС‰РµРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.
  */
 export async function GET() {
   const authorization = await getAuthorizedUser();
@@ -188,7 +188,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          'Некорректное действие. Поддерживаются: "run_due" и "pause_all".',
+          'РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ РґРµР№СЃС‚РІРёРµ. РџРѕРґРґРµСЂР¶РёРІР°СЋС‚СЃСЏ: "run_due" Рё "pause_all".',
       },
       { status: 400 },
     );
@@ -215,7 +215,7 @@ export async function POST(request: Request) {
           error:
             error instanceof Error
               ? error.message
-              : "Не удалось выполнить массовый запуск bidder-ов.",
+              : "РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ РјР°СЃСЃРѕРІС‹Р№ Р·Р°РїСѓСЃРє bidder-РѕРІ.",
         },
         { status: 500 },
       );
@@ -240,7 +240,7 @@ export async function POST(request: Request) {
       success: true,
       action,
       pausedCount: 0,
-      message: "Нет активных bidder-ов для постановки на паузу.",
+      message: "РќРµС‚ Р°РєС‚РёРІРЅС‹С… bidder-РѕРІ РґР»СЏ РїРѕСЃС‚Р°РЅРѕРІРєРё РЅР° РїР°СѓР·Сѓ.",
       summary,
     });
   }
@@ -263,7 +263,7 @@ export async function POST(request: Request) {
       createBidderEvent({
         bidderId: bidder.id,
         type: "bulk_pause",
-        message: "Bidder поставлен на паузу массовой операцией.",
+        message: "Bidder РїРѕСЃС‚Р°РІР»РµРЅ РЅР° РїР°СѓР·Сѓ РјР°СЃСЃРѕРІРѕР№ РѕРїРµСЂР°С†РёРµР№.",
       }),
     ),
   );
@@ -274,7 +274,7 @@ export async function POST(request: Request) {
     success: true,
     action,
     pausedCount: activeBidders.length,
-    message: `На паузу поставлено bidder-ов: ${activeBidders.length}.`,
+    message: `РќР° РїР°СѓР·Сѓ РїРѕСЃС‚Р°РІР»РµРЅРѕ bidder-РѕРІ: ${activeBidders.length}.`,
     summary,
   });
 }

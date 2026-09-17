@@ -11,7 +11,7 @@ type RouteContext = {
 };
 
 function hasBidderAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return level === "pro" || level === "admin";
 }
 
 async function getAuthorizedUser() {
@@ -37,7 +37,7 @@ async function getAuthorizedUser() {
   if (!user || !hasBidderAccess(user.subscriptionLevel)) {
     return {
       error: NextResponse.json(
-        { error: "Бид-менеджер доступен с подпиской Basic" },
+        { error: "Бид-менеджер доступен с подпиской Pro" },
         { status: 403 },
       ),
     };

@@ -7,7 +7,7 @@ export type SessionUser = {
   id: number;
   email: string;
   name: string;
-  subscriptionLevel: "free" | "basic" | "admin";
+  subscriptionLevel: "free" | "basic" | "pro" | "admin";
 };
 
 export async function hashPassword(password: string) {

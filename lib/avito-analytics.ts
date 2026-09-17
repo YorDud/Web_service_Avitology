@@ -3,7 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 
 export function hasAvitoAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return (
+    level === "basic" ||
+    level === "pro" ||
+    level === "admin"
+  );
 }
 
 export async function getAuthorizedAvitoUser() {
@@ -26,7 +30,7 @@ export async function getAuthorizedAvitoUser() {
   if (!user || !user.isActive || !hasAvitoAccess(user.subscriptionLevel)) {
     return {
       error: NextResponse.json(
-        { error: "Аналитика мест в поиске доступна с подпиской Basic" },
+        { error: "Аналитика мест в поиске доступна с подпиской Basic или Pro" },
         { status: 403 }
       ),
     } as const;
