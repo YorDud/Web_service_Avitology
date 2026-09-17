@@ -913,6 +913,12 @@ export default function DashboardClientPage({
     initialBidders.map(toBidder),
   );
 
+  const [isBidderBetaTooltipOpen, setIsBidderBetaTooltipOpen] = useState(false);
+const [bidderBetaTooltipPosition, setBidderBetaTooltipPosition] = useState({
+  top: 0,
+  right: 0,
+});
+
   const [operationalLoadingBidderId, setOperationalLoadingBidderId] = useState<
     number | null
   >(null);
@@ -4166,19 +4172,91 @@ setExpandedBidderId(savedBidder.id);
 
             {/* ========== НАЧАЛО УСЛУГИ «БИД-МЕНЕДЖЕР АВИТО» ========== */}
             {activeSection === "bid-manager" && !hasBidderAccess && (
-              <section className="overflow-hidden rounded-[32px] bg-black p-6 text-white shadow-[0_24px_65px_rgba(16,24,40,.2)] md:p-8"><div className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">BETA · Pro</div><h2 className="mt-5 text-3xl font-extrabold tracking-[-.05em] md:text-5xl">Бид-менеджер <span className="text-[#03bd48]">Авито</span></h2><p className="mt-4 max-w-2xl text-sm leading-7 text-white/65">Автоматическое управление CPX-ставками доступно на тарифе Pro. В Pro можно одновременно хранить до 10 созданных стратегий.</p><Link href="/pricing" className="btn-primary mt-6 inline-flex">Выбрать Pro</Link></section>
+              <section className="relative z-20 overflow-visible rounded-[32px] bg-[#101010] p-5 text-white shadow-[0_24px_65px_rgba(16,24,40,0.22)] sm:p-7 md:p-8"><div className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">BETA · Pro</div><h2 className="mt-5 text-3xl font-extrabold tracking-[-.05em] md:text-5xl">Бид-менеджер <span className="text-[#03bd48]">Авито</span></h2><p className="mt-4 max-w-2xl text-sm leading-7 text-white/65">Автоматическое управление CPX-ставками доступно на тарифе Pro. В Pro можно одновременно хранить до 10 созданных стратегий.</p><Link href="/pricing" className="btn-primary mt-6 inline-flex">Выбрать Pro</Link></section>
             )}
             {activeSection === "bid-manager" && hasBidderAccess && (
               <div className="bid-manager-buttons space-y-6 [&_button]:transition-all [&_button]:duration-300 [&_button]:ease-out [&_button:hover:not(:disabled)]:-translate-y-0.5 [&_button:hover:not(:disabled)]:shadow-[0_10px_20px_rgba(16,24,40,0.12)] [&_button:active:not(:disabled)]:translate-y-0 [&_button:focus-visible]:outline-none [&_button:focus-visible]:ring-4 [&_button:focus-visible]:ring-[#03bd48]/20">
                 <section className="relative overflow-hidden rounded-[32px] bg-[#101010] p-5 text-white shadow-[0_24px_65px_rgba(16,24,40,0.22)] sm:p-7 md:p-8">
                   <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#03bd48]/20 blur-3xl" />
+                  <button
+  type="button"
+  aria-label="Информация о BETA-версии Бид-менеджера Авито"
+  onMouseEnter={(event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+
+    setBidderBetaTooltipPosition({
+      top: rect.bottom + 12,
+      right: Math.max(16, window.innerWidth - rect.right),
+    });
+
+    setIsBidderBetaTooltipOpen(true);
+  }}
+  onMouseLeave={() => {
+    setIsBidderBetaTooltipOpen(false);
+  }}
+  onFocus={(event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+
+    setBidderBetaTooltipPosition({
+      top: rect.bottom + 12,
+      right: Math.max(16, window.innerWidth - rect.right),
+    });
+
+    setIsBidderBetaTooltipOpen(true);
+  }}
+  onBlur={() => {
+    setIsBidderBetaTooltipOpen(false);
+  }}
+  className="absolute right-5 top-5 z-20 flex h-9 w-9 items-center justify-center rounded-xl border border-blue-300/45 bg-blue-500 text-base font-extrabold text-white shadow-[0_8px_20px_rgba(59,130,246,0.3)] transition hover:scale-105 hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300/70 sm:right-7 sm:top-7"
+>
+  !
+</button>
                   <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
                     <div className="min-w-0"><div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-white/75"><span className="h-2 w-2 rounded-full bg-[#03bd48]"/>Автоматизация продвижения</div><div className="mb-3 inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">BETA</div><h2 className="text-3xl font-extrabold tracking-[-.055em] sm:text-4xl md:text-5xl">Бид-менеджер <span className="text-[#03bd48]">Авито</span></h2><p className="mt-4 max-w-2xl text-sm leading-7 text-white/62">Активные стратегии автоматически проверяют позицию и управляют CPX-ставкой в рамках заданных лимитов.</p></div>
                     <button type="button" onClick={openBidderWizard} className="btn-primary w-full shrink-0 sm:w-auto"><span className="text-lg">+</span>Создать стратегию</button>
                   </div>
                 </section>
 
+
+
                 <section className="rounded-[28px] border border-black/[.08] bg-white p-4 shadow-[0_12px_32px_rgba(16,24,40,.05)] sm:p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-extrabold ${avitoConnection ? "bg-[#03bd48]/10 text-[#028c36]" : "bg-amber-50 text-amber-700"}`}>{avitoConnection ? "✓" : "!"}</div><div><div className="text-xs font-extrabold uppercase tracking-[.1em] text-black/42">Кабинет Авито</div><div className="mt-1 font-extrabold text-black">{avitoConnection ? "Подключён и готов к работе" : "Не подключён"}</div><div className="mt-1 text-xs font-semibold text-black/48">{avitoConnection ? `Client ID: ${avitoConnection.clientIdMasked}` : "Подключите кабинет, чтобы выбирать объявления и управлять CPX."}</div></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={openAvitoConnection} disabled={avitoConnectionSaving} className="btn-primary disabled:opacity-60">{avitoConnection ? "Переподключить" : "Подключить Авито"}</button>{avitoConnection && <button type="button" onClick={disconnectAvitoConnection} className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-extrabold text-red-600">Отключить</button>}</div></div></section>
+
+                {isBidderBetaTooltipOpen &&
+                  typeof document !== "undefined" &&
+                  createPortal(
+                    <div
+                      className="fixed z-[99999] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-blue-200/35 bg-[#172238] p-4 text-white shadow-[0_18px_55px_rgba(0,0,0,0.58)]"
+                      style={{
+                        top: bidderBetaTooltipPosition.top,
+                        right: bidderBetaTooltipPosition.right,
+                      }}
+                      role="tooltip"
+                    >
+                      <div className="flex gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500 text-base font-extrabold text-white">
+                          !
+                        </div>
+
+                        <div>
+                          <div className="text-sm font-extrabold text-blue-100">
+                            Услуга находится на этапе BETA-тестирования
+                          </div>
+
+                          <p className="mt-1 text-sm leading-6 text-white/70">
+                            Некоторые функции Бид-менеджера Авито могут работать некорректно,
+                            быть неполными или временно недоступными.
+                          </p>
+
+                          <p className="mt-2 text-sm font-bold leading-6 text-blue-200">
+                            Мы продолжаем дорабатывать и совершенствовать
+                            услугу. Используя Бид-менеджер, вы помогаете нам
+                            выявлять проблемы и улучшать сервис.
+                          </p>
+                        </div>
+                      </div>
+                    </div>,
+                    document.body,
+                  )}
 
                 <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricCard title="Работают автоматически" className="border-[#03bd48]/20 bg-[#03bd48]/[.055] p-4 sm:p-5"><div className="text-3xl font-extrabold text-[#028c36]">{bidders.filter((item) => item.status === "active").length}</div><div className="mt-1 text-xs font-bold text-[#027a30]/65">активных стратегий</div></MetricCard><MetricCard title="На паузе" className="p-4 sm:p-5"><div className="text-3xl font-extrabold">{bidders.filter((item) => item.status === "paused").length}</div><div className="mt-1 text-xs font-bold text-black/42">не выполняются</div></MetricCard><MetricCard title="Требуют внимания" className="border-amber-200 bg-amber-50 p-4 sm:p-5"><div className="text-3xl font-extrabold text-amber-700">{bidders.filter((item) => item.status === "attention").length}</div><div className="mt-1 text-xs font-bold text-amber-700/65">проверьте настройки</div></MetricCard><MetricCard title="Изменений ставки сегодня" className="bg-black p-4 text-white sm:p-5"><div className="text-3xl font-extrabold text-[#03bd48]">{bidders.reduce((sum, item) => sum + item.changesToday, 0)}</div><div className="mt-1 text-xs font-bold text-white/45">во всех стратегиях</div></MetricCard></section>
 
