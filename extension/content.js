@@ -354,7 +354,7 @@ async function checkAccess() {
     if (!state.access) {
       statusEl.className = "helpsell-status warning";
       statusEl.textContent =
-        "Нет доступа к услуге. Нужна подписка Basic или Admin.";
+        "Нет доступа к услуге. Нужна подписка Basic или Pro.";
       return false;
     }
 

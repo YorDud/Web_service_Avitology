@@ -42,7 +42,9 @@ export async function GET() {
     }
 
     const hasAccess =
-      user.subscriptionLevel === "basic" || user.subscriptionLevel === "admin";
+  user.subscriptionLevel === "basic" ||
+  user.subscriptionLevel === "pro" ||
+  user.subscriptionLevel === "admin";
 
     return withCors(
       NextResponse.json({

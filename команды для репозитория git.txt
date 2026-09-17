@@ -90,3 +90,62 @@ git clean -fd
 git fetch origin — забирает всё свежее с GitHub
 git reset --hard origin/main — делает проект точной копией GitHub-ветки
 git clean -fd — удаляет все неотслеживаемые файлы и папки
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+cd /opt/avitology
+
+# 1. Бэкап БД и .env с датой/временем.
+# SQLite .backup надёжнее обычного cp, включая режим WAL.
+BACKUP_DIR="/opt/avitology_backups/$(date +%Y-%m-%d_%H-%M-%S)"
+mkdir -p "$BACKUP_DIR"
+
+sqlite3 prisma/dev.db ".backup '$BACKUP_DIR/dev.db.backup'"
+cp .env "$BACKUP_DIR/.env.backup" 2>/dev/null || true
+
+echo "Бэкап создан: $BACKUP_DIR"
+
+# 2. Скачать актуальный код из GitHub
+git fetch origin --prune
+git checkout main
+git reset --hard origin/main
+
+# 3. Установить зависимости.
+# Сейчас используйте npm install, так как package-lock.json пока не синхронизирован.
+npm install
+
+# 4. Загрузить .env для Prisma и сборки
+set -a
+source .env
+set +a
+
+# 5. Применить миграции, если в обновлении изменилась Prisma schema
+npx prisma migrate deploy
+
+# 6. Обновить Prisma Client
+npx prisma generate
+
+# 7. Собрать production-сайт
+rm -rf .next
+npm run build
+
+# 8. Перезапустить приложение и обновить переменные .env в PM2
+pm2 restart helpsell --update-env
+
+# 9. Сохранить настройки PM2 после перезагрузки сервера
+pm2 save
+
+# 10. Проверка
+pm2 status
+pm2 logs helpsell --lines 50
