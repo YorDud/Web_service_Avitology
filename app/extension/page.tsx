@@ -250,7 +250,7 @@ export default async function ExtensionPage() {
               ) : (
                 <>
                   <h2 className="text-3xl font-extrabold tracking-[-0.04em]">
-                    Подключите Basic
+                    Подключите Basic или Pro
                   </h2>
 
                   <p className="mt-4 text-sm leading-7 text-white/72">

@@ -2377,12 +2377,12 @@ setExpandedBidderId(savedBidder.id);
                           Расширьте возможности
                         </div>
                         <h2 className="mt-5 text-3xl font-extrabold tracking-[-0.04em]">
-                          Подключите Basic
+                          Подключите Basic или Pro
                         </h2>
                         <p className="mt-3 max-w-2xl text-sm leading-7 text-white/85">
                           Подписка Basic откроет доступ к аналитике мест в
                           поиске Авито, финансовому анализу и рабочим
-                          инструментам платформы.
+                          инструментам платформы.  Pro rключает всё из Basic + бид-менеджер Авито и до 10 стратегий на аккаунт.
                         </p>
                       </div>
                       <Link
