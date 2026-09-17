@@ -159,12 +159,14 @@ async function applyStealth(page: Page) {
     });
 
     // WebGL vendor / renderer
+        // WebGL vendor / renderer
     const getParameter = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function (parameter: number) {
+    WebGLRenderingContext.prototype.getParameter = function (this: WebGLRenderingContext, parameter: number) {
       if (parameter === 37445) return "Intel Inc.";
       if (parameter === 37446) return "Intel Iris OpenGL Engine";
       return getParameter.call(this, parameter);
     } as typeof WebGLRenderingContext.prototype.getParameter;
+
 
     // Chrome runtime
     (window as any).chrome = { runtime: {} };
