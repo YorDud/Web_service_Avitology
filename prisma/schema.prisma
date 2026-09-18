@@ -98,12 +98,12 @@ model FinancialRecord {
   userId     Int
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   recordDate String
+  name       String   @default("")
   income     Int      @default(0)
   expense    Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([userId, recordDate])
   @@index([userId, recordDate])
 }
 

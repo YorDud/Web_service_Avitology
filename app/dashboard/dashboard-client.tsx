@@ -1,12 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 
 type FinancialRecord = {
   id: number;
   recordDate: string;
+  name: string;
   income: number;
   expense: number;
 };
@@ -150,6 +157,7 @@ type DashboardSection =
   | "avito"
   | "financial"
   | "bid-manager"
+  | "reviews-calculator"
   | "popular-queries"
   | null;
 
@@ -434,6 +442,29 @@ function getProfitClass(value: number) {
   if (value > 0) return "text-[#028c36]";
   if (value < 0) return "text-red-600";
   return "text-black/50";
+}
+
+function getFiveStarReviewsNeeded(
+  totalScore: number,
+  totalReviews: number,
+  targetRating: number,
+) {
+  if (totalReviews === 0) return null;
+
+  /*
+    Авито отображает рейтинг с одним знаком после запятой.
+
+    Например, чтобы отобразился рейтинг 4.8, фактический средний рейтинг
+    должен быть не ниже 4.75. Для 4.9 — не ниже 4.85, для 5.0 — 4.95.
+  */
+  const displayThreshold = targetRating - 0.05;
+
+  const needed = Math.ceil(
+    (displayThreshold * totalReviews - totalScore) /
+      (5 - displayThreshold),
+  );
+
+  return Math.max(0, needed);
 }
 
 function InfoCard({
@@ -883,6 +914,14 @@ export default function DashboardClientPage({
   const [isFinancialTableOpen, setIsFinancialTableOpen] = useState(true);
   const [isChartFullscreen, setIsChartFullscreen] = useState(false);
 
+    const [reviewCounts, setReviewCounts] = useState({
+    five: 0,
+    four: 0,
+    three: 0,
+    two: 0,
+    one: 0,
+  });
+
   const [isAvitoAnalyticsOpen, setIsAvitoAnalyticsOpen] = useState(false);
   const [avitoAnalyses, setAvitoAnalyses] = useState<AvitoAnalysisSummary[]>(
     [],
@@ -1034,9 +1073,18 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
       available: hasBidderAccess,
       beta: true,
     },
+
+    {
+      id: "reviews-calculator",
+      index: "05",
+      title: "Калькулятор отзывов",
+      description: "Расчёт рейтинга профиля Авито",
+      available: true,
+    },
+
     {
       id: "popular-queries",
-      index: "05",
+      index: "06",
       title: "Запросы по популярности Авито",
       description: hasAccess
         ? "Подбор популярных запросов"
@@ -1056,18 +1104,43 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
       .sort((a, b) => b.recordDate.localeCompare(a.recordDate));
   }, [financialRecords, tablePeriodStart, tablePeriodEnd]);
 
-  const analytics = useMemo(() => {
-    const recordByDate = new Map(
-      financialRecords.map((record) => [record.recordDate, record]),
-    );
-    const chartData = getDateRange(periodStart, periodEnd).map((date) => ({
-      date,
-      income: recordByDate.get(date)?.income ?? 0,
-      expense: recordByDate.get(date)?.expense ?? 0,
-    }));
+    const analytics = useMemo(() => {
+    const totalsByDate = new Map<
+      string,
+      { income: number; expense: number }
+    >();
+
+    for (const record of financialRecords) {
+      const current = totalsByDate.get(record.recordDate) ?? {
+        income: 0,
+        expense: 0,
+      };
+
+      totalsByDate.set(record.recordDate, {
+        income: current.income + record.income,
+        expense: current.expense + record.expense,
+      });
+    }
+
+    const chartData = getDateRange(periodStart, periodEnd).map((date) => {
+      const total = totalsByDate.get(date) ?? { income: 0, expense: 0 };
+
+      return {
+        date,
+        income: total.income,
+        expense: total.expense,
+      };
+    });
+
     const income = chartData.reduce((sum, item) => sum + item.income, 0);
     const expense = chartData.reduce((sum, item) => sum + item.expense, 0);
-    return { chartData, income, expense, netProfit: income - expense };
+
+    return {
+      chartData,
+      income,
+      expense,
+      netProfit: income - expense,
+    };
   }, [financialRecords, periodStart, periodEnd]);
 
   const popularQueryResults = useMemo(() => {
@@ -1082,6 +1155,46 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
         ]
       : [];
   }, [popularQuery]);
+
+    const reviewsCalculator = useMemo(() => {
+    const totalReviews =
+      reviewCounts.five +
+      reviewCounts.four +
+      reviewCounts.three +
+      reviewCounts.two +
+      reviewCounts.one;
+
+    const totalScore =
+      reviewCounts.five * 5 +
+      reviewCounts.four * 4 +
+      reviewCounts.three * 3 +
+      reviewCounts.two * 2 +
+      reviewCounts.one;
+
+    const currentRating =
+      totalReviews > 0 ? totalScore / totalReviews : null;
+
+    const targetRatings =
+  currentRating !== null && currentRating < 4.5
+    ? [4.5, 4.8, 4.9, 5.0]
+    : [4.8, 4.9, 5.0];
+
+const targets = targetRatings.map((target) => ({
+  target,
+  needed: getFiveStarReviewsNeeded(
+    totalScore,
+    totalReviews,
+    target,
+  ),
+}));
+
+    return {
+      totalReviews,
+      totalScore,
+      currentRating,
+      targets,
+    };
+  }, [reviewCounts]);
 
   const filteredAvitoItems = useMemo(() => {
     const q = avitoSearch.trim().toLowerCase();
@@ -1129,11 +1242,12 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
 
   
 
-  function addFinancialRecord() {
+    function addFinancialRecord() {
     setFinancialDrafts((current) => [
       {
         id: -Date.now(),
         recordDate: getTodayDate(),
+        name: "",
         income: 0,
         expense: 0,
         isNew: true,
@@ -1142,17 +1256,23 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
     ]);
   }
 
-  function updateFinancialDraft(
+    function updateFinancialDraft(
     id: number,
-    field: "recordDate" | "income" | "expense",
+    field: "recordDate" | "name" | "income" | "expense",
     value: string,
   ) {
     setFinancialDrafts((current) =>
       current.map((record) => {
         if (record.id !== id) return record;
-        return field === "recordDate"
-          ? { ...record, recordDate: value }
-          : { ...record, [field]: Math.max(0, Number(value) || 0) };
+
+        if (field === "recordDate" || field === "name") {
+          return { ...record, [field]: value };
+        }
+
+        return {
+          ...record,
+          [field]: Math.max(0, Number(value) || 0),
+        };
       }),
     );
   }
@@ -1177,13 +1297,7 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
       return;
     }
 
-    if (new Set(dates).size !== dates.length) {
-      setFinancialError(
-        "В таблице не может быть нескольких строк с одинаковой датой.",
-      );
-      setFinancialSaving(false);
-      return;
-    }
+    
 
     try {
       const responses = await Promise.all([
@@ -1199,10 +1313,11 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
               method: record.isNew ? "POST" : "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                recordDate: record.recordDate,
-                income: Math.max(0, Math.round(record.income)),
-                expense: Math.max(0, Math.round(record.expense)),
-              }),
+  recordDate: record.recordDate,
+  name: record.name.trim().slice(0, 200),
+  income: Math.max(0, Math.round(record.income)),
+  expense: Math.max(0, Math.round(record.expense)),
+}),
             },
           ),
         ),
@@ -3936,47 +4051,65 @@ setExpandedBidderId(savedBidder.id);
                         </div>
                       )}
 
-                      <div className="mt-6 space-y-3 md:hidden">
+                                            <div className="mt-6 space-y-3 md:hidden">
                         {!isEditingFinancials &&
                           tableRecordsInPeriod.map((record, index) => {
                             const profit = record.income - record.expense;
+
                             return (
                               <div
                                 key={record.id}
                                 className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-[0_8px_20px_rgba(16,24,40,0.04)]"
                               >
+                                {record.name.trim() && (
+                                  <div className="mb-3 rounded-xl bg-black/[0.035] px-3 py-2.5 text-sm font-extrabold leading-5 text-black">
+                                    {record.name}
+                                  </div>
+                                )}
+
                                 <div className="flex items-center justify-between gap-3 border-b border-black/[0.07] pb-3">
                                   <span className="text-xs font-extrabold text-black/40">
                                     Запись #{index + 1}
                                   </span>
+
                                   <span className="text-sm font-extrabold text-black">
                                     {formatRecordDate(record.recordDate)}
                                   </span>
                                 </div>
+
                                 <div className="mt-3 grid grid-cols-2 gap-2">
                                   <div className="rounded-xl bg-[#03bd48]/[0.07] p-3">
                                     <div className="text-[9px] font-extrabold uppercase tracking-wide text-[#027a30]/65">
                                       Доходы
                                     </div>
+
                                     <div className="mt-1 text-base font-extrabold text-[#028c36]">
                                       {formatMoney(record.income)} ₽
                                     </div>
                                   </div>
+
                                   <div className="rounded-xl bg-red-50 p-3">
                                     <div className="text-[9px] font-extrabold uppercase tracking-wide text-red-600/65">
                                       Расходы
                                     </div>
+
                                     <div className="mt-1 text-base font-extrabold text-red-600">
                                       {formatMoney(record.expense)} ₽
                                     </div>
                                   </div>
                                 </div>
+
                                 <div className="mt-2 rounded-xl bg-black p-3">
                                   <div className="text-[9px] font-extrabold uppercase tracking-wide text-white/45">
                                     Чистая прибыль
                                   </div>
+
                                   <div
-                                    className={`mt-1 text-lg font-extrabold ${profit >= 0 ? "text-[#03bd48]" : "text-red-400"}`}
+                                    className={`mt-1 text-lg font-extrabold ${
+                                      profit >= 0
+                                        ? "text-[#03bd48]"
+                                        : "text-red-400"
+                                    }`}
                                   >
                                     {profit > 0 ? "+" : ""}
                                     {formatMoney(profit)} ₽
@@ -3985,6 +4118,7 @@ setExpandedBidderId(savedBidder.id);
                               </div>
                             );
                           })}
+
                         {!isEditingFinancials &&
                           tableRecordsInPeriod.length === 0 && (
                             <div className="rounded-2xl border border-dashed border-black/15 px-5 py-12 text-center text-sm text-black/48">
@@ -3992,154 +4126,218 @@ setExpandedBidderId(savedBidder.id);
                             </div>
                           )}
                       </div>
+
                       <div
-                        className={`mt-6 overflow-x-auto rounded-3xl border border-black/[0.08] shadow-[0_10px_26px_rgba(16,24,40,0.04)] ${isEditingFinancials ? "block" : "hidden md:block"}`}
+                        className={`mt-6 overflow-x-auto rounded-3xl border border-black/[0.08] shadow-[0_10px_26px_rgba(16,24,40,0.04)] ${
+                          isEditingFinancials ? "block" : "hidden md:block"
+                        }`}
                       >
-                        <table className="min-w-[760px] w-full border-collapse text-left">
+                        <table
+  className={`w-full border-collapse text-left ${
+    isEditingFinancials ? "min-w-[1080px]" : "min-w-[660px]"
+  }`}
+>
                           <thead className="bg-[#101010]">
-                            <tr className="text-[10px] font-extrabold uppercase tracking-[0.11em] text-white/58">
-                              <th className="w-[70px] px-5 py-4">№</th>
-                              <th className="px-5 py-4">Дата</th>
-                              <th className="px-5 py-4">Доходы</th>
-                              <th className="px-5 py-4">Расходы</th>
-                              <th className="px-5 py-4">Чистая прибыль</th>
-                              {isEditingFinancials && (
-                                <th className="w-[120px] px-5 py-4">
-                                  Действие
-                                </th>
-                              )}
-                            </tr>
-                          </thead>
+  <tr className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-white/58">
+    <th className="w-[48px] px-3 py-3.5">№</th>
+    <th className="w-[130px] px-3 py-3.5">Дата</th>
+
+    {isEditingFinancials && (
+      <th className="min-w-[320px] px-3 py-3.5">Наименование</th>
+    )}
+
+    <th className="w-[135px] px-3 py-3.5">Доходы</th>
+    <th className="w-[135px] px-3 py-3.5">Расходы</th>
+    <th className="w-[150px] px-3 py-3.5">Чистая прибыль</th>
+
+    {isEditingFinancials && (
+      <th className="w-[105px] px-3 py-3.5">Действие</th>
+    )}
+  </tr>
+</thead>
+
                           <tbody>
                             {!isEditingFinancials &&
-                              tableRecordsInPeriod.map((record, index) => {
-                                const profit = record.income - record.expense;
-                                return (
-                                  <tr
-                                    key={record.id}
-                                    className="border-b border-black/[0.06] bg-white text-sm last:border-b-0 transition hover:bg-[#03bd48]/[0.035]"
-                                  >
-                                    <td className="px-5 py-4 font-bold text-black/42">
-                                      {index + 1}
-                                    </td>
-                                    <td className="px-5 py-4 font-bold text-black">
-                                      {formatRecordDate(record.recordDate)}
-                                    </td>
-                                    <td className="px-5 py-4 font-extrabold text-[#028c36]">
-                                      {formatMoney(record.income)} ₽
-                                    </td>
-                                    <td className="px-5 py-4 font-extrabold text-red-600">
-                                      {formatMoney(record.expense)} ₽
-                                    </td>
-                                    <td
-                                      className={`px-5 py-4 text-base font-extrabold ${getProfitClass(
-                                        profit,
-                                      )}`}
-                                    >
-                                      {profit > 0 ? "+" : ""}
-                                      {formatMoney(profit)} ₽
-                                    </td>
-                                  </tr>
-                                );
-                              })}
+  tableRecordsInPeriod.map((record, index) => {
+    const profit = record.income - record.expense;
+    const hasName = Boolean(record.name?.trim());
+
+    return (
+      <Fragment key={record.id}>
+        {hasName && (
+          <tr className="bg-white">
+            <td colSpan={5} className="px-3 pb-0 pt-3">
+              <div className="flex items-center gap-2 rounded-xl border border-[#03bd48]/20 bg-[#03bd48]/[0.055] px-3 py-2">
+                
+
+                <div className="min-w-0">
+                  
+
+                  <div className="truncate text-xs font-extrabold text-[#075d2c]">
+                    {record.name}
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        )}
+
+        <tr className="border-b border-black/[0.06] bg-white text-xs transition hover:bg-[#03bd48]/[0.035]">
+          <td
+            className={`px-3 py-3 font-bold text-black/42 ${
+              hasName ? "pt-2.5" : ""
+            }`}
+          >
+            {index + 1}
+          </td>
+
+          <td
+            className={`px-3 py-3 font-bold text-black ${
+              hasName ? "pt-2.5" : ""
+            }`}
+          >
+            {formatRecordDate(record.recordDate)}
+          </td>
+
+          <td
+            className={`px-3 py-3 font-extrabold text-[#028c36] ${
+              hasName ? "pt-2.5" : ""
+            }`}
+          >
+            {formatMoney(record.income)} ₽
+          </td>
+
+          <td
+            className={`px-3 py-3 font-extrabold text-red-600 ${
+              hasName ? "pt-2.5" : ""
+            }`}
+          >
+            {formatMoney(record.expense)} ₽
+          </td>
+
+          <td
+            className={`px-3 py-3 text-sm font-extrabold ${getProfitClass(
+              profit,
+            )} ${hasName ? "pt-2.5" : ""}`}
+          >
+            {profit > 0 ? "+" : ""}
+            {formatMoney(profit)} ₽
+          </td>
+        </tr>
+      </Fragment>
+    );
+  })}
 
                             {isEditingFinancials &&
-                              financialDrafts.map((record, index) => {
-                                const profit = record.income - record.expense;
-                                return (
-                                  <tr
-                                    key={record.id}
-                                    className={`border-b border-black/[0.06] text-sm last:border-b-0 ${
-                                      record.isNew ? "bg-red-50/70" : "bg-white"
-                                    }`}
-                                  >
-                                    <td className="px-5 py-3 font-bold text-black/42">
-                                      {index + 1}
-                                    </td>
-                                    <td className="px-5 py-3">
-                                      <input
-                                        type="date"
-                                        value={record.recordDate}
-                                        onChange={(event) =>
-                                          updateFinancialDraft(
-                                            record.id,
-                                            "recordDate",
-                                            event.target.value,
-                                          )
-                                        }
-                                        className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
-                                      />
-                                    </td>
-                                    <td className="px-5 py-3">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        value={
-                                          record.income == 0
-                                            ? ""
-                                            : record.income
-                                        }
-                                        onChange={(event) =>
-                                          updateFinancialDraft(
-                                            record.id,
-                                            "income",
-                                            event.target.value,
-                                          )
-                                        }
-                                        className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-[#028c36] outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
-                                      />
-                                    </td>
+  financialDrafts.map((record, index) => {
+    const profit = record.income - record.expense;
 
-                                    <td className="px-5 py-3">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        value={
-                                          record.expense == 0
-                                            ? ""
-                                            : record.expense
-                                        }
-                                        onChange={(event) =>
-                                          updateFinancialDraft(
-                                            record.id,
-                                            "expense",
-                                            event.target.value,
-                                          )
-                                        }
-                                        className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-red-600 outline-none transition focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10"
-                                      />
-                                    </td>
+    return (
+      <tr
+        key={record.id}
+        className={`border-b border-black/[0.06] text-[11px] last:border-b-0 ${
+          record.isNew ? "bg-red-50/70" : "bg-white"
+        }`}
+      >
+        <td className="px-2 py-2 text-[11px] font-bold text-black/42">
+          {index + 1}
+        </td>
 
-                                    <td
-                                      className={`px-5 py-3 text-base font-extrabold ${getProfitClass(
-                                        profit,
-                                      )}`}
-                                    >
-                                      {profit > 0 ? "+" : ""}
-                                      {formatMoney(profit)} ₽
-                                    </td>
-                                    <td className="px-5 py-3">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          removeFinancialDraft(record)
-                                        }
-                                        className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
-                                      >
-                                        Удалить
-                                      </button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
+        <td className="px-2 py-2">
+          <input
+            type="date"
+            value={record.recordDate}
+            onChange={(event) =>
+              updateFinancialDraft(
+                record.id,
+                "recordDate",
+                event.target.value,
+              )
+            }
+            className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[11px] font-bold outline-none transition focus:border-[#03bd48] focus:ring-2 focus:ring-[#03bd48]/10"
+          />
+        </td>
+
+        <td className="px-2 py-2">
+          <input
+            type="text"
+            value={record.name}
+            maxLength={200}
+            placeholder="Наименование"
+            onChange={(event) =>
+              updateFinancialDraft(
+                record.id,
+                "name",
+                event.target.value,
+              )
+            }
+            className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[11px] font-bold text-black outline-none transition placeholder:text-[11px] placeholder:font-medium placeholder:text-black/35 focus:border-[#03bd48] focus:ring-2 focus:ring-[#03bd48]/10"
+          />
+        </td>
+
+        <td className="px-2 py-2">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={record.income === 0 ? "" : record.income}
+            onChange={(event) =>
+              updateFinancialDraft(
+                record.id,
+                "income",
+                event.target.value,
+              )
+            }
+            className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[11px] font-bold text-[#028c36] outline-none transition focus:border-[#03bd48] focus:ring-2 focus:ring-[#03bd48]/10"
+          />
+        </td>
+
+        <td className="px-2 py-2">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={record.expense === 0 ? "" : record.expense}
+            onChange={(event) =>
+              updateFinancialDraft(
+                record.id,
+                "expense",
+                event.target.value,
+              )
+            }
+            className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[11px] font-bold text-red-600 outline-none transition focus:border-[#03bd48] focus:ring-2 focus:ring-[#03bd48]/10"
+          />
+        </td>
+
+        <td
+          className={`whitespace-nowrap px-2 py-2 text-xs font-extrabold ${getProfitClass(
+            profit,
+          )}`}
+        >
+          {profit > 0 ? "+" : ""}
+          {formatMoney(profit)} ₽
+        </td>
+
+        <td className="px-2 py-2 text-center">
+          <button
+            type="button"
+            onClick={() => removeFinancialDraft(record)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-lg font-bold leading-none text-red-600 transition hover:border-red-300 hover:bg-red-100"
+            aria-label="Удалить строку"
+            title="Удалить строку"
+          >
+            ×
+          </button>
+        </td>
+      </tr>
+    );
+  })}
 
                             {!isEditingFinancials &&
                               tableRecordsInPeriod.length === 0 && (
                                 <tr>
                                   <td
-                                    colSpan={5}
+                                    colSpan={6}
                                     className="px-5 py-14 text-center text-sm text-black/48"
                                   >
                                     В выбранном периоде пока нет данных. Нажмите
@@ -4153,7 +4351,7 @@ setExpandedBidderId(savedBidder.id);
                               financialDrafts.length === 0 && (
                                 <tr>
                                   <td
-                                    colSpan={6}
+                                    colSpan={7}
                                     className="px-5 py-14 text-center text-sm text-black/48"
                                   >
                                     В таблице нет строк. Нажмите «Добавить
@@ -4908,6 +5106,319 @@ onChange={(e) =>
               </div>
             )}
             {/* ========== КОНЕЦ УСЛУГИ «БИД-МЕНЕДЖЕР АВИТО» ========== */}
+
+
+            {activeSection === "reviews-calculator" && (
+              <div className="space-y-6">
+                <section className="relative overflow-hidden rounded-[32px] bg-[#101010] p-5 text-white shadow-[0_24px_65px_rgba(16,24,40,0.22)] sm:p-7 md:p-8">
+                  <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#03bd48]/20 blur-3xl" />
+                  <div className="pointer-events-none absolute -bottom-20 left-1/4 h-48 w-48 rounded-full bg-white/[0.04] blur-3xl" />
+
+                  <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                    <div>
+                      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold">
+                        <span className="text-[#03bd48]">★</span>
+                        Бесплатный инструмент
+                      </div>
+
+                      <h2 className="text-3xl font-extrabold leading-[1.05] tracking-[-0.055em] sm:text-4xl md:text-5xl">
+                        Калькулятор отзывов
+                        <span className="text-[#03bd48]"> Авито</span>
+                      </h2>
+
+                      <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62">
+                        Укажите количество текущих оценок — калькулятор покажет
+                        ваш средний рейтинг и рассчитает, сколько новых отзывов
+                        на 5 звёзд нужно для роста рейтинга.
+                      </p>
+                    </div>
+
+                    <div className="w-full rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/[0.12] p-4 sm:w-[230px]">
+  <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/55">
+    Текущий рейтинг
+  </div>
+
+  <div className="mt-2 flex items-center gap-2 text-4xl font-extrabold tracking-[-0.05em] text-[#03bd48]">
+    {reviewsCalculator.currentRating === null
+      ? "—"
+      : reviewsCalculator.currentRating.toFixed(1)}
+
+    {reviewsCalculator.currentRating !== null && (
+      <span className="text-2xl text-white/85">★</span>
+    )}
+  </div>
+
+  <div className="mt-1 text-xs font-semibold leading-5 text-white/55">
+    Средний балл по введённым отзывам
+  </div>
+</div>
+                  </div>
+                </section>
+
+                <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+                  <div className="overflow-hidden rounded-[30px] border border-black/[0.08] bg-white p-5 shadow-[0_18px_45px_rgba(16,24,40,0.07)] sm:p-6 md:p-8">
+                    <div className="border-b border-black/[0.07] pb-5">
+  <div className="badge-green mb-3">
+    Шаг 1 · Текущие оценки
+  </div>
+
+  <h3 className="text-2xl font-extrabold tracking-[-0.04em] text-black sm:text-3xl">
+    Распределение отзывов
+  </h3>
+
+  <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+    <p className="max-w-lg text-sm leading-6 text-black/50">
+      Введите, сколько отзывов каждой оценки уже есть у вашего профиля Авито.
+    </p>
+
+    <button
+      type="button"
+      onClick={() =>
+        setReviewCounts({
+          five: 0,
+          four: 0,
+          three: 0,
+          two: 0,
+          one: 0,
+        })
+      }
+      className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-[10px] font-extrabold text-black/50 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+      title="Очистить все поля"
+    >
+      Очистить
+    </button>
+  </div>
+</div>
+
+                    <div className="mt-5 space-y-3">
+                      {[
+                        {
+                          key: "five" as const,
+                          rating: 5,
+                          label: "5 звёзд",
+                          tone: "border-[#03bd48]/25 bg-[#03bd48]/[0.07]",
+                          textTone: "text-[#028c36]",
+                          starTone: "text-[#03bd48]",
+                        },
+                        {
+                          key: "four" as const,
+                          rating: 4,
+                          label: "4 звезды",
+                          tone: "border-black/[0.08] bg-black/[0.018]",
+                          textTone: "text-black",
+                          starTone: "text-amber-400",
+                        },
+                        {
+                          key: "three" as const,
+                          rating: 3,
+                          label: "3 звезды",
+                          tone: "border-black/[0.08] bg-black/[0.018]",
+                          textTone: "text-black",
+                          starTone: "text-amber-400",
+                        },
+                        {
+                          key: "two" as const,
+                          rating: 2,
+                          label: "2 звезды",
+                          tone: "border-black/[0.08] bg-black/[0.018]",
+                          textTone: "text-black",
+                          starTone: "text-amber-400",
+                        },
+                        {
+                          key: "one" as const,
+                          rating: 1,
+                          label: "1 звезда",
+                          tone: "border-red-200/80 bg-red-50/[0.7]",
+                          textTone: "text-red-600",
+                          starTone: "text-red-500",
+                        },
+                      ].map((item) => (
+                        <label
+                          key={item.key}
+                          className={`flex items-center gap-3 rounded-2xl border p-3 transition sm:p-4 ${item.tone}`}
+                        >
+                          <div className="min-w-[84px]">
+                            <div
+                              className={`whitespace-nowrap text-base font-extrabold tracking-[-0.03em] ${item.starTone}`}
+                            >
+                              {"★".repeat(item.rating)}
+                              <span className="text-black/15">
+                                {"★".repeat(5 - item.rating)}
+                              </span>
+                            </div>
+
+                            <div className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.1em] text-black/40">
+                              {item.label}
+                            </div>
+                          </div>
+
+                          <div className="h-10 w-px bg-black/[0.08]" />
+
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            inputMode="numeric"
+                            value={
+                              reviewCounts[item.key] === 0
+                                ? ""
+                                : reviewCounts[item.key]
+                            }
+                            onChange={(event) =>
+                              setReviewCounts((current) => ({
+                                ...current,
+                                [item.key]: Math.max(
+                                  0,
+                                  Number.parseInt(event.target.value, 10) || 0,
+                                ),
+                              }))
+                            }
+                            placeholder="0"
+                            className={`min-w-0 flex-1 rounded-xl border border-black/10 bg-white px-3 py-3 text-right text-sm font-extrabold outline-none transition placeholder:text-black/25 focus:border-[#03bd48] focus:ring-4 focus:ring-[#03bd48]/10 ${item.textTone}`}
+                            aria-label={`Количество отзывов ${item.label}`}
+                          />
+
+                          <span className="hidden text-xs font-bold text-black/42 sm:block">
+                            отзывов
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="mt-5 rounded-2xl border border-black/[0.07] bg-black/[0.018] p-4 text-sm leading-6 text-black/55">
+                      <span className="font-extrabold text-black">
+                        Как считать:
+                      </span>{" "}
+                      посмотрите в профиле Авито, сколько у вас отзывов с
+                      оценками от 1 до 5 звёзд, и внесите каждое число в
+                      соответствующее поле.
+                    </div>
+                  </div>
+
+                  <div className="overflow-hidden rounded-[30px] border border-black/[0.08] bg-white shadow-[0_18px_45px_rgba(16,24,40,0.07)]">
+  <div className="bg-black p-5 text-white sm:p-6 md:p-8">
+    <div className="text-[10px] font-extrabold uppercase tracking-[0.13em] text-white/48">
+      Шаг 2 · Результат
+    </div>
+
+    <h3 className="mt-3 text-2xl font-extrabold tracking-[-0.045em] sm:text-3xl">
+      Потенциал роста
+    </h3>
+
+    <p className="mt-2 text-sm leading-6 text-white/58">
+      Рассчитаем, сколько новых отзывов с оценкой 5★ нужно,
+      чтобы повысить отображаемый рейтинг профиля.
+    </p>
+  </div>
+
+  <div className="p-5 sm:p-6 md:p-8">
+    {reviewsCalculator.totalReviews === 0 ? (
+      <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.018] p-8 text-center sm:p-10">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#03bd48]/10 text-2xl font-extrabold text-[#028c36]">
+          ★
+        </div>
+
+        <h4 className="mt-4 text-xl font-extrabold text-black">
+          Добавьте текущие отзывы
+        </h4>
+
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-7 text-black/50">
+          Укажите количество оценок слева, чтобы увидеть, сколько
+          потребуется новых отзывов 5★.
+        </p>
+      </div>
+    ) : (
+      <>
+        <div className="mb-4">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-black/40">
+            Потенциал роста
+          </div>
+
+          <h4 className="mt-1 text-xl font-extrabold tracking-[-0.035em] text-black">
+            Сколько нужно отзывов 5★
+          </h4>
+        </div>
+
+        <div className="space-y-3">
+          {reviewsCalculator.targets.map((item) => {
+            const isReached = item.needed === 0;
+
+            return (
+              <div
+                key={item.target}
+                className={`flex items-center gap-3 rounded-2xl border p-4 sm:p-5 ${
+                  isReached
+                    ? "border-[#03bd48]/25 bg-[#03bd48]/[0.075]"
+                    : "border-black/[0.08] bg-white"
+                }`}
+              >
+                <div
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-lg font-extrabold ${
+                    isReached
+                      ? "bg-[#03bd48] text-white"
+                      : "bg-black text-[#03bd48]"
+                  }`}
+                >
+                  {item.target.toFixed(1)}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-black/40">
+                    До рейтинга {item.target.toFixed(1)}
+                  </div>
+
+                  <div
+                    className={`mt-1 text-sm font-extrabold ${
+                      isReached ? "text-[#028c36]" : "text-black"
+                    }`}
+                  >
+                    {isReached
+                      ? "Рейтинг уже достигнут"
+                      : `Нужно ещё ${item.needed} ${
+                          item.needed === 1
+                            ? "отзыв"
+                            : item.needed !== null &&
+                                item.needed >= 2 &&
+                                item.needed <= 4
+                              ? "отзыва"
+                              : "отзывов"
+                        } 5★`}
+                  </div>
+                </div>
+
+                <div
+                  className={`text-2xl font-extrabold tracking-[-0.05em] ${
+                    isReached ? "text-[#028c36]" : "text-black"
+                  }`}
+                >
+                  {isReached ? "✓" : `+${item.needed}`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-lg font-extrabold text-white">
+              !
+            </div>
+
+            <p className="text-sm leading-6 text-amber-900/80">
+              Расчёт показывает минимальное число новых отзывов с оценкой{" "}
+              <b>5★</b>. Рейтинг Авито отображается с точностью до одного
+              знака после запятой.
+            </p>
+          </div>
+        </div>
+      </>
+    )}
+  </div>
+</div>
+                </section>
+              </div>
+            )}
+
 
             {activeSection === "popular-queries" && hasAccess && (
               <div className="space-y-6">

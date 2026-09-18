@@ -148,4 +148,7 @@ pm2 save
 
 # 10. Проверка
 pm2 status
-pm2 logs helpsell --lines 50
+
+# перезапуск cron
+sudo systemctl restart cron
+sudo systemctl status cron

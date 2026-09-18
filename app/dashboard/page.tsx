@@ -53,9 +53,10 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const initialFinancialRecords = user.financialRecords.map((record) => ({
+    const initialFinancialRecords = user.financialRecords.map((record) => ({
     id: record.id,
     recordDate: record.recordDate,
+    name: record.name,
     income: record.income,
     expense: record.expense,
   }));

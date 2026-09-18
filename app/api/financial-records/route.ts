@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 
 function hasFinancialAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return level === "basic" || level === "pro" || level === "admin";
 }
 
 function isValidDate(value: unknown): value is string {
@@ -23,13 +23,17 @@ function isValidMoney(value: unknown): value is number {
   );
 }
 
+function normalizeRecordName(value: unknown) {
+  return typeof value === "string" ? value.trim().slice(0, 200) : "";
+}
+
 export async function GET() {
   const sessionUser = await getSessionUser();
 
   if (!sessionUser) {
     return NextResponse.json(
       { error: "Требуется авторизация" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -43,7 +47,7 @@ export async function GET() {
   if (!user || !hasFinancialAccess(user.subscriptionLevel)) {
     return NextResponse.json(
       { error: "Финансовый анализ доступен с подпиской Basic" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -51,9 +55,14 @@ export async function GET() {
     where: {
       userId: sessionUser.id,
     },
-    orderBy: {
-      recordDate: "desc",
-    },
+    orderBy: [
+      {
+        recordDate: "desc",
+      },
+      {
+        id: "desc",
+      },
+    ],
   });
 
   return NextResponse.json({ records });
@@ -65,7 +74,7 @@ export async function POST(request: Request) {
   if (!sessionUser) {
     return NextResponse.json(
       { error: "Требуется авторизация" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -79,12 +88,13 @@ export async function POST(request: Request) {
   if (!user || !hasFinancialAccess(user.subscriptionLevel)) {
     return NextResponse.json(
       { error: "Финансовый анализ доступен с подпиской Basic" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
   let body: {
     recordDate?: unknown;
+    name?: unknown;
     income?: unknown;
     expense?: unknown;
   };
@@ -94,42 +104,35 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json(
       { error: "Некорректный формат данных" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   if (!isValidDate(body.recordDate)) {
     return NextResponse.json(
       { error: "Укажите корректную дату" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   if (!isValidMoney(body.income) || !isValidMoney(body.expense)) {
     return NextResponse.json(
       { error: "Доходы и расходы должны быть целыми неотрицательными числами" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  const record = await prisma.financialRecord.upsert({
-    where: {
-      userId_recordDate: {
-        userId: sessionUser.id,
-        recordDate: body.recordDate,
-      },
-    },
-    update: {
-      income: body.income,
-      expense: body.expense,
-    },
-    create: {
+  // Важно: create, а не upsert.
+  // Поэтому можно добавлять несколько независимых строк на одну дату.
+  const record = await prisma.financialRecord.create({
+    data: {
       userId: sessionUser.id,
       recordDate: body.recordDate,
+      name: normalizeRecordName(body.name),
       income: body.income,
       expense: body.expense,
     },
   });
 
-  return NextResponse.json({ record });
+  return NextResponse.json({ record }, { status: 201 });
 }

@@ -9,7 +9,7 @@ type RouteContext = {
 };
 
 function hasFinancialAccess(level: string | null | undefined) {
-  return level === "basic" || level === "admin";
+  return level === "basic" || level === "pro" || level === "admin";
 }
 
 function isValidDate(value: unknown): value is string {
@@ -27,6 +27,10 @@ function isValidMoney(value: unknown): value is number {
     Number.isInteger(value) &&
     value >= 0
   );
+}
+
+function normalizeRecordName(value: unknown) {
+  return typeof value === "string" ? value.trim().slice(0, 200) : "";
 }
 
 async function getAuthorizedRecord(id: number, userId: number) {
@@ -47,7 +51,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!sessionUser) {
     return NextResponse.json(
       { error: "Требуется авторизация" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -61,7 +65,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!user || !hasFinancialAccess(user.subscriptionLevel)) {
     return NextResponse.json(
       { error: "Недостаточно прав доступа" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -71,7 +75,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json(
       { error: "Некорректный идентификатор записи" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -80,12 +84,13 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!existingRecord) {
     return NextResponse.json(
       { error: "Запись не найдена" },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
   let body: {
     recordDate?: unknown;
+    name?: unknown;
     income?: unknown;
     expense?: unknown;
   };
@@ -95,44 +100,36 @@ export async function PATCH(request: Request, context: RouteContext) {
   } catch {
     return NextResponse.json(
       { error: "Некорректный формат данных" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   if (!isValidDate(body.recordDate)) {
     return NextResponse.json(
       { error: "Укажите корректную дату" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   if (!isValidMoney(body.income) || !isValidMoney(body.expense)) {
     return NextResponse.json(
       { error: "Доходы и расходы должны быть целыми неотрицательными числами" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  try {
-    const record = await prisma.financialRecord.update({
-      where: { id },
-      data: {
-        recordDate: body.recordDate,
-        income: body.income,
-        expense: body.expense,
-      },
-    });
+  // Повторяющиеся даты разрешены.
+  const record = await prisma.financialRecord.update({
+    where: { id },
+    data: {
+      recordDate: body.recordDate,
+      name: normalizeRecordName(body.name),
+      income: body.income,
+      expense: body.expense,
+    },
+  });
 
-    return NextResponse.json({ record });
-  } catch {
-    return NextResponse.json(
-      {
-        error:
-          "Нельзя сохранить запись: на эту дату уже существует финансовая запись",
-      },
-      { status: 409 }
-    );
-  }
+  return NextResponse.json({ record });
 }
 
 export async function DELETE(_: Request, context: RouteContext) {
@@ -141,7 +138,7 @@ export async function DELETE(_: Request, context: RouteContext) {
   if (!sessionUser) {
     return NextResponse.json(
       { error: "Требуется авторизация" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -155,7 +152,7 @@ export async function DELETE(_: Request, context: RouteContext) {
   if (!user || !hasFinancialAccess(user.subscriptionLevel)) {
     return NextResponse.json(
       { error: "Недостаточно прав доступа" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -165,7 +162,7 @@ export async function DELETE(_: Request, context: RouteContext) {
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json(
       { error: "Некорректный идентификатор записи" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -174,7 +171,7 @@ export async function DELETE(_: Request, context: RouteContext) {
   if (!existingRecord) {
     return NextResponse.json(
       { error: "Запись не найдена" },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
