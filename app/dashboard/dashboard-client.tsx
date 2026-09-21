@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import ImageUniqualizerService from "./image-uniqualizer";
 
 type FinancialRecord = {
   id: number;
@@ -159,6 +160,7 @@ type DashboardSection =
   | "bid-manager"
   | "reviews-calculator"
   | "popular-queries"
+  | "image-uniqualizer"
   | null;
 
 type BidderStatus = "active" | "paused" | "attention";
@@ -1091,6 +1093,14 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
         : "Доступно с подпиской Basic",
       available: hasAccess,
       inDevelopment: true,
+    },
+
+    {
+      id: "image-uniqualizer",
+      index: "07",
+      title: "Уникализатор картинок",
+      description: "Уникальные копии фото для объявлений",
+      available: true,
     },
   ];
 
@@ -2503,7 +2513,7 @@ setExpandedBidderId(savedBidder.id);
                         <p className="mt-3 max-w-2xl text-sm leading-7 text-white/85">
                           Подписка Basic откроет доступ к аналитике мест в
                           поиске Авито, финансовому анализу и рабочим
-                          инструментам платформы.  Pro rключает всё из Basic + бид-менеджер Авито и до 10 стратегий на аккаунт.
+                          инструментам платформы.  Pro включает всё из Basic + бид-менеджер Авито и до 10 стратегий на аккаунт.
                         </p>
                       </div>
                       <Link
@@ -5550,6 +5560,9 @@ onChange={(e) =>
                 </section>
               </div>
             )}
+
+            {/* ========== УСЛУГА «УНИКАЛИЗАТОР КАРТИНОК»: доступна на всех тарифах ========== */}
+            {activeSection === "image-uniqualizer" && <ImageUniqualizerService />}
           </section>
         </div>
       </div>

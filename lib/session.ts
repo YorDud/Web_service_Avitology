@@ -21,9 +21,10 @@ export async function getSessionUser() {
   if (!user) return null;
 
   if (
-    user.subscriptionLevel === "basic" &&
+    (user.subscriptionLevel === "basic" ||
+      user.subscriptionLevel === "pro") &&
     user.subscriptionEndsAt &&
-    new Date(user.subscriptionEndsAt) < new Date()
+    user.subscriptionEndsAt <= new Date()
   ) {
     const updatedUser = await prisma.user.update({
       where: { id: user.id },

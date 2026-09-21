@@ -9,7 +9,7 @@ export default async function DashboardPage() {
   const sessionUser = await getSessionUser();
 
   if (!sessionUser) {
-    redirect("/login");
+    redirect("/auth");
   }
 
   const user = await prisma.user.findUnique({
@@ -50,7 +50,7 @@ export default async function DashboardPage() {
   });
 
   if (!user) {
-    redirect("/login");
+    redirect("/auth");
   }
 
     const initialFinancialRecords = user.financialRecords.map((record) => ({
