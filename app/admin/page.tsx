@@ -62,7 +62,7 @@ export default async function AdminPage() {
 
   const dbPayments = await prisma.payment.findMany({
     orderBy: { id: "desc" },
-    take: 100,
+    take: 1500,
     select: {
       id: true,
       userId: true,

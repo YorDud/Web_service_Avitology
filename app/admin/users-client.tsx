@@ -80,6 +80,18 @@ function formatDateTime(value: string | null) {
   }).format(date);
 }
 
+function toDateInputValue(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const offset = date.getTimezoneOffset() * 60 * 1000;
+
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
 function getPaymentStatusClass(status: string) {
   switch (status.toLowerCase()) {
     case "succeeded":
@@ -144,6 +156,24 @@ export default function AdminUsersClient({
 
   const [search, setSearch] = useState("");
   const [paymentSearch, setPaymentSearch] = useState("");
+
+    const [isPaymentFiltersOpen, setIsPaymentFiltersOpen] = useState(false);
+
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
+  const [paymentProviderFilter, setPaymentProviderFilter] = useState("all");
+  const [paymentPlanFilter, setPaymentPlanFilter] = useState("all");
+
+  const [paymentDateField, setPaymentDateField] = useState<
+    "paidAt" | "createdAt"
+  >("paidAt");
+
+  const [paymentDateFrom, setPaymentDateFrom] = useState("");
+  const [paymentDateTo, setPaymentDateTo] = useState("");
+
+  const [paymentAmountFrom, setPaymentAmountFrom] = useState("");
+  const [paymentAmountTo, setPaymentAmountTo] = useState("");
+
+  const [onlySuccessfulPayments, setOnlySuccessfulPayments] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(
     initialUsers[0] || null
@@ -235,18 +265,204 @@ export default function AdminUsersClient({
     });
   }, [users, search]);
 
+    const paymentFilterOptions = useMemo(() => {
+    const statuses = Array.from(
+      new Set(payments.map((payment) => payment.status).filter(Boolean)),
+    ).sort();
+
+    const providers = Array.from(
+      new Set(payments.map((payment) => payment.provider).filter(Boolean)),
+    ).sort();
+
+    const plans = Array.from(
+      new Set(
+        payments
+          .map((payment) => payment.planCode)
+          .filter((plan): plan is string => Boolean(plan)),
+      ),
+    ).sort();
+
+    return {
+      statuses,
+      providers,
+      plans,
+    };
+  }, [payments]);
+
   const filteredPayments = useMemo(() => {
     const query = paymentSearch.trim().toLowerCase();
+    const queryParts = query.split(/\s+/).filter(Boolean);
 
-    if (!query) return payments;
+    const minAmount = paymentAmountFrom.trim()
+      ? Number(paymentAmountFrom)
+      : null;
 
-    const parts = query.split(/\s+/).filter(Boolean);
+    const maxAmount = paymentAmountTo.trim()
+      ? Number(paymentAmountTo)
+      : null;
+
+    const fromDate = paymentDateFrom
+      ? new Date(`${paymentDateFrom}T00:00:00`)
+      : null;
+
+    const toDate = paymentDateTo
+      ? new Date(`${paymentDateTo}T23:59:59.999`)
+      : null;
 
     return payments.filter((payment) => {
       const text = getPaymentSearchText(payment);
-      return parts.every((part) => text.includes(part));
+
+      if (
+        queryParts.length > 0 &&
+        !queryParts.every((part) => text.includes(part))
+      ) {
+        return false;
+      }
+
+      if (
+        paymentStatusFilter !== "all" &&
+        payment.status.toLowerCase() !== paymentStatusFilter.toLowerCase()
+      ) {
+        return false;
+      }
+
+      if (
+        paymentProviderFilter !== "all" &&
+        payment.provider.toLowerCase() !== paymentProviderFilter.toLowerCase()
+      ) {
+        return false;
+      }
+
+      if (
+        paymentPlanFilter !== "all" &&
+        (payment.planCode || "") !== paymentPlanFilter
+      ) {
+        return false;
+      }
+
+      if (
+        onlySuccessfulPayments &&
+        payment.status.toLowerCase() !== "succeeded"
+      ) {
+        return false;
+      }
+
+      if (minAmount !== null && !Number.isNaN(minAmount)) {
+        if (payment.amount < minAmount) {
+          return false;
+        }
+      }
+
+      if (maxAmount !== null && !Number.isNaN(maxAmount)) {
+        if (payment.amount > maxAmount) {
+          return false;
+        }
+      }
+
+      const rawDate =
+        paymentDateField === "paidAt" ? payment.paidAt : payment.createdAt;
+
+      /*
+        При фильтрации по факту оплаты исключаем платежи,
+        у которых дата оплаты ещё отсутствует.
+      */
+      if (paymentDateField === "paidAt" && !rawDate) {
+        return false;
+      }
+
+      if (fromDate || toDate) {
+        if (!rawDate) return false;
+
+        const paymentDate = new Date(rawDate);
+
+        if (Number.isNaN(paymentDate.getTime())) {
+          return false;
+        }
+
+        if (fromDate && paymentDate < fromDate) {
+          return false;
+        }
+
+        if (toDate && paymentDate > toDate) {
+          return false;
+        }
+      }
+
+      return true;
     });
-  }, [payments, paymentSearch]);
+  }, [
+    payments,
+    paymentSearch,
+    paymentStatusFilter,
+    paymentProviderFilter,
+    paymentPlanFilter,
+    paymentDateField,
+    paymentDateFrom,
+    paymentDateTo,
+    paymentAmountFrom,
+    paymentAmountTo,
+    onlySuccessfulPayments,
+  ]);
+
+  const paymentAnalytics = useMemo(() => {
+    const successfulPayments = filteredPayments.filter(
+      (payment) => payment.status.toLowerCase() === "succeeded",
+    );
+
+    const successfulRevenue = successfulPayments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0,
+    );
+
+    const allOperationsAmount = filteredPayments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0,
+    );
+
+    const pendingCount = filteredPayments.filter(
+      (payment) => payment.status.toLowerCase() === "pending",
+    ).length;
+
+    const canceledOrFailedCount = filteredPayments.filter((payment) =>
+      ["canceled", "failed"].includes(payment.status.toLowerCase()),
+    ).length;
+
+    const currency =
+      successfulPayments[0]?.currency ||
+      filteredPayments[0]?.currency ||
+      "₽";
+
+    return {
+      successfulCount: successfulPayments.length,
+      successfulRevenue,
+      allOperationsAmount,
+      pendingCount,
+      canceledOrFailedCount,
+      currency,
+    };
+  }, [filteredPayments]);
+
+  const hasActivePaymentFilters =
+    paymentStatusFilter !== "all" ||
+    paymentProviderFilter !== "all" ||
+    paymentPlanFilter !== "all" ||
+    paymentDateFrom !== "" ||
+    paymentDateTo !== "" ||
+    paymentAmountFrom !== "" ||
+    paymentAmountTo !== "" ||
+    onlySuccessfulPayments;
+
+  function clearPaymentFilters() {
+    setPaymentStatusFilter("all");
+    setPaymentProviderFilter("all");
+    setPaymentPlanFilter("all");
+    setPaymentDateField("paidAt");
+    setPaymentDateFrom("");
+    setPaymentDateTo("");
+    setPaymentAmountFrom("");
+    setPaymentAmountTo("");
+    setOnlySuccessfulPayments(false);
+  }
 
   async function saveServiceSettings() {
     setServiceSettingsLoading(true);
@@ -1158,20 +1374,360 @@ export default function AdminUsersClient({
                   </div>
 
                   <div className="w-full lg:max-w-md">
-                    <input
-                      value={paymentSearch}
-                      onChange={(event) =>
-                        setPaymentSearch(event.target.value)
-                      }
-                      placeholder="Поиск по платежам, ID, почте..."
-                      className="w-full rounded-2xl border border-black/10 bg-black/[0.02] px-4 py-4 text-sm outline-none transition placeholder:text-black/35 focus:border-[#03bd48] focus:bg-white"
-                    />
+  <input
+    value={paymentSearch}
+    onChange={(event) => setPaymentSearch(event.target.value)}
+    placeholder="Поиск по платежам, ID, почте..."
+    className="w-full rounded-2xl border border-black/10 bg-black/[0.02] px-4 py-4 text-sm outline-none transition placeholder:text-black/35 focus:border-[#03bd48] focus:bg-white"
+  />
 
-                    <div className="mt-2 text-sm font-semibold text-black/42">
-                      Найдено платежей: {filteredPayments.length}
+  <div className="mt-2 flex items-center justify-between gap-3">
+    <div className="text-sm font-semibold text-black/42">
+      Найдено платежей: {filteredPayments.length}
+    </div>
+
+    {paymentSearch && (
+      <button
+        type="button"
+        onClick={() => setPaymentSearch("")}
+        className="text-xs font-extrabold text-[#028c36]"
+      >
+        Очистить поиск
+      </button>
+    )}
+  </div>
+
+  <button
+    type="button"
+    onClick={() => setIsPaymentFiltersOpen((current) => !current)}
+    aria-expanded={isPaymentFiltersOpen}
+    className={`mt-3 flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-xs font-extrabold transition ${
+      isPaymentFiltersOpen || hasActivePaymentFilters
+        ? "border-[#03bd48]/35 bg-[#03bd48]/10 text-[#027a30]"
+        : "border-black/10 bg-white text-black/60 hover:border-[#03bd48]/35 hover:text-[#028c36]"
+    }`}
+  >
+    <span className="flex items-center gap-2">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-4 w-4"
+        aria-hidden="true"
+      >
+        <path d="M4 6h16" />
+        <path d="M7 12h10" />
+        <path d="M10 18h4" />
+      </svg>
+
+      Фильтры и расчёты
+
+      {hasActivePaymentFilters && (
+        <span className="rounded-full bg-[#03bd48] px-1.5 py-0.5 text-[9px] text-white">
+          Активны
+        </span>
+      )}
+    </span>
+
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`h-4 w-4 transition-transform duration-300 ${
+        isPaymentFiltersOpen ? "rotate-180" : ""
+      }`}
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  </button>
+</div>
+                </div>
+
+                                {isPaymentFiltersOpen && (
+                  <div className="mt-5 overflow-hidden rounded-3xl border border-[#03bd48]/20 bg-[linear-gradient(135deg,rgba(3,189,72,0.07),rgba(255,255,255,0.97))] p-4 shadow-[0_12px_28px_rgba(16,24,40,0.04)] sm:p-5">
+                    <div className="flex flex-col gap-4 border-b border-[#03bd48]/15 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#027a30]/65">
+                          Фильтрация и аналитика
+                        </div>
+
+                        <h3 className="mt-1 text-xl font-extrabold tracking-[-0.035em] text-black">
+                          Период, статусы и сумма оплат
+                        </h3>
+
+                        <p className="mt-1 max-w-2xl text-sm leading-6 text-black/50">
+                          Расчёты обновляются автоматически по операциям,
+                          подходящим под выбранные условия.
+                        </p>
+                      </div>
+
+                      {hasActivePaymentFilters && (
+                        <button
+                          type="button"
+                          onClick={clearPaymentFilters}
+                          className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
+                        >
+                          Сбросить фильтры
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-bold text-black/50">
+                          Статус платежа
+                        </span>
+
+                        <select
+                          value={paymentStatusFilter}
+                          onChange={(event) =>
+                            setPaymentStatusFilter(event.target.value)
+                          }
+                          className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48]"
+                        >
+                          <option value="all">Все статусы</option>
+
+                          {paymentFilterOptions.statuses.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-bold text-black/50">
+                          Способ оплаты
+                        </span>
+
+                        <select
+                          value={paymentProviderFilter}
+                          onChange={(event) =>
+                            setPaymentProviderFilter(event.target.value)
+                          }
+                          className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48]"
+                        >
+                          <option value="all">Все способы</option>
+
+                          {paymentFilterOptions.providers.map((provider) => (
+                            <option key={provider} value={provider}>
+                              {provider === "yookassa"
+                                ? "ЮKassa"
+                                : provider === "test"
+                                  ? "Тестовая активация"
+                                  : provider}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-bold text-black/50">
+                          Тариф
+                        </span>
+
+                        <select
+                          value={paymentPlanFilter}
+                          onChange={(event) =>
+                            setPaymentPlanFilter(event.target.value)
+                          }
+                          className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48]"
+                        >
+                          <option value="all">Все тарифы</option>
+
+                          {paymentFilterOptions.plans.map((plan) => (
+                            <option key={plan} value={plan}>
+                              {plan}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="flex cursor-pointer items-end gap-3 rounded-xl border border-black/10 bg-white px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={onlySuccessfulPayments}
+                          onChange={(event) =>
+                            setOnlySuccessfulPayments(event.target.checked)
+                          }
+                          className="h-4 w-4 shrink-0 rounded accent-[#03bd48]"
+                        />
+
+                        <span className="text-sm font-extrabold leading-5 text-black">
+                          Только успешные оплаты
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-black/[0.07] bg-white/80 p-4">
+                      <div className="mb-3 text-sm font-extrabold text-black">
+                        Диапазон дат
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <label className="block">
+                          <span className="mb-2 block text-xs font-bold text-black/50">
+                            Считать дату по
+                          </span>
+
+                          <select
+                            value={paymentDateField}
+                            onChange={(event) =>
+                              setPaymentDateField(
+                                event.target.value as "paidAt" | "createdAt",
+                              )
+                            }
+                            className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48]"
+                          >
+                            <option value="paidAt">Дате оплаты</option>
+                            <option value="createdAt">Дате создания</option>
+                          </select>
+                        </label>
+
+                        <label className="block">
+                          <span className="mb-2 block text-xs font-bold text-black/50">
+                            Начало периода
+                          </span>
+
+                          <input
+                            type="date"
+                            value={paymentDateFrom}
+                            max={paymentDateTo || undefined}
+                            onChange={(event) =>
+                              setPaymentDateFrom(event.target.value)
+                            }
+                            className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48]"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="mb-2 block text-xs font-bold text-black/50">
+                            Конец периода
+                          </span>
+
+                          <input
+                            type="date"
+                            value={paymentDateTo}
+                            min={paymentDateFrom || undefined}
+                            onChange={(event) =>
+                              setPaymentDateTo(event.target.value)
+                            }
+                            className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition focus:border-[#03bd48]"
+                          />
+                        </label>
+
+                        <div className="rounded-xl bg-black/[0.035] p-3">
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-black/40">
+                            Выбранный период
+                          </div>
+
+                          <div className="mt-2 text-sm font-extrabold leading-5 text-black">
+                            {paymentDateFrom
+                              ? toDateInputValue(
+                                  `${paymentDateFrom}T00:00:00`,
+                                )
+                              : "С начала"}
+                            {" — "}
+                            {paymentDateTo
+                              ? toDateInputValue(
+                                  `${paymentDateTo}T00:00:00`,
+                                )
+                              : "по сегодня"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-bold text-black/50">
+                          Сумма от
+                        </span>
+
+                        <input
+                          type="number"
+                          min="0"
+                          value={paymentAmountFrom}
+                          onChange={(event) =>
+                            setPaymentAmountFrom(event.target.value)
+                          }
+                          placeholder="Например: 299"
+                          className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition placeholder:font-medium placeholder:text-black/30 focus:border-[#03bd48]"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-bold text-black/50">
+                          Сумма до
+                        </span>
+
+                        <input
+                          type="number"
+                          min="0"
+                          value={paymentAmountTo}
+                          onChange={(event) =>
+                            setPaymentAmountTo(event.target.value)
+                          }
+                          placeholder="Без ограничения"
+                          className="w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold outline-none transition placeholder:font-medium placeholder:text-black/30 focus:border-[#03bd48]"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <PaymentInfoCard
+                        title="Операций по фильтру"
+                        className="border border-black/[0.06] bg-white"
+                      >
+                        <div className="text-2xl font-extrabold text-black">
+                          {filteredPayments.length}
+                        </div>
+                      </PaymentInfoCard>
+
+                      <PaymentInfoCard
+                        title="Успешных оплат"
+                        className="border border-[#03bd48]/20 bg-[#03bd48]/[0.07]"
+                      >
+                        <div className="text-2xl font-extrabold text-[#028c36]">
+                          {paymentAnalytics.successfulCount}
+                        </div>
+                      </PaymentInfoCard>
+
+                      <PaymentInfoCard
+                        title="Выручка успешных оплат"
+                        className="border border-[#03bd48]/25 bg-[#03bd48]/[0.10]"
+                      >
+                        <div className="text-2xl font-extrabold text-[#028c36]">
+                          {new Intl.NumberFormat("ru-RU").format(
+                            paymentAnalytics.successfulRevenue,
+                          )}{" "}
+                          {paymentAnalytics.currency}
+                        </div>
+                      </PaymentInfoCard>
+
+                      <PaymentInfoCard
+                        title="Ожидают / отменены"
+                        className="border border-amber-200 bg-amber-50"
+                      >
+                        <div className="text-lg font-extrabold text-amber-800">
+                          {paymentAnalytics.pendingCount} /{" "}
+                          {paymentAnalytics.canceledOrFailedCount}
+                        </div>
+
+                        <div className="mt-1 text-xs font-semibold text-amber-800/65">
+                          pending / canceled и failed
+                        </div>
+                      </PaymentInfoCard>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {filteredPayments.length === 0 ? (
                   <div className="mt-6 rounded-3xl border border-dashed border-black/15 bg-black/[0.02] p-8 text-center text-black/50">
