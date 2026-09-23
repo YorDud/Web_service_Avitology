@@ -151,6 +151,11 @@ type DashboardPageProps = {
   initialFinancialRecords: FinancialRecord[];
   initialBidders: BidderApi[];
   initialAvitoConnection: AvitoConnection | null;
+
+  // Пробный Basic на 1 день: сервер определяет,
+  // доступно ли предложение конкретному пользователю.
+  trialOfferEnabled: boolean;
+  canUseFreeTrial: boolean;
 };
 
 type DashboardSection =
@@ -889,9 +894,66 @@ export default function DashboardClientPage({
   initialFinancialRecords,
   initialBidders,
   initialAvitoConnection,
+  trialOfferEnabled,
+  canUseFreeTrial,
 }: DashboardPageProps) {
   const [activeSection, setActiveSection] =
     useState<DashboardSection>("profile");
+
+      /*
+   * Показываем предложение только:
+   * - если администратор включил пробный период;
+   * - пользователь ещё не пользовался им;
+   * - у пользователя Free.
+   */
+  const shouldShowTrialOffer =
+    trialOfferEnabled &&
+    canUseFreeTrial &&
+    user.subscriptionLevel.toLowerCase() === "free";
+
+  const [isTrialOfferOpen, setIsTrialOfferOpen] = useState(
+    shouldShowTrialOffer,
+  );
+  const [isTrialActivating, setIsTrialActivating] = useState(false);
+  const [trialOfferError, setTrialOfferError] = useState<string | null>(null);
+
+  async function activateTrialFromDashboard() {
+    try {
+      setIsTrialActivating(true);
+      setTrialOfferError(null);
+
+      /*
+       * Это тот же endpoint, который используется в:
+       * app/pricing/buy-basic-button.tsx
+       */
+      const response = await fetch("/api/subscription/free-trial", {
+        method: "POST",
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.error || "Не удалось активировать пробный доступ.",
+        );
+      }
+
+      /*
+       * Ваш endpoint уже возвращает redirectUrl. Обычно это /dashboard.
+       * Переход/обновление сразу подтянет тариф Basic и скроет окно.
+       */
+      window.location.href = payload?.redirectUrl || "/dashboard";
+    } catch (error) {
+      setTrialOfferError(
+        error instanceof Error
+          ? error.message
+          : "Не удалось активировать пробный доступ.",
+      );
+    } finally {
+      setIsTrialActivating(false);
+    }
+  }
+
   const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>(
     initialFinancialRecords,
   );
@@ -2241,6 +2303,74 @@ setExpandedBidderId(savedBidder.id);
   }
 
   return (
+    <>
+      {isTrialOfferOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="trial-offer-title"
+        >
+          <div className="w-full max-w-md rounded-3xl border border-[#03bd48]/30 bg-white p-6 shadow-2xl shadow-black/30">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#03bd48]/20 bg-[#03bd48]/10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#028c36]">
+              <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
+              Пробный доступ
+            </div>
+
+            <h2
+              id="trial-offer-title"
+              className="mt-4 text-2xl font-extrabold tracking-tight text-black"
+            >
+              Попробуйте Basic бесплатно
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-black/60">
+              Для вас доступен пробный период на 1 день. Получите полный
+              доступ к возможностям тарифа Basic без оплаты и привязки карты.
+            </p>
+
+            <div className="mt-5 rounded-2xl border border-[#03bd48]/20 bg-[#03bd48]/[0.06] p-4">
+              <div className="text-sm font-extrabold text-black">
+                Basic на 1 день бесплатно
+              </div>
+
+              <div className="mt-2 space-y-1 text-sm leading-5 text-black/60">
+                <div>✓ Доступ к функциям тарифа Basic</div>
+                <div>✓ Не требуется карта или оплата</div>
+                <div>✓ После окончания тариф автоматически станет Free</div>
+              </div>
+            </div>
+
+            {trialOfferError && (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                {trialOfferError}
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setIsTrialOfferOpen(false)}
+                disabled={isTrialActivating}
+                className="rounded-xl border border-black/10 bg-black/[0.025] px-5 py-3 text-sm font-extrabold text-black/65 transition hover:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Позже
+              </button>
+
+              <button
+                type="button"
+                onClick={activateTrialFromDashboard}
+                disabled={isTrialActivating}
+                className="rounded-xl bg-[#03bd48] px-5 py-3 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(3,189,72,0.28)] transition hover:-translate-y-0.5 hover:bg-[#029d3c] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isTrialActivating
+                  ? "Активация…"
+                  : "Активировать Basic на 1 день"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     <main className="min-h-screen bg-white">
       <div className="container-main internal-page-shell pb-12">
         <header className="mb-6 overflow-hidden rounded-[30px] bg-black p-6 text-white shadow-[0_24px_65px_rgba(16,24,40,0.2)] md:p-8">
@@ -5567,5 +5697,6 @@ onChange={(e) =>
         </div>
       </div>
     </main>
+    </>
   );
 }

@@ -2,11 +2,14 @@ import { redirect } from "next/navigation";
 import DashboardClient from "./dashboard-client";
 import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { getServiceSettings } from "@/lib/service-settings";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const sessionUser = await getSessionUser();
+
+  const serviceSettings = await getServiceSettings();
 
   if (!sessionUser) {
     redirect("/auth");
@@ -25,6 +28,7 @@ export default async function DashboardPage() {
       subscriptionPrice: true,
       subscriptionPaidAt: true,
       subscriptionEndsAt: true,
+      usedFreeTrial: true,
 
       financialRecords: {
         orderBy: {
@@ -171,6 +175,8 @@ lastPositionError: bidder.lastPositionError,
       initialFinancialRecords={initialFinancialRecords}
       initialBidders={initialBidders}
       initialAvitoConnection={initialAvitoConnection}
+      trialOfferEnabled={serviceSettings.isFreeTrialEnabled}
+      canUseFreeTrial={!user.usedFreeTrial}
     />
   );
 }
