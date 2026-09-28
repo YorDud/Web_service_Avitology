@@ -88,13 +88,22 @@ export type SyncResult = {
 export type CatalogNode = {
   slug: string | null;
   name: string;
+  /** Полный путь: «Электроника › Аудио и видео › Наушники». */
   path: string;
+  /** Промежуточный раздел, под которым лежит этот пункт (в дереве Авито — ключ группы), например «Аудио и видео». */
+  group: string | null;
 };
 
 export type CatalogField = {
   tag: string;
   label: string;
+  /** Описание поля от Авито. */
+  description: string;
   required: boolean;
+  /** Обязательно только при определённых значениях других полей. */
+  conditional: boolean;
+  /** Текст условия («когда обязательно»), если Авито его прислал. */
+  condition: string;
   values: string[];
 };
 

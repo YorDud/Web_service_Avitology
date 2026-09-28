@@ -324,17 +324,22 @@ export function normalizeUpload(raw: Json): ReportSummary {
 
 type RawCategoryNode = { name?: string; slug?: string; nested?: Record<string, RawCategoryNode[]>[] };
 
-function walkCatalog(nodes: RawCategoryNode[] | undefined, parents: string[], out: CatalogNode[]) {
+function walkCatalog(nodes: RawCategoryNode[] | undefined, parents: string[], out: CatalogNode[], group: string | null = null) {
   for (const node of nodes ?? []) {
     const name = typeof node?.name === "string" ? node.name : null;
     if (!name) continue;
     const path = [...parents, name];
-    out.push({ slug: typeof node.slug === "string" ? node.slug : null, name, path: path.join(" › ") });
+    out.push({ slug: typeof node.slug === "string" ? node.slug : null, name, path: path.join(" › "), group });
 
-    for (const group of Array.isArray(node.nested) ? node.nested : []) {
-      if (!group || typeof group !== "object") continue;
-      for (const children of Object.values(group)) {
-        if (Array.isArray(children)) walkCatalog(children, path, out);
+    for (const groupMap of Array.isArray(node.nested) ? node.nested : []) {
+      if (!groupMap || typeof groupMap !== "object") continue;
+      // Ключ группы — промежуточный раздел (например «Аудио и видео»): показываем его в пути,
+      // чтобы по нему можно было искать, и запоминаем как группу для вложенных пунктов.
+      for (const [groupName, children] of Object.entries(groupMap)) {
+        if (!Array.isArray(children)) continue;
+        const label = groupName.trim();
+        const useLabel = label && label !== name ? label : null;
+        walkCatalog(children, useLabel ? [...path, useLabel] : path, out, useLabel);
       }
     }
   }
@@ -367,10 +372,16 @@ export function parseCatalogFields(raw: Json): CatalogField[] {
       const tag = typeof field?.tag === "string" ? field.tag.trim() : "";
       if (tag) {
         const contents: Json[] = Array.isArray(field?.content) ? field.content : [];
+        const conditionTexts: string[] = contents.flatMap((content) =>
+          Array.isArray(content?.dependencies_text) ? content.dependencies_text.filter((t: unknown) => typeof t === "string") : [],
+        );
         out.push({
           tag,
           label: String(field?.label ?? field?.descriptions ?? tag),
+          description: typeof field?.descriptions === "string" ? field.descriptions : "",
           required: contents.some((content) => content?.required === true),
+          conditional: contents.some((content) => content?.required_by_dependency === true),
+          condition: [...new Set(conditionTexts)].join("; ").slice(0, 300),
           values: collectFieldValues(contents),
         });
       }

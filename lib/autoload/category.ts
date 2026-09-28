@@ -10,7 +10,7 @@ import type { CatalogField } from "./types";
    ========================================================================= */
 
 /** Поля, которые заполняет сам пользователь — их значения из справочника не подставляем. */
-const USER_TAGS = new Set([
+export const USER_TAGS = new Set([
   "Id",
   "Title",
   "Description",
@@ -42,7 +42,7 @@ export type CategoryResolution = {
 };
 
 export function resolveCategoryFields(
-  node: { name: string; path?: string; slug: string | null },
+  node: { name: string; path?: string; slug: string | null; group?: string | null },
   fields: CatalogField[],
 ): CategoryResolution {
   const values: Record<string, string> = {};
@@ -57,16 +57,24 @@ export function resolveCategoryFields(
   if (allowed.length > 0) {
     const segments = (node.path ?? "").split("›").map((part) => part.trim());
     const pick =
+      (node.group ? allowed.find((value) => value === node.group) : undefined) ??
       allowed.find((value) => value === node.name) ??
       allowed.find((value) => segments.includes(value)) ??
       allowed[0];
     values.Category = pick;
+  } else if (node.group) {
+    // Авито не прислал список допустимых значений — берём промежуточный раздел из дерева каталога
+    // (для «Наушники» это «Аудио и видео»).
+    values.Category = node.group;
+    warnings.push(
+      `Авито не прислал допустимые значения поля «Категория» — подставили раздел «${node.group}» из каталога. Если после загрузки Авито напишет про категорию, скажите нам, какой пункт вы выбирали.`,
+    );
   } else {
     values.Category = node.name;
     warnings.push(
       node.slug
-        ? "Авито не вернул допустимые значения поля «Категория» для этого раздела — подставлено название раздела. Если при загрузке будет ошибка про категорию, выберите более вложенный раздел."
-        : "Это общий раздел без собственных полей — подставлено его название. Выберите более вложенный раздел (например, конкретный вид товара), иначе Авито может не принять категорию.",
+        ? "Авито не прислал допустимые значения поля «Категория» для этого раздела — подставлено его название. Если при загрузке будет ошибка про категорию, выберите более вложенный пункт."
+        : "Это общий раздел без собственных полей — подставлено его название. Выберите более вложенный пункт (конкретный вид товара), иначе Авито может не принять категорию.",
     );
   }
   summary.push(`Категория: ${values.Category}`);

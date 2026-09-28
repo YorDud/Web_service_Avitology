@@ -15,7 +15,7 @@ import {
   type FieldOption,
   type KnownField,
 } from "@/lib/autoload/fields";
-import { resolveCategoryFields } from "@/lib/autoload/category";
+import { USER_TAGS, resolveCategoryFields } from "@/lib/autoload/category";
 import { buildImport, buildTemplateCsv, parseDelimited, toCsv, type ImportResult } from "@/lib/autoload/import";
 import { MESSAGE_KIND, fixHint, kindOf } from "@/lib/autoload/hints";
 import { buildFeedXml, splitImages, validateAds, type AdIssue } from "@/lib/autoload/xml";
@@ -966,6 +966,7 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
                         onPickNode={(node) => void applyCategoryNode(node, "defaults")}
                         onOpenCatalog={() => setCategoryTarget("defaults")}
                       />
+                      <CategoryCaption category={defaults.Category} goodsType={defaults.GoodsType} adType={defaults.AdType} />
                     </div>
                   ) : (
                     <div className="min-w-0 flex-1">
@@ -1678,14 +1679,21 @@ function RowEditor({
                       {field.tag === "Description" && <span className={`text-xs font-bold ${length > 7500 ? "text-red-600" : "text-black/35"}`}>{length}/7500</span>}
                     </div>
                     {field.tag === "Category" ? (
-                      <CategoryField
-                        id={`r-${field.tag}`}
-                        value={value}
-                        connected={connected}
-                        busy={categoryBusy}
-                        onPickNode={onPickCategory}
-                        onOpenCatalog={onOpenCatalog}
-                      />
+                      <>
+                        <CategoryField
+                          id={`r-${field.tag}`}
+                          value={value}
+                          connected={connected}
+                          busy={categoryBusy}
+                          onPickNode={onPickCategory}
+                          onOpenCatalog={onOpenCatalog}
+                        />
+                        <CategoryCaption
+                          category={row.data.Category ?? defaults.Category}
+                          goodsType={row.data.GoodsType ?? defaults.GoodsType}
+                          adType={row.data.AdType ?? defaults.AdType}
+                        />
+                      </>
                     ) : (
                       <FieldControl
                         id={`r-${field.tag}`}
@@ -2282,6 +2290,97 @@ function CategoryField({
   );
 }
 
+function CategoryCaption({ category, goodsType, adType }: { category?: string; goodsType?: string; adType?: string }) {
+  if (!category) {
+    return <p className="mt-1.5 text-xs leading-5 text-black/45">Выберите категорию из списка — вписывать её вручную не нужно.</p>;
+  }
+  return (
+    <p className="mt-1.5 text-xs leading-5 text-black/55">
+      В файл уйдёт: Категория — <b className="text-black">{category}</b>
+      {goodsType && (
+        <>
+          {" "}· Вид товара — <b className="text-black">{goodsType}</b>
+        </>
+      )}
+      {adType && (
+        <>
+          {" "}· Вид объявления — <b className="text-black">{adType}</b>
+        </>
+      )}
+      .
+    </p>
+  );
+}
+
+function FieldSection({
+  title,
+  note,
+  fields,
+  onAddColumn,
+  standard,
+  collapsed,
+}: {
+  title: string;
+  note: string;
+  fields: CatalogField[];
+  onAddColumn?: (tag: string, values?: string[]) => void;
+  standard?: boolean;
+  collapsed?: boolean;
+}) {
+  const [open, setOpen] = useState(!collapsed);
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 text-left">
+        <span className="text-sm font-extrabold text-black">
+          {title} <span className="font-bold text-black/35">· {fields.length}</span>
+        </span>
+        <Icon name="chevron" className={`h-4 w-4 shrink-0 text-black/40 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      <p className="mt-0.5 text-xs leading-5 text-black/50">{note}</p>
+      {open && (
+        <ul className="mt-2 max-h-[34vh] space-y-2 overflow-y-auto pr-1">
+          {fields.map((field) => {
+            const known = FIELD_BY_TAG[field.tag];
+            const text = known?.hint || field.description;
+            return (
+              <li key={field.tag} className="min-w-0 rounded-xl border border-black/[0.08] bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-extrabold text-black">{field.label}</div>
+                    <div className="truncate text-[11px] font-semibold text-black/35">{field.tag}</div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {field.required ? <Pill tone="red">обязательное</Pill> : field.conditional ? <Pill tone="amber">иногда обязательное</Pill> : null}
+                    {!standard && onAddColumn && (
+                      <button
+                        type="button"
+                        onClick={() => onAddColumn(field.tag, field.values)}
+                        aria-label={`Добавить столбец ${field.label}`}
+                        title="Добавить столбцом в таблицу"
+                        className="rounded-lg p-1.5 text-black/45 transition hover:bg-[#03bd48]/10 hover:text-[#028c36]"
+                      >
+                        <Icon name="plus" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {text && <p className="mt-1.5 text-xs leading-5 text-black/55">{text}</p>}
+                {field.conditional && field.condition && <p className="mt-1 text-xs leading-5 text-amber-800">Когда обязательно: {field.condition}</p>}
+                {field.values.length > 0 && (
+                  <p className="mt-1.5 text-xs leading-5 text-black/40">
+                    Допустимо: {field.values.slice(0, 8).join(", ")}
+                    {field.values.length > 8 ? ` … (всего ${field.values.length})` : ""}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function CategoryModal({
   onPick,
   onAddColumn,
@@ -2307,6 +2406,22 @@ function CategoryModal({
     const list = q ? nodes.filter((node) => node.path.toLowerCase().includes(q)) : nodes;
     return list.slice(0, 80);
   }, [nodes, search]);
+
+  const preview = useMemo(() => (current && fields ? resolveCategoryFields(current, fields) : null), [current, fields]);
+
+  const sections = useMemo(() => {
+    const own: CatalogField[] = [];
+    const standard: CatalogField[] = [];
+    const optional: CatalogField[] = [];
+    for (const field of fields ?? []) {
+      if (preview && field.tag in preview.values) continue; // уже подставили
+      const isStandard = USER_TAGS.has(field.tag) || Boolean(FIELD_BY_TAG[field.tag]);
+      if (isStandard) standard.push(field);
+      else if (field.required || field.conditional) own.push(field);
+      else optional.push(field);
+    }
+    return { own, standard, optional };
+  }, [fields, preview]);
 
   async function open(node: CatalogNode) {
     setCurrent(node);
@@ -2369,32 +2484,65 @@ function CategoryModal({
         </div>
 
         <div className="min-w-0 rounded-2xl border border-black/[0.08] bg-black/[0.02] p-4">
-          <div className="text-sm font-extrabold text-black">Поля категории</div>
-          {!current && <p className="mt-2 text-sm leading-6 text-black/45">Выберите категорию слева, и здесь появятся её поля.</p>}
-          {current && !current.slug && <p className="mt-2 text-sm leading-6 text-black/45">У этого раздела нет отдельных полей. Выберите вложенную категорию.</p>}
-          {fieldsLoading && <div className="al-skeleton mt-3 h-24 rounded-xl" />}
-          {fieldsError && <p className="mt-3 text-sm font-bold text-red-600">{fieldsError}</p>}
-          {fields && fields.length === 0 && <p className="mt-2 text-sm leading-6 text-black/45">Авито не вернул список полей для этой категории.</p>}
-          {fields && fields.length > 0 && (
-            <ul className="mt-3 max-h-[40vh] space-y-2 overflow-y-auto pr-1">
-              {fields.map((field) => (
-                <li key={field.tag} className="rounded-xl border border-black/[0.08] bg-white p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-extrabold text-black">{field.tag}</div>
-                      {field.label !== field.tag && <div className="text-xs font-semibold text-black/45">{field.label}</div>}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {field.required && <Pill tone="red">обязательное</Pill>}
-                      <button type="button" onClick={() => onAddColumn(field.tag, field.values)} aria-label={`Добавить столбец ${field.tag}`} className="rounded-lg p-1.5 text-black/45 transition hover:bg-[#03bd48]/10 hover:text-[#028c36]">
-                        <Icon name="plus" />
-                      </button>
-                    </div>
-                  </div>
-                  {field.values.length > 0 && <div className="mt-2 text-xs leading-5 text-black/40">Значения: {field.values.slice(0, 8).join(", ")}{field.values.length > 8 ? "…" : ""}</div>}
-                </li>
-              ))}
-            </ul>
+          {!current && (
+            <p className="text-sm leading-6 text-black/55">
+              Найдите свой товар слева (например, «Наушники») и нажмите на него — здесь появится, что попадёт в файл и что нужно заполнить.
+            </p>
+          )}
+          {current && !current.slug && (
+            <p className="text-sm leading-6 text-black/55">У этого раздела нет собственных полей. Выберите более вложенный пункт — конкретный вид товара.</p>
+          )}
+          {fieldsLoading && <div className="al-skeleton mt-1 h-24 rounded-xl" />}
+          {fieldsError && <p className="text-sm font-bold text-red-600">{fieldsError}</p>}
+          {current && fields && fields.length === 0 && (
+            <p className="text-sm leading-6 text-black/55">Авито не вернул список полей для этого пункта.</p>
+          )}
+          {current && fields && fields.length > 0 && preview && (
+            <div className="space-y-4">
+              <div>
+                <div className="text-sm font-extrabold text-black">Что попадёт в файл</div>
+                <p className="mt-1 text-xs leading-5 text-black/50">Эти значения мы подставим сами — вписывать их вручную не нужно.</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {Object.entries(preview.values).map(([tag, value]) => (
+                    <span key={tag} className="inline-flex max-w-full items-center gap-1 rounded-lg border border-[#03bd48]/30 bg-[#03bd48]/[0.08] px-2.5 py-1.5 text-xs font-extrabold text-[#027a30]">
+                      <span className="text-black/50">{tagLabel(tag)}:</span>
+                      <span className="min-w-0 truncate">{value}</span>
+                    </span>
+                  ))}
+                </div>
+                {preview.warnings.map((warning) => (
+                  <p key={warning} className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
+                    {warning}
+                  </p>
+                ))}
+              </div>
+
+              {sections.own.length > 0 && (
+                <FieldSection
+                  title="Поля именно этой категории"
+                  note="Обязательные добавим столбцами таблицы сами — заполните их у каждого объявления."
+                  fields={sections.own}
+                  onAddColumn={onAddColumn}
+                />
+              )}
+              {sections.standard.length > 0 && (
+                <FieldSection
+                  title="Стандартные поля"
+                  note="Они уже есть в вашей таблице (в столбцах или в «Общих полях») — ничего добавлять не нужно."
+                  fields={sections.standard}
+                  standard
+                />
+              )}
+              {sections.optional.length > 0 && (
+                <FieldSection
+                  title="Необязательные поля"
+                  note="Можно добавить столбцом «+», если нужно."
+                  fields={sections.optional}
+                  onAddColumn={onAddColumn}
+                  collapsed
+                />
+              )}
+            </div>
           )}
         </div>
       </div>

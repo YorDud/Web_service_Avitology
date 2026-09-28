@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatForDateTimeLocal } from "@/lib/dates";
+import BonusCodesPanel from "./bonus-codes-panel";
 
 type UserItem = {
   id: number;
@@ -55,6 +56,7 @@ type AdminSection =
   | "settings"
   | "create-user"
   | "payments"
+  | "bonus-codes"
   | null;
 
 type Props = {
@@ -689,6 +691,12 @@ export default function AdminUsersClient({
       title: "История платежей",
       description: "Операции, статусы и внешние ID",
       index: "04",
+    },
+    {
+      id: "bonus-codes",
+      title: "Бонус-коды",
+      description: "Промокоды на подписки Basic и Pro",
+      index: "05",
     },
   ];
 
@@ -1356,6 +1364,8 @@ export default function AdminUsersClient({
                 </section>
               </section>
             )}
+
+            {activeSection === "bonus-codes" && <BonusCodesPanel />}
 
             {activeSection === "payments" && (
               <section className="white-card min-w-0 p-5 md:p-8">

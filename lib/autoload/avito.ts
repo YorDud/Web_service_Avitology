@@ -88,20 +88,42 @@ function explain(status: number, payload: Json): string {
   return extractMessage(payload, `Авито вернул ошибку ${status}.`);
 }
 
+
+/** Таймауты обращений к API Авито (миллисекунды). Держим короткими, чтобы интерфейс не «зависал». */
+export const TOKEN_TIMEOUT_MS = 8_000;
+export const REQUEST_TIMEOUT_MS = 10_000;
+/** Дерево категорий большое, ему разрешаем чуть дольше. */
+export const TREE_TIMEOUT_MS = 15_000;
+
+async function timedFetch(url: string | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    const name = (error as { name?: string } | null)?.name;
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new AvitoApiError(`Авито не ответил за ${Math.round(timeoutMs / 1000)} с. Повторите чуть позже.`, 504);
+    }
+    throw new AvitoApiError("Не удалось связаться с API Авито. Проверьте соединение и повторите.", 502);
+  }
+}
+
 /* ---------- Токен ---------- */
 
 export async function requestToken(clientId: string, clientSecret: string) {
-  const response = await fetch(`${API_BASE}${ENDPOINTS.token}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-    }),
-    signal: AbortSignal.timeout(20_000),
-    cache: "no-store",
-  });
+  const response = await timedFetch(
+    `${API_BASE}${ENDPOINTS.token}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+      cache: "no-store",
+    },
+    TOKEN_TIMEOUT_MS,
+  );
 
   const payload: Json = await response.json().catch(() => null);
   if (!response.ok || !payload?.access_token) {
@@ -175,18 +197,22 @@ export async function avitoRequest<T = Json>(
     if (value !== undefined && value !== "") url.searchParams.set(key, String(value));
   }
 
+  const timeoutMs = path === ENDPOINTS.tree ? TREE_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
   const send = async (token: string) =>
-    fetch(url, {
-      method: options.method ?? "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-        ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
+    timedFetch(
+      url,
+      {
+        method: options.method ?? "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
+        },
+        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        cache: "no-store",
       },
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-      signal: AbortSignal.timeout(30_000),
-      cache: "no-store",
-    });
+      timeoutMs,
+    );
 
   let response = await send(await getAccessToken(connection));
 

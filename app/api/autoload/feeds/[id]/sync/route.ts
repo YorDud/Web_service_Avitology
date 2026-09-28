@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { avito } from "@/lib/autoload/avito";
+import { avito, AvitoApiError } from "@/lib/autoload/avito";
 import {
   fail,
   normalizeUpload,
@@ -70,7 +70,11 @@ export async function POST(_request: Request, context: Context) {
       { avitoId: string | null; status: string | null; messages: UploadMessage[] }
     >();
 
+    const startedAt = Date.now();
     for (let page = 1; page <= MAX_PAGES; page += 1) {
+      if (Date.now() - startedAt > 40_000) {
+        throw new AvitoApiError("Отчёт Авито слишком большой — не успели получить его за отведённое время. Повторите чуть позже.", 504);
+      }
       const raw = useCurrent
         ? await avito.currentUploadItems(account, { page, perPage: PER_PAGE })
         : await avito.lastSuccessfulUploadItems(account, { page, perPage: PER_PAGE });

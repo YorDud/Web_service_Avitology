@@ -61,6 +61,7 @@ model User {
   avitoBidders           AvitoBidder[]
   avitoAccountConnection AvitoAccountConnection?
   autoloadFeeds          AutoloadFeed[]
+  bonusCodeRedemptions   BonusCodeRedemption[]
 }
 
 model ServiceSettings {
@@ -299,4 +300,36 @@ model AutoloadAd {
 
   @@unique([feedId, adKey])
   @@index([feedId])
+}
+
+model BonusCode {
+  id           Int       @id @default(autoincrement())
+  code         String    @unique
+  tier         String
+  durationDays Int
+  isActive     Boolean   @default(true)
+  maxUses      Int?
+  usedCount    Int       @default(0)
+  validFrom    DateTime?
+  validUntil   DateTime?
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  redemptions BonusCodeRedemption[]
+}
+
+model BonusCodeRedemption {
+  id           Int       @id @default(autoincrement())
+  codeId       Int
+  code         BonusCode @relation(fields: [codeId], references: [id], onDelete: Restrict)
+  userId       Int
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier         String
+  durationDays Int
+  endsAt       DateTime
+  redeemedAt   DateTime  @default(now())
+
+  @@unique([codeId, userId])
+  @@index([userId])
 }

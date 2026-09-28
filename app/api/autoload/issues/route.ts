@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { avito } from "@/lib/autoload/avito";
+import { avito, AvitoApiError } from "@/lib/autoload/avito";
 import { normalizeUpload, requireAccount, requireAutoloadUser, routeError } from "@/lib/autoload/server";
 import type { IssueAd, IssueGroup, IssuesResponse } from "@/lib/autoload/types";
 
@@ -38,7 +38,11 @@ export async function GET() {
     const problemItems: { adKey: string; avitoId: string | null; url: string | null; messages: { type: string; code: number; title: string; description: string }[] }[] = [];
     let totalAds = 0;
 
+    const startedAt = Date.now();
     for (let page = 1; page <= MAX_PAGES; page += 1) {
+      if (Date.now() - startedAt > 40_000) {
+        throw new AvitoApiError("Отчёт Авито слишком большой — не успели получить его за отведённое время. Повторите чуть позже.", 504);
+      }
       const raw = useCurrent
         ? await avito.currentUploadItems(account, { page, perPage: PER_PAGE })
         : await avito.lastSuccessfulUploadItems(account, { page, perPage: PER_PAGE });

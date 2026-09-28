@@ -253,23 +253,24 @@ export default function AutoloadService() {
 
       {/* HERO */}
       <section className="relative overflow-hidden rounded-[30px] bg-black p-5 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] sm:p-7 md:p-8">
+        <button
+          type="button"
+          aria-label="Информация о BETA-версии Автозагрузки объявлений Авито"
+          onMouseEnter={openBetaTooltip}
+          onMouseLeave={() => setIsBetaTooltipOpen(false)}
+          onFocus={openBetaTooltip}
+          onBlur={() => setIsBetaTooltipOpen(false)}
+          className="absolute right-5 top-5 z-20 flex h-9 w-9 items-center justify-center rounded-xl border border-blue-300/45 bg-blue-500 text-base font-extrabold text-white shadow-[0_8px_20px_rgba(59,130,246,0.3)] transition hover:scale-105 hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300/70 sm:right-7 sm:top-7"
+        >
+          !
+        </button>
+
         <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          <div className="min-w-0">
+          <div className="min-w-0 pr-12 sm:pr-0">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <span className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">BETA</span>
               <span className="inline-flex rounded-full border border-[#03bd48]/30 bg-[#03bd48]/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-[#78f8a6]">Подписка Pro</span>
               <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-white/70">Через API Авито</span>
-              <button
-                type="button"
-                aria-label="Информация о BETA-версии Автозагрузки объявлений Авито"
-                onMouseEnter={openBetaTooltip}
-                onMouseLeave={() => setIsBetaTooltipOpen(false)}
-                onFocus={openBetaTooltip}
-                onBlur={() => setIsBetaTooltipOpen(false)}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-300/45 bg-blue-500 text-sm font-extrabold text-white shadow-[0_6px_16px_rgba(59,130,246,0.3)] transition hover:scale-105 hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300/70"
-              >
-                !
-              </button>
             </div>
             <h2 className="text-3xl font-extrabold tracking-[-0.05em] md:text-4xl">
               Автозагрузка
@@ -295,7 +296,7 @@ export default function AutoloadService() {
           </div>
 
           {/* Схема потока данных */}
-          <div className="rounded-[26px] border border-white/10 bg-white/[0.04] p-5">
+          <div className="rounded-[26px] border border-white/10 bg-white/[0.04] p-5 lg:mt-10">
             <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 sm:gap-2">
               {[
                 { icon: "table", title: "Таблица", sub: "объявления" },
