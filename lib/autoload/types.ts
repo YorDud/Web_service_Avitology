@@ -97,3 +97,29 @@ export type CatalogField = {
   required: boolean;
   values: string[];
 };
+
+export type IssueAd = {
+  adKey: string;
+  title: string | null;
+  feedId: number | null;
+  feedName: string | null;
+  avitoId: string | null;
+  url: string | null;
+};
+
+export type IssueGroup = {
+  type: string;
+  code: number;
+  title: string;
+  description: string;
+  count: number;
+  ads: IssueAd[];
+};
+
+export type IssuesResponse = {
+  upload: ReportSummary | null;
+  partial: boolean;
+  groups: IssueGroup[];
+  adsWithIssues: number;
+  totalAds: number;
+};

@@ -30,6 +30,7 @@ function toAccountStatus(connection: RawAvitoConnection): AccountStatus {
   };
 }
 import FeedEditor from "./feed-editor";
+import IssuesModal from "./issues-modal";
 import {
   AutoloadStyles,
   Icon,
@@ -136,6 +137,8 @@ export default function AutoloadService() {
   const [loadError, setLoadError] = useState("");
   const [openFeedId, setOpenFeedId] = useState<number | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const [focusAdKey, setFocusAdKey] = useState<string | null>(null);
   const [isBetaTooltipOpen, setIsBetaTooltipOpen] = useState(false);
   const [betaTooltipPosition, setBetaTooltipPosition] = useState({ top: 0, right: 16 });
 
@@ -229,7 +232,11 @@ export default function AutoloadService() {
           feedId={openFeedId}
           account={account}
           profile={profile}
-          onBack={() => setOpenFeedId(null)}
+          focusAdKey={focusAdKey}
+          onBack={() => {
+            setOpenFeedId(null);
+            setFocusAdKey(null);
+          }}
           onChanged={() => void refreshFeeds()}
           onProfile={setProfile}
           toast={toast.push}
@@ -246,27 +253,24 @@ export default function AutoloadService() {
 
       {/* HERO */}
       <section className="relative overflow-hidden rounded-[30px] bg-black p-5 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] sm:p-7 md:p-8">
-        <button
-    type="button"
-    aria-label="Информация о BETA-версии Автозагрузки объявлений Авито"
-    onMouseEnter={openBetaTooltip}
-    onMouseLeave={() => setIsBetaTooltipOpen(false)}
-    onFocus={openBetaTooltip}
-    onBlur={() => setIsBetaTooltipOpen(false)}
-    className="absolute right-5 top-5 z-20 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-300/45 bg-blue-500 text-sm font-extrabold text-white shadow-[0_6px_16px_rgba(59,130,246,0.3)] transition hover:scale-105 hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300/70 sm:right-7 sm:top-7 md:right-8 md:top-8"
-  >
-    !
-  </button>
         <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="min-w-0">
             <div className="mb-4 flex flex-wrap items-center gap-2">
-  <span className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">
-    BETA
-  </span>
-  <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-white/70">
-    Через API Авито
-  </span>
-</div>
+              <span className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">BETA</span>
+              <span className="inline-flex rounded-full border border-[#03bd48]/30 bg-[#03bd48]/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-[#78f8a6]">Подписка Pro</span>
+              <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-white/70">Через API Авито</span>
+              <button
+                type="button"
+                aria-label="Информация о BETA-версии Автозагрузки объявлений Авито"
+                onMouseEnter={openBetaTooltip}
+                onMouseLeave={() => setIsBetaTooltipOpen(false)}
+                onFocus={openBetaTooltip}
+                onBlur={() => setIsBetaTooltipOpen(false)}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-300/45 bg-blue-500 text-sm font-extrabold text-white shadow-[0_6px_16px_rgba(59,130,246,0.3)] transition hover:scale-105 hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300/70"
+              >
+                !
+              </button>
+            </div>
             <h2 className="text-3xl font-extrabold tracking-[-0.05em] md:text-4xl">
               Автозагрузка
               <span className="text-[#03bd48]"> объявлений Авито</span>
@@ -303,13 +307,8 @@ export default function AutoloadService() {
                     <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${index === 2 ? "al-pulse bg-[#03bd48] text-white" : "bg-white/10 text-[#78f8a6]"}`}>
                       <Icon name={node.icon} className="h-4 w-4" />
                     </span>
-                    <span className="mt-2 max-w-full break-words text-[10px] font-extrabold leading-tight sm:text-[12px]">
-  {node.title}
-</span>
-<span className="mt-0.5 max-w-full break-words text-[8px] font-semibold leading-tight text-white/45">
-  {node.sub}
-</span>
-
+                    <span className="mt-2 max-w-full break-words text-xs font-extrabold leading-tight sm:text-sm">{node.title}</span>
+                    <span className="mt-0.5 max-w-full break-words text-[10px] font-semibold leading-tight text-white/45">{node.sub}</span>
                   </div>
                   {index < list.length - 1 && <div className="al-wire" />}
                 </Fragment>
@@ -366,6 +365,7 @@ export default function AutoloadService() {
           </div>,
           document.body,
         )}
+
 
       {/* ИНСТРУКЦИЯ */}
       <div
@@ -462,6 +462,7 @@ export default function AutoloadService() {
               error={reportsError}
               loading={reportsLoading}
               onRefresh={() => void refreshReports()}
+              onShowIssues={() => setIssuesOpen(true)}
             />
           )}
         </div>
@@ -501,6 +502,16 @@ export default function AutoloadService() {
           )}
         </div>
       </div>
+
+      {issuesOpen && (
+        <IssuesModal
+          onClose={() => setIssuesOpen(false)}
+          onOpenAd={(feedId, adKey) => {
+            setFocusAdKey(adKey);
+            setOpenFeedId(feedId);
+          }}
+        />
+      )}
 
       {toast.node}
     </div>
@@ -970,21 +981,23 @@ function ProfileForm({
                 )}
               </div>
 
-              <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-8 md:grid-cols-12">
-                {Array.from({ length: 24 }, (_, hour) => (
-                  <button
-                    key={hour}
-                    type="button"
-                    aria-pressed={rule.time_slots.includes(hour)}
-                    onClick={() => updateRule(index, { time_slots: toggleIn(rule.time_slots, hour) })}
-                    className={`rounded-lg py-1.5 text-[11px] font-extrabold tabular-nums transition ${
-                      rule.time_slots.includes(hour) ? "bg-[#03bd48] text-white" : "bg-white text-black/45 ring-1 ring-black/10 hover:ring-[#03bd48]/50"
-                    }`}
-                  >
-                    {String(hour).padStart(2, "0")}
-                  </button>
-                ))}
-              </div>
+              <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
+  {Array.from({ length: 24 }, (_, hour) => (
+    <button
+      key={hour}
+      type="button"
+      aria-pressed={rule.time_slots.includes(hour)}
+      onClick={() => updateRule(index, { time_slots: toggleIn(rule.time_slots, hour) })}
+      className={`flex h-10 min-w-[52px] items-center justify-center whitespace-nowrap rounded-lg px-2 text-xs font-extrabold leading-none tabular-nums transition ${
+        rule.time_slots.includes(hour)
+          ? "bg-[#03bd48] text-white"
+          : "bg-white text-black/45 ring-1 ring-black/10 hover:ring-[#03bd48]/50"
+      }`}
+    >
+      {String(hour).padStart(2, "0")}
+    </button>
+  ))}
+</div>
 
               <div className="mt-3 flex items-center gap-3">
                 <label htmlFor={`rate-${index}`} className="text-xs font-extrabold text-black/55">
@@ -1071,12 +1084,16 @@ function ReportsCard({
   error,
   loading,
   onRefresh,
+  onShowIssues,
 }: {
   reports: ReportsState | null;
   error: string;
   loading: boolean;
   onRefresh: () => void;
+  onShowIssues: () => void;
 }) {
+  const latest = reports?.current ?? reports?.last ?? null;
+  const hasIssues = latest?.status === "success_warning" || latest?.status === "error";
   return (
     <section className="white-card p-5 md:p-8">
       <SectionTitle
@@ -1091,6 +1108,21 @@ function ReportsCard({
 
       {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600">{error}</div>}
       {!reports && !error && <div className="al-skeleton h-28 rounded-2xl" />}
+
+      {hasIssues && (
+        <div className="al-pop mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="text-sm font-extrabold text-amber-900">
+            {latest?.status === "error" ? "Загрузка завершилась с ошибкой" : "«Загружено, есть замечания» — что это значит"}
+          </div>
+          <p className="mt-1 text-sm leading-6 text-amber-900/80">
+            Авито принял ваш файл, но по части объявлений прислал сообщения: где-то ошибка (объявление не опубликовано), где-то замечание.
+            Нажмите кнопку — мы покажем, какие именно объявления и что в них поправить.
+          </p>
+          <button type="button" onClick={onShowIssues} className="btn-primary mt-3 inline-flex items-center gap-2 !px-5 !py-2.5 text-sm">
+            <Icon name="search" /> Показать, что исправить
+          </button>
+        </div>
+      )}
 
       {reports && !reports.last && !reports.current && reports.uploads.length === 0 && (
         <div className="rounded-2xl bg-black/[0.03] p-6 text-center text-sm font-bold leading-6 text-black/45">

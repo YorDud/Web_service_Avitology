@@ -16,6 +16,7 @@ import {
   type KnownField,
 } from "@/lib/autoload/fields";
 import { buildImport, buildTemplateCsv, parseDelimited, toCsv, type ImportResult } from "@/lib/autoload/import";
+import { MESSAGE_KIND, fixHint, kindOf } from "@/lib/autoload/hints";
 import { buildFeedXml, splitImages, validateAds, type AdIssue } from "@/lib/autoload/xml";
 import type {
   AccountStatus,
@@ -105,6 +106,8 @@ function statusTone(status: string | null, messages: AdMessage[]): "green" | "re
 
 type Props = {
   feedId: number;
+  /** Открыть сразу это объявление (переход из окна «Что исправить»). */
+  focusAdKey?: string | null;
   account: AccountStatus | null;
   profile: ProfileDto | null;
   onBack: () => void;
@@ -113,7 +116,7 @@ type Props = {
   toast: (text: string, kind?: "ok" | "error") => void;
 };
 
-export default function FeedEditor({ feedId, account, profile, onBack, onChanged, onProfile, toast }: Props) {
+export default function FeedEditor({ feedId, focusAdKey, account, profile, onBack, onChanged, onProfile, toast }: Props) {
   const [feed, setFeed] = useState<FeedDetail | null>(null);
   const [loadError, setLoadError] = useState("");
   const [ads, setAds] = useState<AdRow[]>([]);
@@ -173,6 +176,18 @@ export default function FeedEditor({ feedId, account, profile, onBack, onChanged
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
+
+  const focusedRef = useRef(false);
+  useEffect(() => {
+    if (!focusAdKey || !feed || focusedRef.current) return;
+    const row = ads.find((item) => item.key === focusAdKey);
+    if (!row) return;
+    focusedRef.current = true;
+    setTab("ads");
+    setQuery(focusAdKey);
+    setPage(0);
+    setRowModal(row.uid);
+  }, [focusAdKey, feed, ads]);
 
   const reload = useCallback(async () => {
     const { feed: detail } = await api<{ feed: FeedDetail }>(`/api/autoload/feeds/${feedId}`);
@@ -787,7 +802,9 @@ export default function FeedEditor({ feedId, account, profile, onBack, onChanged
                           ))}
                           <td className="border-r border-black/[0.07] px-2.5 py-1">
                             {row.avitoStatus || row.avitoMessages.length > 0 ? (
-                              <Pill tone={statusTone(row.avitoStatus, row.avitoMessages)}>{row.avitoStatus || "Есть сообщения"}</Pill>
+                              <button type="button" onClick={() => setRowModal(row.uid)} title="Открыть сообщения Авито" className="rounded-full">
+                                <Pill tone={statusTone(row.avitoStatus, row.avitoMessages)}>{row.avitoMessages.length > 0 ? `Сообщений: ${row.avitoMessages.length}` : row.avitoStatus}</Pill>
+                              </button>
                             ) : (
                               <span className="text-xs font-bold text-black/25">—</span>
                             )}
@@ -1631,8 +1648,15 @@ function RowEditor({
             <ul className="mt-3 space-y-2">
               {row.avitoMessages.map((message, index) => (
                 <li key={index} className="text-sm leading-6 text-black/65">
-                  <b className={message.type === "error" ? "text-red-600" : "text-amber-700"}>{message.title || message.type}</b>
-                  {message.description ? `: ${message.description}` : ""}
+                  <b className={message.type === "error" ? "text-red-600" : "text-amber-700"}>
+                    {MESSAGE_KIND[kindOf(message.type)].label}: {message.title || message.type}
+                  </b>
+                  {message.description ? `. ${message.description}` : ""}
+                  {fixHint(message.title, message.description) && (
+                    <span className="mt-1 block rounded-lg bg-[#03bd48]/[0.07] px-2.5 py-1.5 text-xs font-semibold text-black/70">
+                      Как исправить: {fixHint(message.title, message.description)}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

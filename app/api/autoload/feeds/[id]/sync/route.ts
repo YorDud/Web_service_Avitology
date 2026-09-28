@@ -42,17 +42,20 @@ export async function POST(_request: Request, context: Context) {
     const feed = await prisma.autoloadFeed.findFirst({ where: { id: feedId, userId: auth.user.id } });
     if (!feed) return fail("Таблица не найдена.", 404);
 
+    // Берём самую свежую загрузку (в т.ч. завершившуюся с замечаниями): «last_successful» у Авито
+    // может указывать на более старую загрузку без ошибок, и тогда статусы были бы устаревшими.
     let uploadId = "";
     let partial = false;
-    const last = await avito.lastSuccessfulUpload(account);
-    if (last) {
-      uploadId = normalizeUpload(last).id;
+    let useCurrent = false;
+    const current = await avito.currentUpload(account);
+    if (current) {
+      const summary = normalizeUpload(current);
+      uploadId = summary.id;
+      partial = summary.status === "processing";
+      useCurrent = true;
     } else {
-      const current = await avito.currentUpload(account);
-      if (current) {
-        uploadId = normalizeUpload(current).id;
-        partial = true;
-      }
+      const last = await avito.lastSuccessfulUpload(account);
+      if (last) uploadId = normalizeUpload(last).id;
     }
 
     if (!uploadId) {
@@ -68,7 +71,7 @@ export async function POST(_request: Request, context: Context) {
     >();
 
     for (let page = 1; page <= MAX_PAGES; page += 1) {
-      const raw = partial
+      const raw = useCurrent
         ? await avito.currentUploadItems(account, { page, perPage: PER_PAGE })
         : await avito.lastSuccessfulUploadItems(account, { page, perPage: PER_PAGE });
 
