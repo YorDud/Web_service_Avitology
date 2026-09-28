@@ -1,5 +1,5 @@
 /* Импорт и экспорт таблиц объявлений: вставка из Excel / Google Таблиц и CSV. */
-import { LIST_SEPARATOR, normalizeDateValue, normalizePriceValue, resolveTag, type AdData } from "./fields";
+import { FIELD_BY_TAG, LIST_SEPARATOR, normalizeDateValue, normalizePriceValue, resolveTag, type AdData } from "./fields";
 import type { FeedAdInput } from "./xml";
 
 export function detectDelimiter(text: string): string {
@@ -66,6 +66,15 @@ export type ImportResult = {
 };
 
 /** Первая строка — заголовки. Столбец «Id» необязателен: недостающие ID создаются автоматически. */
+/** «нет» → «Нет», «по телефону» → «По телефону»: приводим к допустимому значению поля со списком. */
+function canonicalOption(tag: string, value: string): string {
+  const options = FIELD_BY_TAG[tag]?.options;
+  if (!options) return value;
+  const v = value.trim().toLowerCase();
+  const hit = options.find((option) => option.value.toLowerCase() === v || option.label.toLowerCase() === v);
+  return hit ? hit.value : value;
+}
+
 export function buildImport(rows: string[][], idPrefix = "ad"): ImportResult {
   if (rows.length === 0) return { ads: [], mapping: [], recognized: 0 };
 
@@ -85,6 +94,7 @@ export function buildImport(rows: string[][], idPrefix = "ad"): ImportResult {
 
       if (item.tag === "Price") value = normalizePriceValue(value);
       else if (item.tag === "DateBegin" || item.tag === "DateEnd") value = normalizeDateValue(value);
+      else value = canonicalOption(item.tag, value);
       if (!value) return;
 
       if (data[item.tag]) {

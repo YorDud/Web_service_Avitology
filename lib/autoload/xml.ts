@@ -7,6 +7,7 @@ import {
   MAX_VALUE_LENGTH,
   isValidTagPath,
   normalizePriceValue,
+  FIELD_BY_TAG,
   type AdData,
 } from "./fields";
 
@@ -272,6 +273,20 @@ export function validateAds(ads: FeedAdInput[], defaults: AdData) {
         if (digits.length < 10 || digits.length > 12) {
           push(ad, index, "ContactPhone", "warning", "Телефон выглядит неполным.");
         }
+      }
+    }
+
+    for (const tag of ["ContactMethod", "AllowEmail"]) {
+      const value = merged[tag];
+      const allowed = FIELD_BY_TAG[tag]?.options;
+      if (value && allowed && !allowed.some((option) => option.value === value)) {
+        push(
+          ad,
+          index,
+          tag,
+          "error",
+          `Значение «${value}» не из списка допустимых. Выберите: ${allowed.map((option) => option.value).join(" / ")}.`,
+        );
       }
     }
 

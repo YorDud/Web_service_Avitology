@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 
 /* Общие мелочи интерфейса услуги «Автозагрузка объявлений Авито». */
 
@@ -266,6 +267,89 @@ export function Pill({
 }
 
 /**
+ * Выпадающий список, привязанный к полю. Рисуется поверх страницы (портал + position: fixed),
+ * поэтому не обрезается прокруткой таблицы или окна и не растягивает их — из-за этого раньше
+ * строки таблицы «пропадали» при открытии списка.
+ */
+export function AnchoredList({
+  open,
+  anchorRef,
+  popupRef,
+  children,
+  minWidth = 240,
+}: {
+  open: boolean;
+  anchorRef: RefObject<HTMLElement | null>;
+  popupRef: RefObject<HTMLDivElement | null>;
+  children: ReactNode;
+  minWidth?: number;
+}) {
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const below = window.innerHeight - rect.bottom - 12;
+      const above = rect.top - 12;
+      const openUp = below < 220 && above > below;
+      const width = Math.max(rect.width, minWidth);
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      setPos(
+        openUp
+          ? { bottom: window.innerHeight - rect.top + 6, left, width, maxHeight: Math.max(120, Math.min(288, above)) }
+          : { top: rect.bottom + 6, left, width, maxHeight: Math.max(120, Math.min(288, below)) },
+      );
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, anchorRef, minWidth]);
+
+  if (!open || !pos || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      ref={popupRef}
+      style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width, maxHeight: pos.maxHeight }}
+      className="fixed z-[100] overflow-y-auto rounded-2xl border border-black/10 bg-white p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.18)]"
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+/** Закрывает список по клику вне поля и вне самого списка. */
+export function useOutsideClose(
+  open: boolean,
+  refs: RefObject<HTMLElement | null>[],
+  onClose: () => void,
+) {
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (refs.some((ref) => ref.current && ref.current.contains(target))) return;
+      closeRef.current();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+}
+
+/**
  * Выпадающий список с поиском по вводу — как обычный select, но с полем
  * фильтрации, когда вариантов много (категории, значения из каталога Авито).
  * Значение всегда одно из options; свободный текст не сохраняется.
@@ -291,19 +375,13 @@ export function SearchableSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDocDown = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-    document.addEventListener("mousedown", onDocDown);
-    return () => document.removeEventListener("mousedown", onDocDown);
-  }, [open]);
+  useOutsideClose(open, [anchorRef, popupRef], () => {
+    setOpen(false);
+    setQuery("");
+  });
 
   const selected = options.find((option) => option.value === value);
 
@@ -314,7 +392,7 @@ export function SearchableSelect({
   }, [options, query]);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={anchorRef} className="relative">
       <input
         id={id}
         role="combobox"
@@ -331,49 +409,53 @@ export function SearchableSelect({
           setQuery("");
           setOpen(true);
         }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setOpen(false);
+            setQuery("");
+          }
+        }}
         placeholder={placeholder}
         className={className ?? inputClass}
       />
-      {open && (
-        <div className="absolute z-40 mt-1.5 max-h-64 w-full min-w-[220px] overflow-y-auto rounded-2xl border border-black/10 bg-white p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.16)]">
-          {filtered.length === 0 && <div className="px-3 py-2.5 text-sm font-semibold text-black/40">{emptyText}</div>}
-          {filtered.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                onChange(option.value);
-                setQuery("");
-                setOpen(false);
-              }}
-              className={`flex w-full items-start gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition hover:bg-black/[0.05] ${
-                option.value === value ? "bg-[#03bd48]/10 text-[#028c36]" : "text-black/75"
-              }`}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate">{option.label}</span>
-                {option.hint && <span className="mt-0.5 block truncate text-xs font-medium text-black/40">{option.hint}</span>}
-              </span>
-              {option.value === value && <Icon name="check" className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
-            </button>
-          ))}
-          {value && (
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                onChange("");
-                setQuery("");
-                setOpen(false);
-              }}
-              className="mt-1 flex w-full items-center gap-2 rounded-xl border-t border-black/[0.06] px-3 py-2.5 text-left text-xs font-bold text-black/40 transition hover:bg-black/[0.04]"
-            >
-              <Icon name="close" className="h-3 w-3" /> Очистить
-            </button>
-          )}
-        </div>
-      )}
+      <AnchoredList open={open} anchorRef={anchorRef} popupRef={popupRef}>
+        {filtered.length === 0 && <div className="px-3 py-2.5 text-sm font-semibold text-black/40">{emptyText}</div>}
+        {filtered.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              onChange(option.value);
+              setQuery("");
+              setOpen(false);
+            }}
+            className={`flex w-full items-start gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition hover:bg-black/[0.05] ${
+              option.value === value ? "bg-[#03bd48]/10 text-[#028c36]" : "text-black/75"
+            }`}
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{option.label}</span>
+              {option.hint && <span className="mt-0.5 block truncate text-xs font-medium text-black/40">{option.hint}</span>}
+            </span>
+            {option.value === value && <Icon name="check" className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+          </button>
+        ))}
+        {value && (
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              onChange("");
+              setQuery("");
+              setOpen(false);
+            }}
+            className="mt-1 flex w-full items-center gap-2 rounded-xl border-t border-black/[0.06] px-3 py-2.5 text-left text-xs font-bold text-black/40 transition hover:bg-black/[0.04]"
+          >
+            <Icon name="close" className="h-3 w-3" /> Очистить
+          </button>
+        )}
+      </AnchoredList>
     </div>
   );
 }

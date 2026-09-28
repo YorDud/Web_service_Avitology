@@ -15,6 +15,7 @@ import {
   type FieldOption,
   type KnownField,
 } from "@/lib/autoload/fields";
+import { resolveCategoryFields } from "@/lib/autoload/category";
 import { buildImport, buildTemplateCsv, parseDelimited, toCsv, type ImportResult } from "@/lib/autoload/import";
 import { MESSAGE_KIND, fixHint, kindOf } from "@/lib/autoload/hints";
 import { buildFeedXml, splitImages, validateAds, type AdIssue } from "@/lib/autoload/xml";
@@ -29,6 +30,7 @@ import type {
   SyncResult,
 } from "@/lib/autoload/types";
 import {
+  AnchoredList,
   Icon,
   Modal,
   Pill,
@@ -45,6 +47,7 @@ import {
   ghostButton,
   inputClass,
   timeAgo,
+  useOutsideClose,
 } from "./ui";
 
 /* =========================================================================
@@ -60,6 +63,8 @@ type AdRow = {
   avitoMessages: AdMessage[];
   syncedAt: string | null;
 };
+
+type CategoryTarget = "defaults" | { rowUids: string[] };
 
 type Tab = "ads" | "defaults" | "check" | "connect";
 type ImportMode = "append" | "merge" | "replace";
@@ -138,7 +143,8 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
   const [rowModal, setRowModal] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [categoryTarget, setCategoryTarget] = useState<null | "defaults" | { rowUid: string }>(null);
+  const [categoryTarget, setCategoryTarget] = useState<CategoryTarget | null>(null);
+  const [categoryBusy, setCategoryBusy] = useState(false);
   const [issueFilter, setIssueFilter] = useState<"error" | "warning">("error");
   const [issueLimit, setIssueLimit] = useState(50);
 
@@ -184,8 +190,8 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
     if (!row) return;
     focusedRef.current = true;
     setTab("ads");
-    setQuery(focusAdKey);
-    setPage(0);
+    setQuery("");
+    setPage(Math.floor(ads.indexOf(row) / PAGE_SIZE));
     setRowModal(row.uid);
   }, [focusAdKey, feed, ads]);
 
@@ -213,6 +219,65 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
         return { ...row, data };
       }),
     );
+
+  const setCells = (uids: string[], values: Record<string, string>) => {
+    const set = new Set(uids);
+    mutateAds((prev) =>
+      prev.map((row) => {
+        if (!set.has(row.uid)) return row;
+        const data = { ...row.data };
+        for (const [tag, value] of Object.entries(values)) {
+          if (value) data[tag] = value;
+          else delete data[tag];
+        }
+        return { ...row, data };
+      }),
+    );
+  };
+
+  /**
+   * Выбор раздела в каталоге: подставляем точную «Категорию» и фиксированные поля раздела
+   * (например, для «Наушники»: Категория = «Аудио и видео», Вид товара = «Наушники»),
+   * регистрируем списки допустимых значений и добавляем столбцы обязательных полей.
+   */
+  async function applyCategoryNode(node: CatalogNode, target: CategoryTarget) {
+    if (categoryBusy) return;
+    setCategoryBusy(true);
+    try {
+      let fields: CatalogField[] = [];
+      if (node.slug) {
+        try {
+          fields = (await api<{ fields: CatalogField[] }>(`/api/autoload/catalog?slug=${encodeURIComponent(node.slug)}`)).fields;
+        } catch (error) {
+          toast(`Не удалось загрузить поля раздела: ${errorText(error)}`, "error");
+        }
+      }
+      const result = resolveCategoryFields(node, fields);
+
+      if (target === "defaults") {
+        for (const [tag, value] of Object.entries(result.values)) setDefault(tag, value);
+      } else {
+        setCells(target.rowUids, result.values);
+      }
+
+      if (Object.keys(result.options).length > 0) {
+        setFieldOptions((current) => ({ ...current, ...result.options }));
+        setDirty(true);
+      }
+      for (const tag of result.requiredColumns) addColumn(tag);
+
+      toast(result.summary.join(" · "));
+      for (const warning of result.warnings) toast(warning, "error");
+      if (target === "defaults") {
+        const own = ads.filter((row) => row.data.Category && row.data.Category !== result.values.Category).length;
+        if (own > 0) {
+          toast(`У ${own} объявл. в таблице своя категория — она главнее общей. Выделите их галочками и нажмите «Категория».`, "error");
+        }
+      }
+    } finally {
+      setCategoryBusy(false);
+    }
+  }
 
   const addRow = () => {
     if (ads.length >= MAX_ADS_PER_FEED) {
@@ -550,7 +615,7 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
   ];
 
   return (
-    <div className="al-pop min-w-0 space-y-5 break-words">
+    <div className="al-pop min-w-0 space-y-5">
       {/* Шапка таблицы */}
       <section className="rounded-[28px] bg-black p-5 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -690,6 +755,20 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
           {selectedList.length > 0 && (
             <div className="al-pop mt-4 flex flex-wrap items-center gap-2.5 rounded-2xl border border-[#03bd48]/30 bg-[#03bd48]/[0.06] p-3">
               <span className="px-2 text-sm font-extrabold text-black">Выбрано: {selectedList.length}</span>
+              {selectedList.length < ads.length && (
+                <button type="button" onClick={() => setSelected(new Set(ads.map((row) => row.uid)))} className={ghostButton}>
+                  Выбрать все ({ads.length})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setCategoryTarget({ rowUids: selectedList.map((row) => row.uid) })}
+                disabled={!account?.connected}
+                title={account?.connected ? "Назначить категорию выбранным объявлениям" : "Сначала подключите Avito API"}
+                className={ghostButton}
+              >
+                <Icon name="search" /> Категория
+              </button>
               <button type="button" onClick={() => setBulkOpen(true)} className={ghostButton}>
                 <Icon name="edit" /> Задать значение
               </button>
@@ -707,6 +786,17 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
               </button>
               <button type="button" onClick={() => setSelected(new Set())} className="ml-auto text-sm font-bold text-black/50 hover:text-black">
                 Снять выбор
+              </button>
+            </div>
+          )}
+
+          {query.trim() && ads.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+              <span className="min-w-0">
+                Показаны объявления по запросу «{query.trim()}»: {filtered.length} из {ads.length}.
+              </span>
+              <button type="button" onClick={() => setQuery("")} className="rounded-lg bg-white px-2.5 py-1 font-extrabold text-amber-900 ring-1 ring-amber-200 transition hover:bg-amber-100">
+                Сбросить поиск
               </button>
             </div>
           )}
@@ -750,7 +840,7 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
                         </th>
                       ))}
                       <th className="min-w-[84px] whitespace-nowrap border-r border-white/10 px-2.5 py-2.5">Авито</th>
-                      <th className="w-[104px] px-2 py-2.5" />
+                      <th className="sticky right-0 z-[5] w-[112px] min-w-[112px] bg-black px-2 py-2.5" />
                     </tr>
                   </thead>
                   <tbody>
@@ -809,15 +899,15 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
                               <span className="text-xs font-bold text-black/25">—</span>
                             )}
                           </td>
-                          <td className="px-1.5 py-1">
-                            <div className="flex justify-end gap-0.5">
-                              <button type="button" onClick={() => setRowModal(row.uid)} aria-label="Редактировать" className="rounded-lg p-1.5 text-black/45 transition hover:bg-black/[0.06] hover:text-black">
+                          <td className="sticky right-0 z-[5] w-[112px] min-w-[112px] bg-white px-1.5 py-1 shadow-[-10px_0_12px_-10px_rgba(0,0,0,0.18)]">
+                            <div className="flex items-center justify-end gap-0.5">
+                              <button type="button" onClick={() => setRowModal(row.uid)} aria-label="Редактировать" title="Открыть объявление" className="shrink-0 rounded-lg p-1.5 text-black/45 transition hover:bg-black/[0.06] hover:text-black">
                                 <Icon name="edit" />
                               </button>
-                              <button type="button" onClick={() => duplicateRows([row.uid])} aria-label="Дублировать" className="rounded-lg p-1.5 text-black/45 transition hover:bg-black/[0.06] hover:text-black">
+                              <button type="button" onClick={() => duplicateRows([row.uid])} aria-label="Дублировать" title="Дублировать" className="shrink-0 rounded-lg p-1.5 text-black/45 transition hover:bg-black/[0.06] hover:text-black">
                                 <Icon name="copy" />
                               </button>
-                              <button type="button" onClick={() => removeRows([row.uid])} aria-label="Удалить" className="rounded-lg p-1.5 text-black/45 transition hover:bg-red-50 hover:text-red-600">
+                              <button type="button" onClick={() => removeRows([row.uid])} aria-label="Удалить" title="Удалить" className="shrink-0 rounded-lg p-1.5 text-black/45 transition hover:bg-red-50 hover:text-red-600">
                                 <Icon name="trash" />
                               </button>
                             </div>
@@ -871,8 +961,9 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
                       <CategoryField
                         id={`d-${field.tag}`}
                         value={defaults.Category ?? ""}
-                        onChange={(value) => setDefault("Category", value)}
                         connected={Boolean(account?.connected)}
+                        busy={categoryBusy}
+                        onPickNode={(node) => void applyCategoryNode(node, "defaults")}
                         onOpenCatalog={() => setCategoryTarget("defaults")}
                       />
                     </div>
@@ -1143,7 +1234,9 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
             setRowModal(null);
           }}
           onClose={() => setRowModal(null)}
-          onOpenCatalog={() => setCategoryTarget({ rowUid: editingRow.uid })}
+          categoryBusy={categoryBusy}
+          onPickCategory={(node) => void applyCategoryNode(node, { rowUids: [editingRow.uid] })}
+          onOpenCatalog={() => setCategoryTarget({ rowUids: [editingRow.uid] })}
         />
       )}
 
@@ -1169,10 +1262,10 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
       {categoryTarget && (
         <CategoryModal
           onClose={() => setCategoryTarget(null)}
-          onPick={(name) => {
-            if (categoryTarget === "defaults") setDefault("Category", name);
-            else if (categoryTarget) setCell(categoryTarget.rowUid, "Category", name);
+          onPick={(node) => {
+            const target = categoryTarget;
             setCategoryTarget(null);
+            void applyCategoryNode(node, target);
           }}
           onAddColumn={(tag, values) => {
             if (addColumn(tag, values)) toast(`Столбец «${tag}» добавлен в таблицу.`);
@@ -1305,6 +1398,7 @@ function FieldControl({
     return (
       <select id={id} value={value} onChange={(event) => onChange(event.target.value)} className={inputClass}>
         <option value="">{placeholder ? `Как в общих полях: ${placeholder}` : "Не выбрано"}</option>
+        {value && !options.some((option) => option.value === value) && <option value={value}>{value} — нет в списке</option>}
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -1379,6 +1473,7 @@ function ValueInput({
     return (
       <select id={id} value={value} onChange={(event) => onChange(event.target.value)} className={inputClass}>
         <option value="">{placeholder ?? "Не выбрано"}</option>
+        {value && !options.includes(value) && <option value={value}>{value} — нет в списке</option>}
         {options.map((option) => (
           <option key={option} value={option}>
             {option}
@@ -1420,6 +1515,21 @@ function Cell({
     return (
       <button type="button" onClick={onOpen} className={`${cellInputClass} ${ring} whitespace-nowrap text-left ${count ? "" : "text-black/30"}`}>
         {count ? `${count} фото` : "+ Фото"}
+      </button>
+    );
+  }
+
+  if (tag === "Category") {
+    // Категорию нельзя вписывать вручную: только через выбор из каталога Авито (окно объявления).
+    const own = row.data.Category ?? "";
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        title="Выбрать категорию из каталога Авито"
+        className={`${cellInputClass} ${ring} whitespace-nowrap text-left ${own ? "" : "text-black/30"}`}
+      >
+        {own || placeholder || "+ Категория"}
       </button>
     );
   }
@@ -1466,6 +1576,9 @@ function Cell({
     return (
       <select value={row.data[tag] ?? ""} onChange={(event) => onValue(event.target.value)} className={`${cellInputClass} ${ring}`}>
         <option value="">{placeholder ?? "—"}</option>
+        {row.data[tag] && !options.some((option) => option.value === row.data[tag]) && (
+          <option value={row.data[tag]}>{row.data[tag]} — нет в списке</option>
+        )}
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -1499,6 +1612,8 @@ function RowEditor({
   onDelete,
   onClose,
   onOpenCatalog,
+  categoryBusy,
+  onPickCategory,
 }: {
   row: AdRow;
   defaults: AdData;
@@ -1510,6 +1625,8 @@ function RowEditor({
   onDelete: () => void;
   onClose: () => void;
   onOpenCatalog: () => void;
+  categoryBusy: boolean;
+  onPickCategory: (node: CatalogNode) => void;
 }) {
   const custom = Object.keys(row.data).filter((tag) => !FIELD_BY_TAG[tag]);
   const images = splitImages(row.data.Images ?? defaults.Images ?? "").slice(0, 8);
@@ -1564,8 +1681,9 @@ function RowEditor({
                       <CategoryField
                         id={`r-${field.tag}`}
                         value={value}
-                        onChange={(next) => onCell("Category", next)}
                         connected={connected}
+                        busy={categoryBusy}
+                        onPickNode={onPickCategory}
                         onOpenCatalog={onOpenCatalog}
                       />
                     ) : (
@@ -1702,6 +1820,7 @@ function ImportModal({
   ];
 
   async function downloadTemplate(format: "csv" | "xlsx") {
+    (document.getElementById("al-template-menu") as HTMLDetailsElement | null)?.removeAttribute("open");
     const { headers, example } = buildTemplateRows();
     if (format === "csv") {
       downloadFile(buildTemplateCsv(headers, example), "helpsell-avito-shablon.csv", "text/csv;charset=utf-8");
@@ -1811,7 +1930,7 @@ function ImportModal({
         </div>
 
         <div className="relative shrink-0">
-          <details className="group">
+          <details id="al-template-menu" className="group">
             <summary className={`${ghostButton} list-none [&::-webkit-details-marker]:hidden`}>
               <Icon name="download" /> Скачать образец
             </summary>
@@ -2068,32 +2187,28 @@ function useCatalogNodes() {
 function CategoryField({
   id,
   value,
-  onChange,
   connected,
+  busy,
+  onPickNode,
   onOpenCatalog,
 }: {
   id?: string;
   value: string;
-  onChange: (value: string) => void;
   connected: boolean;
+  busy?: boolean;
+  onPickNode: (node: CatalogNode) => void;
   onOpenCatalog: () => void;
 }) {
   const { nodes, loading, error, ensureLoaded } = useCatalogNodes();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDocDown = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-    document.addEventListener("mousedown", onDocDown);
-    return () => document.removeEventListener("mousedown", onDocDown);
-  }, [open]);
+  useOutsideClose(open, [anchorRef, popupRef], () => {
+    setOpen(false);
+    setQuery("");
+  });
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -2102,8 +2217,8 @@ function CategoryField({
   }, [nodes, query]);
 
   return (
-    <div ref={containerRef} className="relative flex gap-2">
-      <div className="min-w-0 flex-1">
+    <div className="flex gap-2">
+      <div ref={anchorRef} className="relative min-w-0 flex-1">
         <input
           id={id}
           role="combobox"
@@ -2119,43 +2234,45 @@ function CategoryField({
             setOpen(true);
             if (connected) ensureLoaded();
           }}
-          placeholder={connected ? "Начните вводить категорию…" : "Сначала подключите Avito API"}
-          disabled={!connected}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setOpen(false);
+              setQuery("");
+            }
+          }}
+          placeholder={busy ? "Загружаем поля категории…" : connected ? "Начните вводить: например, «Наушники»…" : "Сначала подключите Avito API"}
+          disabled={!connected || busy}
           className={inputClass}
         />
-        {open && (
-          <div className="absolute z-40 mt-1.5 max-h-72 w-full overflow-y-auto rounded-2xl border border-black/10 bg-white p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.16)]">
-            {loading && <div className="px-3 py-2.5 text-sm font-semibold text-black/40">Загружаем категории…</div>}
-            {error && <div className="px-3 py-2.5 text-sm font-bold text-red-600">{error}</div>}
-            {!loading && !error && filtered.length === 0 && (
-              <div className="px-3 py-2.5 text-sm font-semibold text-black/40">Ничего не найдено</div>
-            )}
-            {!loading &&
-              filtered.map((node, index) => (
-                <button
-                  key={`${node.path}-${index}`}
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    onChange(node.name);
-                    setQuery("");
-                    setOpen(false);
-                  }}
-                  className={`flex w-full flex-col items-start rounded-xl px-3 py-2 text-left transition hover:bg-black/[0.05] ${
-                    node.name === value ? "bg-[#03bd48]/10" : ""
-                  }`}
-                >
-                  <span className="w-full truncate text-sm font-bold text-black">{node.name}</span>
-                  {node.path !== node.name && <span className="w-full truncate text-xs text-black/40">{node.path}</span>}
-                </button>
-              ))}
-          </div>
-        )}
+        <AnchoredList open={open} anchorRef={anchorRef} popupRef={popupRef} minWidth={320}>
+          {loading && <div className="px-3 py-2.5 text-sm font-semibold text-black/40">Загружаем категории…</div>}
+          {error && <div className="px-3 py-2.5 text-sm font-bold text-red-600">{error}</div>}
+          {!loading && !error && filtered.length === 0 && (
+            <div className="px-3 py-2.5 text-sm font-semibold text-black/40">Ничего не найдено</div>
+          )}
+          {!loading &&
+            filtered.map((node, index) => (
+              <button
+                key={`${node.path}-${index}`}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setQuery("");
+                  setOpen(false);
+                  onPickNode(node);
+                }}
+                className="flex w-full flex-col items-start rounded-xl px-3 py-2 text-left transition hover:bg-black/[0.05]"
+              >
+                <span className="w-full truncate text-sm font-bold text-black">{node.name}</span>
+                {node.path !== node.name && <span className="w-full truncate text-xs text-black/40">{node.path}</span>}
+              </button>
+            ))}
+        </AnchoredList>
       </div>
       <button
         type="button"
         onClick={onOpenCatalog}
-        disabled={!connected}
+        disabled={!connected || busy}
         title={connected ? "Открыть каталог целиком и посмотреть поля категории" : "Сначала подключите Avito API"}
         className={`${ghostButton} shrink-0`}
       >
@@ -2170,7 +2287,7 @@ function CategoryModal({
   onAddColumn,
   onClose,
 }: {
-  onPick: (name: string) => void;
+  onPick: (node: CatalogNode) => void;
   onAddColumn: (tag: string, values?: string[]) => void;
   onClose: () => void;
 }) {
@@ -2211,14 +2328,14 @@ function CategoryModal({
     <Modal
       wide
       title="Каталог категорий Авито"
-      subtitle="Название категории должно совпадать с каталогом Авито. Выберите нужную и посмотрите её поля."
+      subtitle="Выберите самый вложенный раздел (например, «Наушники»): точную категорию Авито и обязательные значения (вид товара и т.п.) мы подставим сами."
       onClose={onClose}
       footer={
         <>
           <button type="button" onClick={onClose} className={ghostButton}>
             Отмена
           </button>
-          <button type="button" disabled={!current} onClick={() => current && onPick(current.name)} className="btn-primary !px-6 !py-3 text-sm disabled:opacity-50">
+          <button type="button" disabled={!current} onClick={() => current && onPick(current)} className="btn-primary !px-6 !py-3 text-sm disabled:opacity-50">
             Выбрать «{current?.name ?? "…"}»
           </button>
         </>

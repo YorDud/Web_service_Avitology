@@ -63,7 +63,7 @@ pm2 status
 
 
 
-
+git pull --ff-only origin main
 
 
 

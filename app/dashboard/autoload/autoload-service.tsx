@@ -226,7 +226,7 @@ export default function AutoloadService() {
   /* ---------- Редактор таблицы ---------- */
   if (openFeedId !== null) {
     return (
-      <div className="min-w-0 break-words">
+      <div className="min-w-0">
         <AutoloadStyles />
         <FeedEditor
           feedId={openFeedId}
@@ -248,7 +248,7 @@ export default function AutoloadService() {
 
   /* ---------- Главная страница услуги ---------- */
   return (
-    <div className="flex min-w-0 flex-col break-words">
+    <div className="flex min-w-0 flex-col">
       <AutoloadStyles />
 
       {/* HERO */}
@@ -303,12 +303,12 @@ export default function AutoloadService() {
                 { icon: "sparkle", title: "Авито", sub: "по расписанию" },
               ].map((node, index, list) => (
                 <Fragment key={node.title}>
-                  <div className="flex min-w-0 flex-col items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40 px-1.5 py-3.5 text-center">
+                  <div className="flex min-w-0 flex-col items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40 px-1 py-3 text-center">
                     <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${index === 2 ? "al-pulse bg-[#03bd48] text-white" : "bg-white/10 text-[#78f8a6]"}`}>
                       <Icon name={node.icon} className="h-4 w-4" />
                     </span>
-                    <span className="mt-2 max-w-full break-words text-xs font-extrabold leading-tight sm:text-sm">{node.title}</span>
-                    <span className="mt-0.5 max-w-full break-words text-[10px] font-semibold leading-tight text-white/45">{node.sub}</span>
+                    <span className="mt-2 max-w-full text-xs font-extrabold leading-tight">{node.title}</span>
+                    <span className="mt-0.5 max-w-full text-[10px] font-semibold leading-tight text-white/45">{node.sub}</span>
                   </div>
                   {index < list.length - 1 && <div className="al-wire" />}
                 </Fragment>
@@ -721,7 +721,7 @@ function ConnectionCard({
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div className="min-w-0 flex-1 basis-48">
           <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-white/45">Шаг 1</div>
-          <h3 className="mt-2 break-words text-xl font-extrabold tracking-[-0.04em] sm:text-2xl">Подключение Avito API</h3>
+          <h3 className="mt-2 text-xl font-extrabold tracking-[-0.04em] sm:text-2xl">Подключение Avito API</h3>
         </div>
         {account && (
           <Pill tone={connected ? "green" : "gray"} className="shrink-0">
@@ -735,9 +735,9 @@ function ConnectionCard({
       {connected && !editing && (
         <div className="al-pop mt-5 space-y-3">
           <div className="rounded-2xl border border-[#03bd48]/30 bg-[#03bd48]/10 p-4">
-            <div className="break-words text-[11px] font-extrabold uppercase leading-4 tracking-[0.1em] text-[#78f8a6]">Ключи Авито подключены</div>
-            <div className="mt-1.5 break-all text-base font-extrabold sm:text-lg">Client ID: {account?.clientIdMasked}</div>
-            <div className="mt-1 break-words text-sm text-white/60">Те же ключи используются в Бид-менеджере Авито — подключать их дважды не нужно.</div>
+            <div className="text-[11px] font-extrabold uppercase leading-4 tracking-[0.1em] text-[#78f8a6]">Ключи Авито подключены</div>
+            <div className="mt-1.5 text-base font-extrabold sm:text-lg">Client ID: <span className="break-all">{account?.clientIdMasked}</span></div>
+            <div className="mt-1 text-sm text-white/60">Те же ключи используются в Бид-менеджере Авито — подключать их дважды не нужно.</div>
           </div>
           <div className="text-xs font-semibold text-white/45">Проверено {formatDateTime(account?.lastCheckedAt)}</div>
           {account?.lastError && (
