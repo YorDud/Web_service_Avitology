@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-  "dev": "next dev",
-  "build": "next build",
-  "start": "next start",
-  "lint": "eslint",
-  "seed": "tsx prisma/seed.ts",
-  "bidder:worker": "tsx scripts/bidder-worker-local.ts"
-},
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "seed": "tsx prisma/seed.ts",
+    "bidder:worker": "tsx scripts/bidder-worker-local.ts"
+  },
   "dependencies": {
     "@prisma/client": "^6.14.0",
     "bcryptjs": "^3.0.3",
@@ -20,6 +20,7 @@
     "prisma": "^6.14.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "xlsx": "^0.18.5",
     "yookassa": "^0.1.1"
   },
   "devDependencies": {

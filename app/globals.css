@@ -19,6 +19,24 @@ html {
   overflow-x: hidden;
 }
 
+#features,
+#workflow,
+#pricing,
+#platform {
+  scroll-margin-top: calc(var(--header-height) + 24px);
+}
+
+@media (max-width: 640px) {
+  #features,
+  #workflow,
+  #pricing,
+  #platform {
+    scroll-margin-top: calc(var(--header-height) + 16px);
+  }
+}
+
+
+
 body {
   overflow-x: hidden;
   padding-top: var(--header-height);

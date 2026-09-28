@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import ImageUniqualizerService from "./image-uniqualizer";
+import AutoloadService from "./autoload/autoload-service";
 
 type FinancialRecord = {
   id: number;
@@ -166,6 +167,7 @@ type DashboardSection =
   | "reviews-calculator"
   | "popular-queries"
   | "image-uniqualizer"
+  | "autoload"
   | null;
 
 type BidderStatus = "active" | "paused" | "attention";
@@ -1129,40 +1131,53 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
         : "Доступно с подпиской Basic",
       available: hasAccess,
     },
-    {
-      id: "bid-manager",
-      index: "04",
-      title: "Бид-менеджер Авито",
-      description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
-      available: hasBidderAccess,
-      beta: true,
-    },
 
     {
       id: "reviews-calculator",
-      index: "05",
+      index: "04",
       title: "Калькулятор отзывов",
       description: "Расчёт рейтинга профиля Авито",
       available: true,
     },
 
     {
-      id: "popular-queries",
+      id: "image-uniqualizer",
+      index: "05",
+      title: "Уникализатор картинок",
+      description: "Уникальные копии фото для объявлений",
+      available: true,
+    },
+
+
+    {
+      id: "bid-manager",
       index: "06",
+      title: "Бид-менеджер Авито",
+      description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
+      available: hasBidderAccess,
+      beta: true,
+    },
+    
+    {
+      id: "autoload",
+      index: "07",
+      title: "Автозагрузка объявлений Авито",
+      description: hasBidderAccess
+        ? "Таблицы Excel/Google/Яндекс и выгрузка через API Авито"
+        : "Доступно с подпиской Pro",
+      available: hasBidderAccess,
+      beta: true,
+    },
+
+    {
+      id: "popular-queries",
+      index: "08",
       title: "Запросы по популярности Авито",
       description: hasAccess
         ? "Подбор популярных запросов"
         : "Доступно с подпиской Basic",
       available: hasAccess,
       inDevelopment: true,
-    },
-
-    {
-      id: "image-uniqualizer",
-      index: "07",
-      title: "Уникализатор картинок",
-      description: "Уникальные копии фото для объявлений",
-      available: true,
     },
   ];
 
@@ -5693,6 +5708,21 @@ onChange={(e) =>
 
             {/* ========== УСЛУГА «УНИКАЛИЗАТОР КАРТИНОК»: доступна на всех тарифах ========== */}
             {activeSection === "image-uniqualizer" && <ImageUniqualizerService />}
+
+            {/* ========== УСЛУГА «АВТОЗАГРУЗКА ОБЪЯВЛЕНИЙ АВИТО»: подписка Pro ========== */}
+            {activeSection === "autoload" && !hasBidderAccess && (
+              <section className="overflow-hidden rounded-[32px] bg-[#101010] p-5 text-white shadow-[0_24px_65px_rgba(16,24,40,0.22)] sm:p-7 md:p-8">
+                <div className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">BETA · Pro</div>
+                <h2 className="mt-5 text-3xl font-extrabold tracking-[-.05em] md:text-5xl">
+                  Автозагрузка объявлений<span className="text-[#03bd48]"> Авито</span>
+                </h2>
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-white/65">
+                  Таблицы объявлений, импорт из Excel, Google и Яндекс Таблиц, проверка ошибок и выгрузка на Авито через API по расписанию. Для работы нужна подписка Pro.
+                </p>
+                <Link href="/pricing" className="btn-primary mt-6 inline-flex">Выбрать Pro</Link>
+              </section>
+            )}
+            {activeSection === "autoload" && hasBidderAccess && <AutoloadService />}
           </section>
         </div>
       </div>

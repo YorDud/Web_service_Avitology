@@ -157,17 +157,17 @@ model AvitoBidder {
   targetFrom Int
   targetTo   Int
 
-  currentPosition   Int?
-  positionSource    String?
-  positionCheckedAt DateTime?
-  positionSearchUrl String?
-  positionPage      Int?
-  lastPositionError String?
+  currentPosition    Int?
+  positionSource     String?
+  positionCheckedAt  DateTime?
+  positionSearchUrl  String?
+  positionPage       Int?
+  lastPositionError  String?
 
-  currentBid Int @default(0)
-  minBid     Int
-  maxBid     Int
-  bidStep    Int @default(10)
+  currentBid         Int  @default(0)
+  minBid          Int
+  maxBid          Int
+  bidStep         Int  @default(10)
 
   dailySpendLimit     Int     @default(0)
   spentToday          Int     @default(0)
@@ -263,34 +263,34 @@ model AvitoAccountConnection {
 }
 
 model AutoloadFeed {
-  id     Int  @id @default(autoincrement())
-  userId Int
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name        String
-  publicToken String  @unique
-  linked      Boolean @default(false)
-  defaults    Json?
-  settings    Json?
+  name          String
+  publicToken   String    @unique
+  linked        Boolean   @default(false)
+  defaults      Json?
+  settings      Json?
 
   lastFetchedAt DateTime?
   fetchCount    Int       @default(0)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  ads AutoloadAd[]
+  ads           AutoloadAd[]
 
   @@index([userId])
 }
 
 model AutoloadAd {
-  id     Int          @id @default(autoincrement())
-  feedId Int
-  feed   AutoloadFeed @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  id            Int          @id @default(autoincrement())
+  feedId        Int
+  feed          AutoloadFeed @relation(fields: [feedId], references: [id], onDelete: Cascade)
 
-  adKey String
-  data  Json
+  adKey         String
+  data          Json
 
   avitoId       String?
   avitoStatus   String?

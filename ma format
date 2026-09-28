@@ -1,0 +1,63 @@
+[1mdiff --git a/prisma/schema.prisma b/prisma/schema.prisma[m
+[1mindex 8111ba1..979a74a 100644[m
+[1m--- a/prisma/schema.prisma[m
+[1m+++ b/prisma/schema.prisma[m
+[36m@@ -60,6 +60,7 @@[m [mmodel User {[m
+   avitoSearchAnalyses    AvitoSearchAnalysis[][m
+   avitoBidders           AvitoBidder[][m
+   avitoAccountConnection AvitoAccountConnection?[m
+[32m+[m[32m  autoloadFeeds          AutoloadFeed[][m
+ }[m
+ [m
+ model ServiceSettings {[m
+[36m@@ -251,6 +252,7 @@[m [mmodel AvitoAccountConnection {[m
+ [m
+   clientId              String[m
+   encryptedClientSecret String[m
+[32m+[m[32m  accessTokenEnc        String?[m
+ [m
+   tokenExpiresAt DateTime?[m
+   lastCheckedAt  DateTime?[m
+[36m@@ -259,3 +261,42 @@[m [mmodel AvitoAccountConnection {[m
+   createdAt DateTime @default(now())[m
+   updatedAt DateTime @updatedAt[m
+ }[m
+[32m+[m
+[32m+[m[32mmodel AutoloadFeed {[m
+[32m+[m[32m  id            Int       @id @default(autoincrement())[m
+[32m+[m[32m  userId        Int[m
+[32m+[m[32m  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  name          String[m
+[32m+[m[32m  publicToken   String    @unique[m
+[32m+[m[32m  linked        Boolean   @default(false)[m
+[32m+[m[32m  defaults      Json?[m
+[32m+[m[32m  settings      Json?[m
+[32m+[m
+[32m+[m[32m  lastFetchedAt DateTime?[m
+[32m+[m[32m  fetchCount    Int       @default(0)[m
+[32m+[m
+[32m+[m[32m  createdAt     DateTime  @default(now())[m
+[32m+[m[32m  updatedAt     DateTime  @updatedAt[m
+[32m+[m
+[32m+[m[32m  ads           AutoloadAd[][m
+[32m+[m
+[32m+[m[32m  @@index([userId])[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel AutoloadAd {[m
+[32m+[m[32m  id            Int          @id @default(autoincrement())[m
+[32m+[m[32m  feedId        Int[m
+[32m+[m[32m  feed          AutoloadFeed @relation(fields: [feedId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  adKey         String[m
+[32m+[m[32m  data          Json[m
+[32m+[m
+[32m+[m[32m  avitoId       String?[m
+[32m+[m[32m  avitoStatus   String?[m
+[32m+[m[32m  avitoMessages Json?[m
+[32m+[m[32m  syncedAt      DateTime?[m
+[32m+[m
+[32m+[m[32m  @@unique([feedId, adKey])[m
+[32m+[m[32m  @@index([feedId])[m
+[32m+[m[32m}[m

@@ -1,0 +1,3 @@
+﻿-- This migration intentionally does nothing.
+-- The preceding migration 20260923144407_add_autoload
+-- already creates accessTokenEnc, AutoloadFeed and AutoloadAd.
