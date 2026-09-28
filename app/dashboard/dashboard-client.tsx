@@ -926,6 +926,13 @@ export default function DashboardClientPage({
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoSuccess, setPromoSuccess] = useState<string | null>(null);
 
+  function openPromoModal() {
+    setPromoError(null);
+    setPromoSuccess(null);
+    setPromoCode("");
+    setIsPromoOpen(true);
+  }
+
   function closePromoModal() {
     if (promoLoading || promoSuccess) return;
     setIsPromoOpen(false);
@@ -2386,7 +2393,7 @@ setExpandedBidderId(savedBidder.id);
           aria-modal="true"
           aria-labelledby="trial-offer-title"
         >
-          <div className="w-full max-w-md rounded-3xl border border-[#03bd48]/30 bg-white p-6 shadow-2xl shadow-black/30">
+          <div className="w-full max-w-lg rounded-3xl border border-[#03bd48]/30 bg-white p-6 shadow-2xl shadow-black/30">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#03bd48]/20 bg-[#03bd48]/10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#028c36]">
               <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
               Пробный доступ
@@ -2422,26 +2429,53 @@ setExpandedBidderId(savedBidder.id);
               </div>
             )}
 
-            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setIsTrialOfferOpen(false)}
-                disabled={isTrialActivating}
-                className="rounded-xl border border-black/10 bg-black/[0.025] px-5 py-3 text-sm font-extrabold text-black/65 transition hover:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Позже
-              </button>
-
+            <div className="mt-6 flex flex-col gap-3">
               <button
                 type="button"
                 onClick={activateTrialFromDashboard}
                 disabled={isTrialActivating}
-                className="rounded-xl bg-[#03bd48] px-5 py-3 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(3,189,72,0.28)] transition hover:-translate-y-0.5 hover:bg-[#029d3c] disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-xl bg-[#03bd48] px-5 py-3.5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(3,189,72,0.28)] transition hover:-translate-y-0.5 hover:bg-[#029d3c] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isTrialActivating
                   ? "Активация…"
                   : "Активировать Basic на 1 день"}
               </button>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsTrialOfferOpen(false)}
+                  disabled={isTrialActivating}
+                  className="whitespace-nowrap rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm font-extrabold text-black/65 transition hover:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Позже
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTrialOfferOpen(false);
+                    openPromoModal();
+                  }}
+                  disabled={isTrialActivating}
+                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-[#03bd48]/30 bg-[#03bd48]/10 px-4 py-3 text-sm font-extrabold text-[#028c36] transition hover:bg-[#03bd48] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" />
+                    <circle cx="7.5" cy="7.5" r="1.2" />
+                  </svg>
+                  Промокод
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2750,12 +2784,7 @@ setExpandedBidderId(savedBidder.id);
                     {user.subscriptionLevel.toLowerCase() !== "admin" && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setPromoError(null);
-                          setPromoSuccess(null);
-                          setPromoCode("");
-                          setIsPromoOpen(true);
-                        }}
+                        onClick={openPromoModal}
                         className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-[#03bd48]/30 bg-[#03bd48]/10 px-4 py-2.5 text-sm font-extrabold text-[#028c36] transition hover:-translate-y-0.5 hover:bg-[#03bd48] hover:text-white"
                       >
                         <span aria-hidden="true">🎟</span>

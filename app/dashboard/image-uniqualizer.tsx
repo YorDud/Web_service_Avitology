@@ -51,6 +51,7 @@ type SourceImage = {
 
 type ResultImage = {
   id: string;
+  sourceId: string;
   sourceName: string;
   name: string;
   blob: Blob;
@@ -891,6 +892,7 @@ export default function ImageUniqualizerService() {
 
           const item: ResultImage = {
             id: nextId(),
+            sourceId: source.id,
             sourceName: source.file.name,
             name: `${baseName}_uniq-${String(variant).padStart(2, "0")}.${rendered.ext}`,
             blob: rendered.blob,
@@ -937,6 +939,39 @@ export default function ImageUniqualizerService() {
       downloadBlob(zip, `helpsell-uniqualizer_${stamp}.zip`);
     } catch {
       setProblems((current) => [...current, "Не удалось собрать ZIP-архив. Скачайте файлы по одному."]);
+    } finally {
+      if (mountedRef.current) setIsZipping(false);
+    }
+  };
+
+  const handleDownloadZipPerPhoto = async () => {
+    if (results.length === 0 || isZipping) return;
+    setIsZipping(true);
+    try {
+      // группируем копии по исходному фото (порядок сохраняется)
+      const groups = new Map<string, ResultImage[]>();
+      for (const item of results) {
+        const list = groups.get(item.sourceId);
+        if (list) list.push(item);
+        else groups.set(item.sourceId, [item]);
+      }
+
+      const usedNames = new Set<string>();
+      for (const items of groups.values()) {
+        const base = sanitizeBaseName(items[0].sourceName);
+        let zipName = `${base}_uniq`;
+        let n = 2;
+        while (usedNames.has(zipName)) zipName = `${base}_uniq-${n++}`;
+        usedNames.add(zipName);
+
+        const zip = await buildZip(items.map((item) => ({ name: item.name, blob: item.blob })));
+        downloadBlob(zip, `${zipName}.zip`);
+
+        // пауза, чтобы браузер не заблокировал серию скачиваний
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+    } catch {
+      setProblems((current) => [...current, "Не удалось собрать ZIP-архивы. Скачайте файлы по одному."]);
     } finally {
       if (mountedRef.current) setIsZipping(false);
     }
@@ -1578,6 +1613,15 @@ export default function ImageUniqualizerService() {
                       >
                         <Icon name="download" className="h-4 w-4" />
                         {isZipping ? "Собираем архив…" : "Скачать всё (ZIP)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDownloadZipPerPhoto()}
+                        disabled={results.length === 0 || isZipping}
+                        className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Icon name="download" className="h-4 w-4" />
+                        {isZipping ? "Собираем архивы…" : "Скачать по каждому фото (ZIP)"}
                       </button>
                       <button
                         type="button"
