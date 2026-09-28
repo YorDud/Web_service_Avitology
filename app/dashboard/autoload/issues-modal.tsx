@@ -84,6 +84,11 @@ export default function IssuesModal({
                 Загрузка №{data.upload.id}: объявлений с сообщениями — {data.adsWithIssues} из {data.totalAds}.
                 {data.partial && " Загрузка ещё идёт, данные могут измениться."}
               </div>
+              {data.stale && data.latestId && (
+                <div className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-xs font-semibold leading-5 text-amber-900">
+                  Авито ещё не подготовил данные по самой свежей загрузке №{data.latestId} — ниже данные предыдущей (№{data.upload.id}). Нажмите «Обновить» через пару минут.
+                </div>
+              )}
 
               <div className="space-y-2.5">
                 {data.groups.map((group) => (

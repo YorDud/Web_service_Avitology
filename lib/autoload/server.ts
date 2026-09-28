@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import type { AutoloadFeed, AvitoAccountConnection } from "@prisma/client";
 import { avito, AvitoApiError, markAvitoError } from "./avito";
+import { choosePickSource } from "./pick";
 import {
   MAX_FIELD_OPTION_VALUES,
   MAX_VALUE_LENGTH,
@@ -317,6 +318,56 @@ export function normalizeUpload(raw: Json): ReportSummary {
       type: String(event?.type ?? ""),
       description: String(event?.description ?? ""),
     })),
+  };
+}
+
+export type UploadPick = {
+  /** Откуда брать объявления загрузки: /uploads/current/items или /uploads/last_successful/items. */
+  which: "current" | "last";
+  upload: ReportSummary;
+  /** Самая свежая загрузка из истории (может отличаться от upload, если Авито ещё не обновил current/last_successful). */
+  latest: ReportSummary | null;
+  /** true — данные по самой свежей загрузке у Авито ещё не готовы, показана предыдущая. */
+  stale: boolean;
+};
+
+/** Новее — выше: история у Авито «самая свежая в начале», но на всякий случай сортируем сами. */
+export function sortUploadsNewestFirst<T extends { started_at?: unknown; upload_id?: unknown }>(list: T[]): T[] {
+  return [...list].sort((a, b) => {
+    const ta = Date.parse(String(a.started_at ?? "")) || 0;
+    const tb = Date.parse(String(b.started_at ?? "")) || 0;
+    return tb - ta || Number(b.upload_id ?? 0) - Number(a.upload_id ?? 0);
+  });
+}
+
+/**
+ * Какую загрузку показывать. «last_successful» у Авито может отставать (в документации:
+ * «для самой последней загрузки возможны задержки»), поэтому ориентируемся на историю:
+ * берём самую свежую и подбираем к ней items из current или last_successful.
+ */
+export async function pickUpload(connection: AvitoAccountConnection): Promise<UploadPick | null> {
+  const [historyR, currentR, lastR] = await Promise.allSettled([
+    avito.uploads(connection, { perPage: 5, page: 1 }),
+    avito.currentUpload(connection),
+    avito.lastSuccessfulUpload(connection),
+  ]);
+  if (historyR.status === "rejected" && currentR.status === "rejected" && lastR.status === "rejected") {
+    throw currentR.reason;
+  }
+
+  const history = historyR.status === "fulfilled" && Array.isArray(historyR.value?.uploads) ? sortUploadsNewestFirst(historyR.value.uploads as Json[]) : [];
+  const latestRaw: Json | null = history[0] ?? null;
+  const current: Json | null = currentR.status === "fulfilled" ? currentR.value : null;
+  const last: Json | null = lastR.status === "fulfilled" ? lastR.value : null;
+
+  const choice = choosePickSource(latestRaw, current, last);
+  if (!choice) return null;
+
+  return {
+    which: choice.which,
+    upload: normalizeUpload(choice.raw),
+    latest: latestRaw ? normalizeUpload(latestRaw) : null,
+    stale: choice.stale,
   };
 }
 

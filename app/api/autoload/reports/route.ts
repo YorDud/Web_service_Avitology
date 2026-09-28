@@ -5,16 +5,17 @@ import {
   requireAccount,
   requireAutoloadUser,
   routeError,
+  sortUploadsNewestFirst,
 } from "@/lib/autoload/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Последняя завершённая загрузка (/autoload/v4/uploads/last_successful),
- * текущая загрузка, если она ещё идёт (/autoload/v4/uploads/current),
- * и история загрузок (/autoload/v4/uploads). Методы v2/v3 (report_id-based)
- * у Авито помечены deprecated и не используются.
+ * История загрузок (/autoload/v4/uploads) — главный источник: «самая свежая в начале».
+ * «Последняя завершённая» и «идёт сейчас» вычисляем из неё, а не берём из /last_successful:
+ * тот метод у Авито может отставать и показывать более старую загрузку, чем есть на самом деле.
+ * Если история недоступна — запасной вариант через /last_successful и /current.
  */
 export async function GET() {
   const auth = await requireAutoloadUser();
@@ -24,23 +25,32 @@ export async function GET() {
   if (!account) return response;
 
   try {
-    const [lastResult, currentResult, listResult] = await Promise.allSettled([
+    const [historyR, lastR, currentR] = await Promise.allSettled([
+      avito.uploads(account, { perPage: 15, page: 1 }),
       avito.lastSuccessfulUpload(account),
       avito.currentUpload(account),
-      avito.uploads(account, { perPage: 10, page: 1 }),
     ]);
 
-    if (lastResult.status === "rejected" && listResult.status === "rejected") {
-      throw lastResult.reason;
+    if (historyR.status === "rejected" && lastR.status === "rejected") throw historyR.reason;
+
+    const rawHistory =
+      historyR.status === "fulfilled" && Array.isArray(historyR.value?.uploads) ? sortUploadsNewestFirst(historyR.value.uploads as Record<string, unknown>[]) : [];
+    const uploads = rawHistory.map((item) => normalizeUpload(item)).filter((item) => item.id);
+
+    let current = uploads.find((item) => item.status === "processing") ?? null;
+    let last = uploads.find((item) => item.status !== "processing") ?? null;
+
+    if (uploads.length === 0) {
+      // история пуста или недоступна — запасной путь
+      if (lastR.status === "fulfilled" && lastR.value) last = normalizeUpload(lastR.value);
+      if (currentR.status === "fulfilled" && currentR.value) {
+        const candidate = normalizeUpload(currentR.value);
+        if (candidate.status === "processing") current = candidate;
+        else if (!last || Number(candidate.id) > Number(last.id)) last = candidate;
+      }
     }
 
-    const rawList = listResult.status === "fulfilled" ? (listResult.value?.uploads ?? []) : [];
-
-    return NextResponse.json({
-      last: lastResult.status === "fulfilled" && lastResult.value ? normalizeUpload(lastResult.value) : null,
-      current: currentResult.status === "fulfilled" && currentResult.value ? normalizeUpload(currentResult.value) : null,
-      uploads: (rawList as unknown[]).map((item) => normalizeUpload(item)).filter((item) => item.id),
-    });
+    return NextResponse.json({ last, current, uploads });
   } catch (error) {
     return routeError(error);
   }

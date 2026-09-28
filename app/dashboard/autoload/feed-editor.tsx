@@ -1189,6 +1189,11 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
                 <Pill tone={syncResult.warnings ? "amber" : "gray"}>С замечаниями: {syncResult.warnings}</Pill>
                 <Pill tone="gray">Не найдено в отчёте: {syncResult.notFound}</Pill>
               </div>
+              {syncResult.stale && syncResult.latestId && (
+                <p className="mt-3 text-xs leading-5 text-amber-800">
+                  Авито ещё не подготовил данные по самой свежей загрузке №{syncResult.latestId} — сверили с предыдущей. Повторите через пару минут.
+                </p>
+              )}
               {syncResult.notFound > 0 && (
                 <p className="mt-3 text-xs leading-5 text-black/45">Объявления «не найдено в отчёте» ещё не попали в выгрузку. Запустите загрузку и обновите статусы после её окончания.</p>
               )}

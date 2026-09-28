@@ -79,6 +79,9 @@ export type SyncResult = {
   uploadId: string | null;
   /** true, если использована ещё идущая загрузка (current), а не последняя завершённая. */
   partial: boolean;
+  /** true — Авито ещё не подготовил данные по самой свежей загрузке, показаны данные предыдущей. */
+  stale: boolean;
+  latestId: string | null;
   matched: number;
   errors: number;
   warnings: number;
@@ -128,6 +131,8 @@ export type IssueGroup = {
 export type IssuesResponse = {
   upload: ReportSummary | null;
   partial: boolean;
+  stale: boolean;
+  latestId: string | null;
   groups: IssueGroup[];
   adsWithIssues: number;
   totalAds: number;

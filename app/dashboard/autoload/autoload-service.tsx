@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { describeSchedule, nextSlots, sourceLabel } from "@/lib/autoload/schedule";
 import type {
   AccountStatus,
   FeedSummary,
@@ -9,6 +10,24 @@ import type {
   ReportSummary,
   ScheduleRule,
 } from "@/lib/autoload/types";
+import FeedEditor from "./feed-editor";
+import IssuesModal from "./issues-modal";
+import {
+  Accordion,
+  AutoloadStyles,
+  Icon,
+  Pill,
+  Spinner,
+  Toggle,
+  api,
+  copyText,
+  errorText,
+  formatDateTime,
+  ghostButton,
+  inputClass,
+  timeAgo,
+  useToast,
+} from "./ui";
 
 /* Ключи Авито общие с Бид-менеджером: используем тот же API /api/avito-connection,
    а не отдельное подключение для Автозагрузки. */
@@ -29,24 +48,6 @@ function toAccountStatus(connection: RawAvitoConnection): AccountStatus {
     lastError: connection.lastError,
   };
 }
-import FeedEditor from "./feed-editor";
-import IssuesModal from "./issues-modal";
-import {
-  AutoloadStyles,
-  Icon,
-  Pill,
-  SectionTitle,
-  Spinner,
-  Toggle,
-  api,
-  copyText,
-  errorText,
-  formatDateTime,
-  ghostButton,
-  inputClass,
-  timeAgo,
-  useToast,
-} from "./ui";
 
 /* =========================================================================
    УСЛУГА «АВТОЗАГРУЗКА ОБЪЯВЛЕНИЙ АВИТО» (08), доступна с подпиской Pro.
@@ -121,6 +122,8 @@ const USEFUL_LINKS = [
   },
 ];
 
+type SectionKey = "connection" | "profile" | "history";
+
 /* ---------- Главный компонент ---------- */
 export default function AutoloadService() {
   const toast = useToast();
@@ -138,9 +141,12 @@ export default function AutoloadService() {
   const [openFeedId, setOpenFeedId] = useState<number | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
+  const [running, setRunning] = useState(false);
   const [focusAdKey, setFocusAdKey] = useState<string | null>(null);
   const [isBetaTooltipOpen, setIsBetaTooltipOpen] = useState(false);
   const [betaTooltipPosition, setBetaTooltipPosition] = useState({ top: 0, right: 16 });
+  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({ connection: false, profile: false, history: false });
+  const autoOpened = useRef({ connection: false, profile: false });
 
   const openBetaTooltip = (event: { currentTarget: HTMLElement }) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -149,6 +155,14 @@ export default function AutoloadService() {
   };
 
   const connected = account?.connected === true;
+  const linkedCount = (feeds ?? []).filter((feed) => feed.linked).length;
+  const canRun = Boolean(profile?.exists) && (linkedCount > 0 || Boolean(profile?.feeds.some((feed) => !feed.ours)));
+
+  const toggleSection = (key: SectionKey) => setOpenSections((current) => ({ ...current, [key]: !current[key] }));
+  const openSection = (key: SectionKey) => {
+    setOpenSections((current) => ({ ...current, [key]: true }));
+    window.setTimeout(() => document.getElementById(`al-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+  };
 
   /* ---------- Загрузка данных ---------- */
   useEffect(() => {
@@ -185,6 +199,20 @@ export default function AutoloadService() {
     };
   }, [connected]);
 
+  // Блоки, которые требуют внимания, раскрываем один раз сами: нет подключения / нет профиля.
+  useEffect(() => {
+    if (account && !account.connected && !autoOpened.current.connection) {
+      autoOpened.current.connection = true;
+      setOpenSections((current) => ({ ...current, connection: true }));
+    }
+  }, [account]);
+  useEffect(() => {
+    if (profile && !profile.exists && !autoOpened.current.profile) {
+      autoOpened.current.profile = true;
+      setOpenSections((current) => ({ ...current, profile: true }));
+    }
+  }, [profile]);
+
   const refreshFeeds = useCallback(async () => {
     try {
       const data = await api<{ feeds: FeedSummary[] }>("/api/autoload/feeds");
@@ -206,6 +234,20 @@ export default function AutoloadService() {
     }
   };
 
+  async function runNow() {
+    if (running) return;
+    setRunning(true);
+    try {
+      await api("/api/autoload/upload", { method: "POST" });
+      toast.push("Выгрузка запущена. Отчёт появится в течение нескольких минут.");
+      window.setTimeout(() => void refreshReports(), 15000);
+    } catch (error) {
+      toast.push(errorText(error), "error");
+    } finally {
+      setRunning(false);
+    }
+  }
+
   const toggleGuide = () => {
     setGuideOpen((open) => {
       if (!open) window.setTimeout(() => guideRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 120);
@@ -213,15 +255,22 @@ export default function AutoloadService() {
     });
   };
 
-  /* ---------- Состояние готовности ---------- */
-  const steps = [
-    { label: "Avito API", done: connected },
-    { label: "Таблица с объявлениями", done: (feeds ?? []).some((feed) => feed.adsCount > 0) },
-    { label: "Профиль автозагрузки", done: profile?.exists === true },
-    { label: "Таблица подключена", done: (feeds ?? []).some((feed) => feed.linked) },
-    { label: "Автозагрузка включена", done: profile?.autoloadEnabled === true },
+  /* ---------- Готовность ---------- */
+  const steps: { label: string; done: boolean; target: SectionKey | "feeds" }[] = [
+    { label: "Avito API", done: connected, target: "connection" },
+    { label: "Таблица", done: (feeds ?? []).some((feed) => feed.adsCount > 0), target: "feeds" },
+    { label: "Профиль", done: profile?.exists === true, target: "profile" },
+    { label: "Подключена", done: linkedCount > 0, target: "feeds" },
+    { label: "Включена", done: profile?.autoloadEnabled === true, target: "profile" },
   ];
   const doneCount = steps.filter((step) => step.done).length;
+  const goToStep = (target: SectionKey | "feeds") => {
+    if (target === "feeds") feedsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    else openSection(target);
+  };
+
+  const latestUpload = reports?.current ?? reports?.last ?? null;
+  const lastScheduled = reports?.uploads.find((item) => item.source === "Url") ?? null;
 
   /* ---------- Редактор таблицы ---------- */
   if (openFeedId !== null) {
@@ -252,7 +301,7 @@ export default function AutoloadService() {
       <AutoloadStyles />
 
       {/* HERO */}
-      <section className="relative overflow-hidden rounded-[30px] bg-black p-5 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] sm:p-7 md:p-8">
+      <section className="relative overflow-hidden rounded-[28px] bg-black p-5 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] sm:p-6">
         <button
           type="button"
           aria-label="Информация о BETA-версии Автозагрузки объявлений Авито"
@@ -260,80 +309,81 @@ export default function AutoloadService() {
           onMouseLeave={() => setIsBetaTooltipOpen(false)}
           onFocus={openBetaTooltip}
           onBlur={() => setIsBetaTooltipOpen(false)}
-          className="absolute right-5 top-5 z-20 flex h-9 w-9 items-center justify-center rounded-xl border border-blue-300/45 bg-blue-500 text-base font-extrabold text-white shadow-[0_8px_20px_rgba(59,130,246,0.3)] transition hover:scale-105 hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300/70 sm:right-7 sm:top-7"
+          className="absolute right-5 top-5 z-20 flex h-9 w-9 items-center justify-center rounded-xl border border-blue-300/45 bg-blue-500 text-base font-extrabold text-white shadow-[0_8px_20px_rgba(59,130,246,0.3)] transition hover:scale-105 hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300/70 sm:right-6 sm:top-6"
         >
           !
         </button>
 
-        <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="min-w-0 pr-12 sm:pr-0">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-blue-200">BETA</span>
               <span className="inline-flex rounded-full border border-[#03bd48]/30 bg-[#03bd48]/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-[#78f8a6]">Подписка Pro</span>
               <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-white/70">Через API Авито</span>
             </div>
-            <h2 className="text-3xl font-extrabold tracking-[-0.05em] md:text-4xl">
+            <h2 className="text-2xl font-extrabold tracking-[-0.05em] sm:text-3xl">
               Автозагрузка
               <span className="text-[#03bd48]"> объявлений Авито</span>
             </h2>
-            <p className="mt-4 max-w-xl text-sm leading-7 text-white/62">
-              Ведите сотни объявлений в одной таблице: импортируйте их из Excel, Google Таблиц или Яндекс Таблиц,
-              заполните общие поля и проверьте ошибки до отправки. HelpSell собирает XML-файл, подключает его к
-              вашему профилю автозагрузки через API и показывает статусы из отчётов Авито.
+            <p className="mt-3 max-w-xl text-sm leading-6 text-white/60">
+              Ведите объявления в одной таблице, импортируйте из Excel, Google и Яндекс Таблиц — HelpSell соберёт файл, подключит его к Авито и покажет статусы.
             </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-5 flex flex-wrap gap-2.5">
               <button
                 type="button"
                 onClick={() => feedsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                className="btn-primary inline-flex items-center justify-center gap-2"
+                className="btn-primary inline-flex items-center justify-center gap-2 !px-5 !py-3 text-sm"
               >
                 <Icon name="table" /> Мои таблицы
               </button>
-              <button type="button" onClick={toggleGuide} aria-expanded={guideOpen} className="btn-secondary inline-flex items-center justify-center gap-2">
+              <button type="button" onClick={toggleGuide} aria-expanded={guideOpen} className="btn-secondary inline-flex items-center justify-center gap-2 !px-5 !py-3 text-sm">
                 <Icon name="book" /> {guideOpen ? "Скрыть инструкцию" : "Инструкция"}
               </button>
             </div>
           </div>
 
-          {/* Схема потока данных */}
-          <div className="rounded-[26px] border border-white/10 bg-white/[0.04] p-5 lg:mt-10">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 sm:gap-2">
+          {/* Готовность */}
+          <div className="min-w-0 rounded-[22px] border border-white/10 bg-white/[0.04] p-4 lg:mt-9">
+            <div className="flex items-center gap-1.5">
               {[
-                { icon: "table", title: "Таблица", sub: "объявления" },
-                { icon: "file", title: "XML", sub: "по ссылке" },
-                { icon: "sparkle", title: "Авито", sub: "по расписанию" },
+                { icon: "table", title: "Таблица" },
+                { icon: "file", title: "XML" },
+                { icon: "sparkle", title: "Авито" },
               ].map((node, index, list) => (
                 <Fragment key={node.title}>
-                  <div className="flex min-w-0 flex-col items-center overflow-hidden rounded-2xl border border-white/10 bg-black/40 px-1 py-3 text-center">
-                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${index === 2 ? "al-pulse bg-[#03bd48] text-white" : "bg-white/10 text-[#78f8a6]"}`}>
-                      <Icon name={node.icon} className="h-4 w-4" />
+                  <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/10 bg-black/40 px-2.5 py-1.5 text-[11px] font-extrabold">
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${index === 2 ? "al-pulse bg-[#03bd48] text-white" : "bg-white/10 text-[#78f8a6]"}`}>
+                      <Icon name={node.icon} className="h-3 w-3" />
                     </span>
-                    <span className="mt-2 max-w-full text-xs font-extrabold leading-tight">{node.title}</span>
-                    <span className="mt-0.5 max-w-full text-[10px] font-semibold leading-tight text-white/45">{node.sub}</span>
-                  </div>
+                    {node.title}
+                  </span>
                   {index < list.length - 1 && <div className="al-wire" />}
                 </Fragment>
               ))}
             </div>
 
-            <div className="mt-5">
-              <div className="mb-2 flex items-center justify-between text-xs font-extrabold uppercase tracking-[0.12em] text-white/45">
-                <span>Готовность</span>
-                <span className="text-[#78f8a6]">{doneCount} из {steps.length}</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-[#03bd48] transition-[width] duration-700 ease-out" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
-              </div>
-              <div className="mt-4 grid gap-2">
-                {steps.map((step) => (
-                  <div key={step.label} className="flex items-center gap-2.5 text-sm font-bold">
-                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors duration-500 ${step.done ? "bg-[#03bd48] text-white" : "bg-white/10 text-transparent"}`}>
-                      <Icon name="check" className="h-3 w-3" />
-                    </span>
-                    <span className={`min-w-0 ${step.done ? "text-white" : "text-white/45"}`}>{step.label}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="mt-4 flex items-center justify-between text-[11px] font-extrabold uppercase tracking-[0.12em] text-white/45">
+              <span>Готовность</span>
+              <span className="text-[#78f8a6]">{doneCount} из {steps.length}</span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-[#03bd48] transition-[width] duration-700 ease-out" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {steps.map((step) => (
+                <button
+                  key={step.label}
+                  type="button"
+                  onClick={() => (step.done ? undefined : goToStep(step.target))}
+                  title={step.done ? "Готово" : "Нажмите, чтобы перейти к этому шагу"}
+                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                    step.done ? "cursor-default bg-[#03bd48]/15 text-[#78f8a6]" : "bg-white/[0.07] text-white/55 hover:bg-white/15 hover:text-white"
+                  }`}
+                >
+                  <Icon name={step.done ? "check" : "plus"} className="h-3 w-3" />
+                  {step.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -366,7 +416,6 @@ export default function AutoloadService() {
           </div>,
           document.body,
         )}
-
 
       {/* ИНСТРУКЦИЯ */}
       <div
@@ -440,12 +489,12 @@ export default function AutoloadService() {
       </div>
 
       {loadError && (
-        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-bold text-red-600">{loadError}</div>
+        <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600">{loadError}</div>
       )}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        {/* ТАБЛИЦЫ */}
-        <div ref={feedsRef} className="min-w-0 scroll-mt-6 space-y-6">
+      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:items-start">
+        {/* ОСНОВНОЕ: таблицы и последняя выгрузка */}
+        <div ref={feedsRef} className="min-w-0 scroll-mt-6 space-y-5">
           <FeedsCard
             feeds={feeds}
             onOpen={setOpenFeedId}
@@ -458,48 +507,108 @@ export default function AutoloadService() {
           />
 
           {connected && (
-            <ReportsCard
+            <LastUploadCard
               reports={reports}
               error={reportsError}
               loading={reportsLoading}
+              profile={profile}
+              canRun={canRun}
+              running={running}
               onRefresh={() => void refreshReports()}
               onShowIssues={() => setIssuesOpen(true)}
+              onRunNow={() => void runNow()}
+              onOpenProfile={() => openSection("profile")}
+              onOpenHistory={() => openSection("history")}
             />
           )}
         </div>
 
-        {/* ПОДКЛЮЧЕНИЕ И ПРОФИЛЬ */}
-        <div className="min-w-0 space-y-6">
-          <ConnectionCard
-            account={account}
-            onConnected={(next) => {
-              setAccount(next);
-              setProfileError("");
-              setReportsError("");
-            }}
-            onDisconnected={() => {
-              // «Отключить автозагрузку» не трогает сами ключи Авито — аккаунт остаётся
-              // подключённым (им пользуется и Бид-менеджер), меняются только профиль и таблицы.
-              void refreshFeeds();
-              api<{ profile: ProfileDto }>("/api/autoload/profile")
-                .then((d) => setProfile(d.profile))
-                .catch(() => null);
-            }}
-            toast={toast.push}
-          />
-
-          {connected && (
-            <ProfileCard
-              profile={profile}
-              error={profileError}
-              linkedCount={(feeds ?? []).filter((feed) => feed.linked).length}
-              onSaved={(next) => {
-                setProfile(next);
+        {/* СЛУЖЕБНОЕ: всё раскрывается по клику */}
+        <div className="min-w-0 space-y-3">
+          <Accordion
+            id="al-connection"
+            icon="key"
+            title="Подключение Avito API"
+            summary={connected ? `Подключено · Client ID ${account?.clientIdMasked ?? ""}` : account ? "Не подключено — нужны Client ID и Client Secret" : "Загрузка…"}
+            badge={account ? <Pill tone={connected ? "green" : "amber"}>{connected ? "Готово" : "Нужно"}</Pill> : undefined}
+            open={openSections.connection}
+            onToggle={() => toggleSection("connection")}
+          >
+            <ConnectionPanel
+              account={account}
+              onConnected={(next) => {
+                setAccount(next);
                 setProfileError("");
+                setReportsError("");
               }}
-              onRefreshReports={() => void refreshReports()}
+              onDisconnected={() => {
+                // «Отключить автозагрузку» не трогает сами ключи Авито — аккаунт остаётся
+                // подключённым (им пользуется и Бид-менеджер), меняются только профиль и таблицы.
+                void refreshFeeds();
+                api<{ profile: ProfileDto }>("/api/autoload/profile")
+                  .then((d) => setProfile(d.profile))
+                  .catch(() => null);
+              }}
               toast={toast.push}
             />
+          </Accordion>
+
+          {connected && (
+            <Accordion
+              id="al-profile"
+              icon="clock"
+              title="Расписание и профиль автозагрузки"
+              summary={
+                !profile
+                  ? profileError
+                    ? "Не удалось загрузить"
+                    : "Загрузка…"
+                  : !profile.exists
+                    ? "Профиль ещё не создан"
+                    : `${profile.autoloadEnabled ? "Включена" : "Выключена"} · ${describeSchedule(profile.schedule)}`
+              }
+              badge={profile?.exists ? <Pill tone={profile.autoloadEnabled ? "green" : "gray"}>{profile.autoloadEnabled ? "Включена" : "Выключена"}</Pill> : profile ? <Pill tone="amber">Нужно</Pill> : undefined}
+              open={openSections.profile}
+              onToggle={() => toggleSection("profile")}
+            >
+              <ProfilePanel
+                profile={profile}
+                error={profileError}
+                linkedCount={linkedCount}
+                uploads={reports?.uploads ?? []}
+                lastScheduled={lastScheduled}
+                canRun={canRun}
+                running={running}
+                onRunNow={() => void runNow()}
+                onSaved={(next) => {
+                  setProfile(next);
+                  setProfileError("");
+                }}
+                toast={toast.push}
+              />
+            </Accordion>
+          )}
+
+          {connected && (
+            <Accordion
+              id="al-history"
+              icon="file"
+              title="История выгрузок"
+              summary={
+                reports?.uploads.length
+                  ? `Последняя №${reports.uploads[0].id} · ${STATUS_LABEL[reports.uploads[0].status] ?? reports.uploads[0].status}`
+                  : reports
+                    ? "Выгрузок пока нет"
+                    : reportsError
+                      ? "Не удалось загрузить"
+                      : "Загрузка…"
+              }
+              badge={latestUpload ? <Pill tone={reportTone(latestUpload.status)}>{shortStatus(latestUpload.status)}</Pill> : undefined}
+              open={openSections.history}
+              onToggle={() => toggleSection("history")}
+            >
+              <HistoryPanel reports={reports} error={reportsError} loading={reportsLoading} onRefresh={() => void refreshReports()} />
+            </Accordion>
           )}
         </div>
       </div>
@@ -570,15 +679,19 @@ function FeedsCard({
   }
 
   return (
-    <section className="white-card p-5 md:p-8">
-      <SectionTitle badge="Таблицы" title="Мои таблицы" />
+    <section className="white-card min-w-0 p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xl font-extrabold tracking-[-0.04em] text-black sm:text-2xl">
+          Мои таблицы{feeds ? <span className="ml-2 text-base font-bold text-black/30">{feeds.length}</span> : null}
+        </h3>
+      </div>
 
       <form
         onSubmit={(event) => {
           event.preventDefault();
           void create();
         }}
-        className="flex flex-col gap-3 sm:flex-row"
+        className="mt-4 flex flex-col gap-2.5 sm:flex-row"
       >
         <input
           value={name}
@@ -588,43 +701,42 @@ function FeedsCard({
           className={inputClass}
           aria-label="Название таблицы"
         />
-        <button type="submit" disabled={creating} className="btn-primary inline-flex shrink-0 items-center justify-center gap-2 disabled:opacity-60">
+        <button type="submit" disabled={creating} className="btn-primary inline-flex shrink-0 items-center justify-center gap-2 !px-5 !py-3 text-sm disabled:opacity-60">
           {creating ? <Spinner /> : <Icon name="plus" />} Создать
         </button>
       </form>
 
-      <div className="mt-6 space-y-3">
-        {feeds === null &&
-          [0, 1].map((item) => <div key={item} className="al-skeleton h-28 rounded-3xl" />)}
+      <div className="mt-4 space-y-2.5">
+        {feeds === null && [0, 1].map((item) => <div key={item} className="al-skeleton h-20 rounded-2xl" />)}
 
         {feeds?.length === 0 && (
-          <div className="rounded-3xl border-2 border-dashed border-black/15 bg-black/[0.02] p-8 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#03bd48]/10 text-[#028c36]">
-              <Icon name="table" className="h-6 w-6" />
+          <div className="rounded-2xl border-2 border-dashed border-black/15 bg-black/[0.02] p-6 text-center">
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#03bd48]/10 text-[#028c36]">
+              <Icon name="table" className="h-5 w-5" />
             </div>
-            <div className="mt-4 text-lg font-extrabold text-black">Создайте первую таблицу</div>
-            <p className="mx-auto mt-1.5 max-w-sm text-sm leading-6 text-black/50">Введите название выше и нажмите «Создать». Дальше можно импортировать объявления из Excel.</p>
+            <div className="mt-3 text-base font-extrabold text-black">Создайте первую таблицу</div>
+            <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-black/50">Введите название выше и нажмите «Создать». Дальше можно импортировать объявления из Excel.</p>
           </div>
         )}
 
         {feeds?.map((feed, index) => (
           <div
             key={feed.id}
-            style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
-            className="al-pop group rounded-3xl border border-black/[0.08] bg-black/[0.02] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#03bd48]/30 hover:bg-white hover:shadow-[0_18px_38px_rgba(3,189,72,0.1)]"
+            style={{ animationDelay: `${Math.min(index, 8) * 50}ms` }}
+            className="al-pop min-w-0 rounded-2xl border border-black/[0.08] bg-black/[0.02] p-3.5 transition duration-300 hover:border-[#03bd48]/30 hover:bg-white hover:shadow-[0_14px_30px_rgba(3,189,72,0.08)] sm:p-4"
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <button type="button" onClick={() => onOpen(feed.id)} className="min-w-0 text-left">
-                <div className="truncate text-xl font-extrabold tracking-[-0.03em] text-black">{feed.name}</div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <Pill tone={feed.linked ? "green" : "gray"}>{feed.linked ? "Подключена к Авито" : "Не подключена"}</Pill>
-                  <span className="text-xs font-bold text-black/45">
-                    {feed.adsCount} объявл. · {feed.lastFetchedAt ? `Авито забирал файл ${timeAgo(feed.lastFetchedAt)}` : "Авито ещё не забирал файл"}
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              <button type="button" onClick={() => onOpen(feed.id)} className="min-w-0 flex-1 basis-48 text-left">
+                <div className="truncate text-base font-extrabold tracking-[-0.02em] text-black">{feed.name}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <Pill tone={feed.linked ? "green" : "gray"}>{feed.linked ? "Подключена" : "Не подключена"}</Pill>
+                  <span className="text-xs font-semibold text-black/45">
+                    {feed.adsCount} объявл. · {feed.lastFetchedAt ? `Авито забирал ${timeAgo(feed.lastFetchedAt)}` : "Авито ещё не забирал"}
                   </span>
                 </div>
               </button>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => onOpen(feed.id)} className="btn-primary !px-5 !py-2.5 text-sm">
+              <div className="flex shrink-0 gap-2">
+                <button type="button" onClick={() => onOpen(feed.id)} className="btn-primary !px-4 !py-2 text-sm">
                   Открыть
                 </button>
                 <button
@@ -632,24 +744,31 @@ function FeedsCard({
                   onClick={() => void remove(feed)}
                   disabled={deletingId === feed.id}
                   aria-label={`Удалить ${feed.name}`}
-                  className="rounded-xl border border-black/10 p-2.5 text-black/40 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                  title="Удалить таблицу"
+                  className="rounded-xl border border-black/10 p-2 text-black/40 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                 >
                   {deletingId === feed.id ? <Spinner /> : <Icon name="trash" />}
                 </button>
               </div>
             </div>
 
-            <div className="mt-4 flex items-center gap-2 rounded-2xl bg-black px-4 py-2.5">
-              <code className="min-w-0 flex-1 truncate text-xs font-semibold text-[#78f8a6]">{feed.publicUrl}</code>
-              <button
-                type="button"
-                onClick={async () => toast((await copyText(feed.publicUrl)) ? "Ссылка скопирована." : "Не удалось скопировать ссылку.", "ok")}
-                aria-label="Копировать ссылку"
-                className="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white"
-              >
-                <Icon name="copy" />
-              </button>
-            </div>
+            <details className="group mt-2.5">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-xs font-extrabold text-black/45 transition hover:text-[#028c36] [&::-webkit-details-marker]:hidden">
+                <Icon name="link" className="h-3.5 w-3.5" /> Ссылка на XML-файл
+                <Icon name="chevron" className="h-3 w-3 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-2 flex items-center gap-2 rounded-xl bg-black px-3.5 py-2">
+                <code className="min-w-0 flex-1 truncate text-xs font-semibold text-[#78f8a6]">{feed.publicUrl}</code>
+                <button
+                  type="button"
+                  onClick={async () => toast((await copyText(feed.publicUrl)) ? "Ссылка скопирована." : "Не удалось скопировать ссылку.", "ok")}
+                  aria-label="Копировать ссылку"
+                  className="shrink-0 rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                >
+                  <Icon name="copy" />
+                </button>
+              </div>
+            </details>
           </div>
         ))}
       </div>
@@ -658,7 +777,7 @@ function FeedsCard({
 }
 
 /* ---------- Подключение Avito API ---------- */
-function ConnectionCard({
+function ConnectionPanel({
   account,
   onConnected,
   onDisconnected,
@@ -718,60 +837,52 @@ function ConnectionCard({
   }
 
   return (
-    <section className="rounded-[30px] bg-black p-5 text-white shadow-[0_20px_55px_rgba(16,24,40,0.18)] md:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <div className="min-w-0 flex-1 basis-48">
-          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-white/45">Шаг 1</div>
-          <h3 className="mt-2 text-xl font-extrabold tracking-[-0.04em] sm:text-2xl">Подключение Avito API</h3>
-        </div>
-        {account && (
-          <Pill tone={connected ? "green" : "gray"} className="shrink-0">
-            {connected ? "Подключено" : "Не подключено"}
-          </Pill>
-        )}
-      </div>
-
-      {account === null && <div className="al-skeleton mt-5 h-24 rounded-2xl opacity-20" />}
+    <div className="min-w-0">
+      {account === null && <div className="al-skeleton h-20 rounded-2xl" />}
 
       {connected && !editing && (
-        <div className="al-pop mt-5 space-y-3">
-          <div className="rounded-2xl border border-[#03bd48]/30 bg-[#03bd48]/10 p-4">
-            <div className="text-[11px] font-extrabold uppercase leading-4 tracking-[0.1em] text-[#78f8a6]">Ключи Авито подключены</div>
-            <div className="mt-1.5 text-base font-extrabold sm:text-lg">Client ID: <span className="break-all">{account?.clientIdMasked}</span></div>
-            <div className="mt-1 text-sm text-white/60">Те же ключи используются в Бид-менеджере Авито — подключать их дважды не нужно.</div>
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/[0.06] p-3.5">
+            <div className="flex items-center gap-2 text-sm font-extrabold text-[#027a30]">
+              <Icon name="check" className="h-4 w-4 shrink-0" /> Ключи Авито подключены
+            </div>
+            <div className="mt-1.5 text-sm font-bold text-black">
+              Client ID: <span className="break-all">{account?.clientIdMasked}</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-black/55">Те же ключи использует Бид-менеджер Авито — подключать их дважды не нужно. Проверено {formatDateTime(account?.lastCheckedAt)}.</p>
           </div>
-          <div className="text-xs font-semibold text-white/45">Проверено {formatDateTime(account?.lastCheckedAt)}</div>
-          {account?.lastError && (
-            <div className="al-pop rounded-2xl border border-red-400/30 bg-red-500/10 p-3.5 text-sm font-bold text-red-300">{account.lastError}</div>
-          )}
-          <div className="flex flex-wrap gap-2.5 pt-1">
-            <button type="button" onClick={() => setEditing(true)} className="rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-extrabold transition hover:bg-white/20">
+          {account?.lastError && <div className="rounded-2xl border border-red-200 bg-red-50 p-3.5 text-sm font-bold text-red-600">{account.lastError}</div>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setEditing(true)} className={ghostButton}>
               Заменить ключи
             </button>
-            <button type="button" onClick={() => void unlink()} disabled={busy} className="rounded-xl border border-red-400/30 px-4 py-2.5 text-sm font-extrabold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50">
+            <button
+              type="button"
+              onClick={() => void unlink()}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-extrabold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+            >
               Отключить автозагрузку
             </button>
           </div>
-          <p className="text-xs leading-5 text-white/35">
-            Чтобы полностью отключить ключи Авито, сделайте это в разделе «Бид-менеджер» → «Кабинет Авито».
-          </p>
+          <p className="text-xs leading-5 text-black/40">Полностью отключить ключи Авито можно в разделе «Бид-менеджер» → «Кабинет Авито».</p>
         </div>
       )}
 
       {showForm && account !== null && (
         <form
-          className="mt-5 space-y-3"
+          className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
             void connect();
           }}
         >
-          <p className="text-sm leading-7 text-white/60">
-            Ключи берутся в личном кабинете Авито: «Интеграции» → «Авито API». Подробности в{" "}
-            <a href="https://www.avito.ru/developers/api-catalog" target="_blank" rel="noopener noreferrer" className="font-bold text-[#78f8a6] hover:underline">
-              документации API
+          <p className="text-sm leading-6 text-black/60">
+            Ключи берутся в личном кабинете Авито: «Интеграции» → «Авито API». Если Авито уже подключён в Бид-менеджере, здесь появится то же подключение —
+            вводить ключи ещё раз не нужно.{" "}
+            <a href="https://www.avito.ru/developers/api-catalog" target="_blank" rel="noopener noreferrer" className="font-bold text-[#028c36] hover:underline">
+              Документация API
             </a>
-            . Если Авито уже подключён в Бид-менеджере, здесь появится то же самое подключение — вводить ключи ещё раз не нужно.
           </p>
           <input
             value={clientId}
@@ -780,7 +891,7 @@ function ConnectionCard({
             autoComplete="off"
             spellCheck={false}
             aria-label="Client ID"
-            className="w-full rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-white/30 focus:border-[#03bd48]"
+            className={inputClass}
           />
           <input
             value={clientSecret}
@@ -790,50 +901,57 @@ function ConnectionCard({
             autoComplete="new-password"
             spellCheck={false}
             aria-label="Client Secret"
-            className="w-full rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-white/30 focus:border-[#03bd48]"
+            className={inputClass}
           />
-          {error && <div className="al-pop rounded-2xl border border-red-400/30 bg-red-500/10 p-3.5 text-sm font-bold text-red-300">{error}</div>}
+          {error && <div className="al-pop rounded-2xl border border-red-200 bg-red-50 p-3.5 text-sm font-bold text-red-600">{error}</div>}
           <div className="flex flex-wrap gap-2.5">
             <button
               type="submit"
               disabled={busy || clientId.trim().length < 6 || clientSecret.trim().length < 6}
-              className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-primary inline-flex items-center gap-2 !px-5 !py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? <Spinner /> : <Icon name="key" />} Проверить и подключить
             </button>
             {editing && (
-              <button type="button" onClick={() => setEditing(false)} className="rounded-xl border border-white/20 px-4 py-3 text-sm font-extrabold transition hover:bg-white/10">
+              <button type="button" onClick={() => setEditing(false)} className={ghostButton}>
                 Отмена
               </button>
             )}
           </div>
-          <p className="text-xs leading-5 text-white/40">Ключи шифруются на сервере и используются только для запросов к API Авито от вашего имени.</p>
+          <p className="text-xs leading-5 text-black/40">Ключи шифруются на сервере и используются только для запросов к API Авито от вашего имени.</p>
         </form>
       )}
-    </section>
+    </div>
   );
 }
 
-function ProfileCard({
+/* ---------- Расписание и профиль ---------- */
+function ProfilePanel({
   profile,
   error,
   linkedCount,
+  uploads,
+  lastScheduled,
+  canRun,
+  running,
+  onRunNow,
   onSaved,
-  onRefreshReports,
   toast,
 }: {
   profile: ProfileDto | null;
   error: string;
   linkedCount: number;
+  uploads: ReportSummary[];
+  lastScheduled: ReportSummary | null;
+  canRun: boolean;
+  running: boolean;
+  onRunNow: () => void;
   onSaved: (profile: ProfileDto) => void;
-  onRefreshReports: () => void;
   toast: (text: string, kind?: "ok" | "error") => void;
 }) {
   return (
-    <section className="white-card p-5 md:p-8">
-      <SectionTitle badge="Шаг 3" title="Профиль автозагрузки" />
-
-      {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600">{error}</div>}
+    <div className="min-w-0 space-y-5">
+      {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold leading-6 text-red-600">{error}</div>}
       {!profile && !error && (
         <div className="space-y-3">
           <div className="al-skeleton h-12 rounded-2xl" />
@@ -842,30 +960,117 @@ function ProfileCard({
       )}
 
       {profile && (
-        <ProfileForm
-          key={JSON.stringify([profile.exists, profile.reportEmail, profile.autoloadEnabled, profile.schedule])}
-          profile={profile}
-          linkedCount={linkedCount}
-          onSaved={onSaved}
-          onRefreshReports={onRefreshReports}
-          toast={toast}
-        />
+        <>
+          <ScheduleDiagnostics profile={profile} linkedCount={linkedCount} uploads={uploads} lastScheduled={lastScheduled} />
+          <ProfileForm
+            key={JSON.stringify([profile.exists, profile.reportEmail, profile.autoloadEnabled, profile.schedule])}
+            profile={profile}
+            linkedCount={linkedCount}
+            canRun={canRun}
+            running={running}
+            onRunNow={onRunNow}
+            onSaved={onSaved}
+            toast={toast}
+          />
+        </>
       )}
-    </section>
+    </div>
+  );
+}
+
+/** Понятная сводка: сработает ли расписание, когда ближайший запуск и был ли последний. */
+function ScheduleDiagnostics({
+  profile,
+  linkedCount,
+  uploads,
+  lastScheduled,
+}: {
+  profile: ProfileDto;
+  linkedCount: number;
+  uploads: ReportSummary[];
+  lastScheduled: ReportSummary | null;
+}) {
+  const problems: string[] = [];
+  if (!profile.exists) {
+    problems.push("Профиль автозагрузки ещё не создан — укажите почту и расписание ниже и нажмите «Создать профиль».");
+  } else {
+    if (!profile.autoloadEnabled) {
+      problems.push("Автозагрузка по расписанию выключена в профиле Авито. Включите переключатель ниже и нажмите «Сохранить профиль» — иначе Авито сам файл не заберёт, работает только «Запустить сейчас».");
+    }
+    if (profile.feeds.length === 0) {
+      problems.push("В профиле Авито нет ни одного файла. Откройте таблицу → вкладка «Подключение» → «Подключить к автозагрузке Авито».");
+    } else if (linkedCount === 0 && !profile.feeds.some((feed) => !feed.ours)) {
+      problems.push("Ни одна таблица HelpSell не подключена к автозагрузке.");
+    }
+    if (profile.schedule.length === 0) problems.push("Не задано ни одного окна расписания.");
+  }
+
+  const slots = profile.exists && profile.autoloadEnabled ? nextSlots(profile.schedule, 3) : [];
+
+  return (
+    <div className="min-w-0 rounded-2xl border border-black/[0.08] bg-black/[0.02] p-4">
+      <div className="text-xs font-extrabold uppercase tracking-[0.12em] text-black/40">Как сейчас работает расписание</div>
+
+      {problems.length > 0 ? (
+        <ul className="mt-2.5 space-y-2">
+          {problems.map((problem) => (
+            <li key={problem} className="flex gap-2.5 rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-semibold leading-5 text-amber-900">
+              <Icon name="warning" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0">{problem}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="mt-2.5 space-y-2.5">
+          <div>
+            <div className="text-xs font-bold text-black/50">Ближайшие запуски (время московское)</div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {slots.length === 0 && <span className="text-xs font-semibold text-black/40">—</span>}
+              {slots.map((slot) => (
+                <span key={slot.start} className={`inline-flex whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-extrabold ${slot.current ? "bg-[#03bd48] text-white" : "bg-white text-black/70 ring-1 ring-black/10"}`}>
+                  {slot.current ? "сейчас: " : ""}
+                  {slot.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="text-xs leading-5 text-black/55">
+            {lastScheduled ? (
+              <>
+                Последний запуск по расписанию: <b className="text-black">№{lastScheduled.id}</b>, {formatDateTime(lastScheduled.startedAt)}.
+              </>
+            ) : uploads.length > 0 ? (
+              "По расписанию запусков пока не было — в истории только ручные выгрузки."
+            ) : (
+              "Выгрузок пока не было."
+            )}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-3 text-xs leading-5 text-black/45">
+        Авито запускает выгрузку <b>в течение выбранного часа</b> (не ровно в его начале) и только в отмеченные дни. В истории выгрузок запуск по расписанию помечен
+        «по ссылке (расписание)».
+      </p>
+    </div>
   );
 }
 
 function ProfileForm({
   profile,
   linkedCount,
+  canRun,
+  running,
+  onRunNow,
   onSaved,
-  onRefreshReports,
   toast,
 }: {
   profile: ProfileDto;
   linkedCount: number;
+  canRun: boolean;
+  running: boolean;
+  onRunNow: () => void;
   onSaved: (profile: ProfileDto) => void;
-  onRefreshReports: () => void;
   toast: (text: string, kind?: "ok" | "error") => void;
 }) {
   const [email, setEmail] = useState(profile.reportEmail);
@@ -873,7 +1078,6 @@ function ProfileForm({
   const [schedule, setSchedule] = useState<ScheduleRule[]>(profile.schedule.length > 0 ? profile.schedule : [SCHEDULE_PRESETS[0].rule]);
   const [agreement, setAgreement] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
   const [formError, setFormError] = useState("");
 
   const canEnable = linkedCount > 0 || profile.feeds.some((feed) => !feed.ours);
@@ -900,20 +1104,6 @@ function ProfileForm({
     }
   }
 
-  async function runNow() {
-    if (running) return;
-    setRunning(true);
-    try {
-      await api("/api/autoload/upload", { method: "POST" });
-      toast("Выгрузка запущена. Отчёт появится в течение нескольких минут.");
-      window.setTimeout(onRefreshReports, 15000);
-    } catch (error) {
-      toast(errorText(error), "error");
-    } finally {
-      setRunning(false);
-    }
-  }
-
   const updateRule = (index: number, patch: Partial<ScheduleRule>) =>
     setSchedule((rules) => rules.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)));
 
@@ -921,12 +1111,12 @@ function ProfileForm({
     list.includes(value) ? list.filter((item) => item !== value) : [...list, value].sort((a, b) => a - b);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 rounded-2xl border border-black/[0.08] bg-white p-4">
+    <div className="min-w-0 space-y-5">
+      <div className="flex items-center gap-4 rounded-2xl border border-black/[0.08] bg-white p-3.5">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-extrabold text-black">Автозагрузка по расписанию</div>
           <div className="mt-0.5 text-xs leading-5 text-black/45">
-            {canEnable ? "Авито сам заберёт файл в выбранное время." : "Сначала подключите хотя бы одну таблицу во вкладке «Подключение»."}
+            {canEnable ? "Авито сам заберёт файл в выбранное время." : "Сначала подключите хотя бы одну таблицу: откройте её → «Подключение»."}
           </div>
         </div>
         <Toggle checked={enabled && canEnable} onChange={setEnabled} disabled={!canEnable} label="Автозагрузка по расписанию" />
@@ -948,7 +1138,7 @@ function ProfileForm({
                 key={preset.title}
                 type="button"
                 onClick={() => setSchedule([preset.rule])}
-                className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-extrabold text-black/60 transition hover:border-[#03bd48]/50 hover:text-[#028c36]"
+                className="whitespace-nowrap rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-extrabold text-black/60 transition hover:border-[#03bd48]/50 hover:text-[#028c36]"
               >
                 {preset.title}
               </button>
@@ -958,7 +1148,7 @@ function ProfileForm({
 
         <div className="space-y-3">
           {schedule.map((rule, index) => (
-            <div key={index} className="al-pop rounded-2xl border border-black/[0.08] bg-black/[0.02] p-4">
+            <div key={index} className="al-pop min-w-0 rounded-2xl border border-black/[0.08] bg-black/[0.02] p-3.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap gap-1.5">
                   {WEEKDAYS.map((label, day) => (
@@ -983,26 +1173,26 @@ function ProfileForm({
               </div>
 
               <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
-  {Array.from({ length: 24 }, (_, hour) => (
-    <button
-      key={hour}
-      type="button"
-      aria-pressed={rule.time_slots.includes(hour)}
-      onClick={() => updateRule(index, { time_slots: toggleIn(rule.time_slots, hour) })}
-      className={`flex h-10 min-w-[52px] items-center justify-center whitespace-nowrap rounded-lg px-2 text-xs font-extrabold leading-none tabular-nums transition ${
-        rule.time_slots.includes(hour)
-          ? "bg-[#03bd48] text-white"
-          : "bg-white text-black/45 ring-1 ring-black/10 hover:ring-[#03bd48]/50"
-      }`}
-    >
-      {String(hour).padStart(2, "0")}
-    </button>
-  ))}
-</div>
+                {Array.from({ length: 24 }, (_, hour) => (
+                  <button
+                    key={hour}
+                    type="button"
+                    aria-pressed={rule.time_slots.includes(hour)}
+                    onClick={() => updateRule(index, { time_slots: toggleIn(rule.time_slots, hour) })}
+                    className={`flex h-10 min-w-[52px] items-center justify-center whitespace-nowrap rounded-lg px-2 text-xs font-extrabold leading-none tabular-nums transition ${
+                      rule.time_slots.includes(hour)
+                        ? "bg-[#03bd48] text-white"
+                        : "bg-white text-black/45 ring-1 ring-black/10 hover:ring-[#03bd48]/50"
+                    }`}
+                  >
+                    {String(hour).padStart(2, "0")}
+                  </button>
+                ))}
+              </div>
 
-              <div className="mt-3 flex items-center gap-3">
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 <label htmlFor={`rate-${index}`} className="text-xs font-extrabold text-black/55">
-                  Объявлений за запуск
+                  Объявлений за окно
                 </label>
                 <input
                   id={`rate-${index}`}
@@ -1011,51 +1201,57 @@ function ProfileForm({
                   max={1000000}
                   value={rule.rate}
                   onChange={(event) => updateRule(index, { rate: Number(event.target.value) })}
-                  className={`${inputClass} !w-32 !py-2`}
+                  className={`${inputClass} !w-28 !flex-none !py-2`}
                 />
               </div>
             </div>
           ))}
         </div>
 
-        <button type="button" onClick={() => setSchedule((rules) => [...rules, { rate: 1000, weekdays: [0, 1, 2, 3, 4, 5, 6], time_slots: [12] }])} className={`${ghostButton} mt-3`}>
-          <Icon name="plus" /> Добавить правило
-        </button>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <button type="button" onClick={() => setSchedule((rules) => [...rules, { rate: 1000, weekdays: [0, 1, 2, 3, 4, 5, 6], time_slots: [12] }])} className={ghostButton}>
+            <Icon name="plus" /> Добавить правило
+          </button>
+          <span className="min-w-0 text-xs font-semibold leading-5 text-black/45">Итого: {describeSchedule(schedule)}</span>
+        </div>
       </div>
 
       {profile.feeds.length > 0 && (
-        <div>
-          <div className="mb-2 text-sm font-extrabold text-black">Файлы в профиле Авито</div>
-          <div className="space-y-1.5">
+        <details className="group rounded-2xl border border-black/[0.08] bg-white">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3 text-sm font-extrabold text-black [&::-webkit-details-marker]:hidden">
+            <span>Файлы в профиле Авито · {profile.feeds.length}</span>
+            <Icon name="chevron" className="h-4 w-4 shrink-0 text-black/40 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="space-y-1.5 border-t border-black/[0.06] p-3">
             {profile.feeds.map((feed) => (
-              <div key={feed.url} className="flex items-center gap-2.5 rounded-xl bg-black/[0.03] px-3.5 py-2.5">
-                <Pill tone={feed.ours ? "green" : "gray"}>{feed.ours ? "HelpSell" : "Внешний"}</Pill>
+              <div key={feed.url} className="flex min-w-0 items-center gap-2.5 rounded-xl bg-black/[0.03] px-3 py-2">
+                <Pill tone={feed.ours ? "green" : "gray"} className="shrink-0">{feed.ours ? "HelpSell" : "Внешний"}</Pill>
                 <span className="min-w-0 truncate text-sm font-bold text-black/70" title={feed.url}>{feed.name}</span>
               </div>
             ))}
           </div>
-        </div>
+        </details>
       )}
 
       {!profile.exists && (
-        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-black/[0.08] bg-white p-4">
-          <input type="checkbox" checked={agreement} onChange={(event) => setAgreement(event.target.checked)} className="mt-1 h-4 w-4 accent-[#03bd48]" />
-          <span className="text-sm leading-6 text-black/65">Принимаю условия использования Автозагрузки Авито. Профиль создаётся в вашем аккаунте Авито.</span>
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-black/[0.08] bg-white p-3.5">
+          <input type="checkbox" checked={agreement} onChange={(event) => setAgreement(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#03bd48]" />
+          <span className="min-w-0 text-sm leading-6 text-black/65">Принимаю условия использования Автозагрузки Авито. Профиль создаётся в вашем аккаунте Авито.</span>
         </label>
       )}
 
-      {formError && <div className="al-pop rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600">{formError}</div>}
+      {formError && <div className="al-pop rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold leading-6 text-red-600">{formError}</div>}
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2.5">
         <button
           type="button"
           onClick={() => void save()}
           disabled={saving || (!profile.exists && !agreement)}
-          className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="btn-primary inline-flex items-center gap-2 !px-5 !py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? <Spinner /> : <Icon name="check" />} {profile.exists ? "Сохранить профиль" : "Создать профиль"}
         </button>
-        <button type="button" onClick={() => void runNow()} disabled={running || !profile.exists || !canEnable} className={ghostButton}>
+        <button type="button" onClick={onRunNow} disabled={running || !canRun} className={ghostButton}>
           {running ? <Spinner /> : <Icon name="play" />} Запустить сейчас
         </button>
       </div>
@@ -1063,7 +1259,7 @@ function ProfileForm({
   );
 }
 
-/* ---------- Отчёты ---------- */
+/* ---------- Выгрузки ---------- */
 // status: processing | success | success_warning | error (перечисление из API Авито v4/uploads)
 function reportTone(status: string): "green" | "red" | "amber" | "gray" {
   if (status === "success") return "green";
@@ -1080,104 +1276,185 @@ const STATUS_LABEL: Record<string, string> = {
   error: "Ошибка загрузки",
 };
 
-function ReportsCard({
+const shortStatus = (status: string) =>
+  ({ processing: "Идёт", success: "Ок", success_warning: "Замечания", error: "Ошибка" })[status] ?? status;
+
+/** Компактная карточка «что было в последний раз» + быстрые действия. */
+function LastUploadCard({
+  reports,
+  error,
+  loading,
+  profile,
+  canRun,
+  running,
+  onRefresh,
+  onShowIssues,
+  onRunNow,
+  onOpenProfile,
+  onOpenHistory,
+}: {
+  reports: ReportsState | null;
+  error: string;
+  loading: boolean;
+  profile: ProfileDto | null;
+  canRun: boolean;
+  running: boolean;
+  onRefresh: () => void;
+  onShowIssues: () => void;
+  onRunNow: () => void;
+  onOpenProfile: () => void;
+  onOpenHistory: () => void;
+}) {
+  const last = reports?.last ?? null;
+  const current = reports?.current ?? null;
+  const hasIssues = last?.status === "success_warning" || last?.status === "error";
+  const next = profile?.exists && profile.autoloadEnabled ? nextSlots(profile.schedule, 1)[0] : null;
+
+  return (
+    <section className="white-card min-w-0 p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xl font-extrabold tracking-[-0.04em] text-black sm:text-2xl">Последняя выгрузка</h3>
+        <button type="button" onClick={onRefresh} disabled={loading} className={`${ghostButton} !px-3 !py-2`} title="Обновить данные из Авито">
+          {loading ? <Spinner /> : <Icon name="refresh" />} Обновить
+        </button>
+      </div>
+
+      {error && <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3.5 text-sm font-bold leading-6 text-red-600">{error}</div>}
+      {!reports && !error && <div className="al-skeleton mt-3 h-24 rounded-2xl" />}
+
+      {reports && !last && !current && (
+        <div className="mt-3 rounded-2xl bg-black/[0.03] p-5 text-center text-sm font-semibold leading-6 text-black/50">
+          Выгрузок пока нет. Они появятся после первого запуска — по расписанию или по кнопке «Запустить сейчас».
+        </div>
+      )}
+
+      {current && (
+        <div className="al-pop mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Spinner className="h-3.5 w-3.5 text-amber-700" />
+          <span className="min-w-0 text-sm font-extrabold text-amber-900">Идёт загрузка №{current.id}</span>
+          <span className="text-xs font-semibold text-amber-900/70">с {formatDateTime(current.startedAt)}</span>
+        </div>
+      )}
+
+      {last && (
+        <div className="al-pop mt-3 min-w-0 rounded-2xl border border-black/[0.08] bg-black/[0.02] p-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Pill tone={reportTone(last.status)}>{STATUS_LABEL[last.status] ?? last.status}</Pill>
+            <span className="text-sm font-extrabold text-black">№{last.id}</span>
+            <span className="text-xs font-semibold text-black/45">{formatDateTime(last.startedAt)}</span>
+          </div>
+          <div className="mt-1 text-xs font-semibold text-black/45">Источник: {sourceLabel(last.source)}</div>
+
+          {last.counts.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {last.counts.map((item) => (
+                <span key={item.label} className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold text-black/70 ring-1 ring-black/10">
+                  <span className="min-w-0 truncate">{item.label}</span>
+                  <b className="shrink-0 text-black">{item.value}</b>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {last.events.length > 0 && (
+            <div className="mt-2.5 space-y-1">
+              {last.events.map((event, index) => (
+                <div key={index} className="text-xs leading-5 text-amber-800">⚠ {event.description}</div>
+              ))}
+            </div>
+          )}
+
+          {hasIssues && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-amber-50 px-3.5 py-3">
+              <p className="min-w-0 flex-1 basis-48 text-xs font-semibold leading-5 text-amber-900">
+                {last.status === "error"
+                  ? "Загрузка завершилась с ошибкой."
+                  : "Авито принял файл, но по части объявлений есть сообщения — где-то ошибка, где-то замечание."}{" "}
+                Покажем, что именно поправить.
+              </p>
+              <button type="button" onClick={onShowIssues} className="btn-primary inline-flex shrink-0 items-center gap-2 !px-4 !py-2 text-xs">
+                <Icon name="search" /> Что исправить
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2.5">
+        <div className="min-w-0 flex-1 basis-56 text-xs font-semibold leading-5 text-black/50">
+          {next ? (
+            <>
+              Следующий запуск по расписанию: <b className="text-black">{next.label}</b> (МСК)
+            </>
+          ) : profile?.exists ? (
+            <>
+              Расписание выключено.{" "}
+              <button type="button" onClick={onOpenProfile} className="font-extrabold text-[#028c36] hover:underline">
+                Настроить
+              </button>
+            </>
+          ) : (
+            <>
+              Профиль не создан.{" "}
+              <button type="button" onClick={onOpenProfile} className="font-extrabold text-[#028c36] hover:underline">
+                Создать
+              </button>
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onRunNow} disabled={running || !canRun} className={ghostButton} title={canRun ? "Не ждать расписания" : "Сначала подключите таблицу и создайте профиль"}>
+            {running ? <Spinner /> : <Icon name="play" />} Запустить сейчас
+          </button>
+          <button type="button" onClick={onOpenHistory} className={ghostButton}>
+            Вся история
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HistoryPanel({
   reports,
   error,
   loading,
   onRefresh,
-  onShowIssues,
 }: {
   reports: ReportsState | null;
   error: string;
   loading: boolean;
   onRefresh: () => void;
-  onShowIssues: () => void;
 }) {
-  const latest = reports?.current ?? reports?.last ?? null;
-  const hasIssues = latest?.status === "success_warning" || latest?.status === "error";
   return (
-    <section className="white-card p-5 md:p-8">
-      <SectionTitle
-        badge="Отчёты"
-        title="Последние выгрузки"
-        right={
-          <button type="button" onClick={onRefresh} disabled={loading} className={ghostButton}>
-            {loading ? <Spinner /> : <Icon name="refresh" />} Обновить
-          </button>
-        }
-      />
+    <div className="min-w-0 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 text-xs leading-5 text-black/50">Самая свежая выгрузка — сверху.</p>
+        <button type="button" onClick={onRefresh} disabled={loading} className={`${ghostButton} shrink-0 !px-3 !py-1.5 !text-xs`}>
+          {loading ? <Spinner /> : <Icon name="refresh" />} Обновить
+        </button>
+      </div>
 
-      {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600">{error}</div>}
-      {!reports && !error && <div className="al-skeleton h-28 rounded-2xl" />}
-
-      {hasIssues && (
-        <div className="al-pop mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <div className="text-sm font-extrabold text-amber-900">
-            {latest?.status === "error" ? "Загрузка завершилась с ошибкой" : "«Загружено, есть замечания» — что это значит"}
-          </div>
-          <p className="mt-1 text-sm leading-6 text-amber-900/80">
-            Авито принял ваш файл, но по части объявлений прислал сообщения: где-то ошибка (объявление не опубликовано), где-то замечание.
-            Нажмите кнопку — мы покажем, какие именно объявления и что в них поправить.
-          </p>
-          <button type="button" onClick={onShowIssues} className="btn-primary mt-3 inline-flex items-center gap-2 !px-5 !py-2.5 text-sm">
-            <Icon name="search" /> Показать, что исправить
-          </button>
-        </div>
-      )}
-
-      {reports && !reports.last && !reports.current && reports.uploads.length === 0 && (
-        <div className="rounded-2xl bg-black/[0.03] p-6 text-center text-sm font-bold leading-6 text-black/45">
-          Загрузок пока нет. Они появятся после первой выгрузки: по расписанию или по кнопке «Запустить сейчас».
-        </div>
-      )}
-
-      {reports?.current && (
-        <div className="al-pop mb-3 rounded-3xl border border-amber-200 bg-amber-50 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-amber-700/70">Загрузка идёт сейчас · №{reports.current.id}</div>
-            <Pill tone="amber">{STATUS_LABEL[reports.current.status] ?? reports.current.status}</Pill>
-          </div>
-          <div className="mt-2 text-sm text-amber-900/70">Началась {formatDateTime(reports.current.startedAt)}. Данные могут ещё меняться.</div>
-        </div>
-      )}
-
-      {reports?.last && (
-        <div className="al-pop rounded-3xl bg-black p-5 text-white">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/45">Последняя завершённая загрузка №{reports.last.id}</div>
-            <Pill tone={reportTone(reports.last.status)}>{STATUS_LABEL[reports.last.status] ?? reports.last.status}</Pill>
-          </div>
-          <div className="mt-2 text-sm text-white/60">{formatDateTime(reports.last.startedAt)}{reports.last.source ? ` · источник: ${reports.last.source}` : ""}</div>
-          {reports.last.counts.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {reports.last.counts.map((item) => (
-                <span key={item.label} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-bold">
-                  {item.label}: <b className="text-[#78f8a6]">{item.value}</b>
-                </span>
-              ))}
-            </div>
-          )}
-          {reports.last.events.length > 0 && (
-            <div className="mt-3 space-y-1.5">
-              {reports.last.events.map((event, index) => (
-                <div key={index} className="text-xs leading-5 text-amber-300/90">⚠ {event.description}</div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-3.5 text-sm font-bold leading-6 text-red-600">{error}</div>}
+      {!reports && !error && <div className="al-skeleton h-24 rounded-2xl" />}
+      {reports && reports.uploads.length === 0 && <div className="rounded-2xl bg-black/[0.03] p-4 text-center text-sm font-semibold text-black/45">Выгрузок пока нет.</div>}
 
       {reports && reports.uploads.length > 0 && (
-        <div className="mt-4 divide-y divide-black/[0.06] overflow-hidden rounded-2xl border border-black/[0.08]">
+        <div className="max-h-[420px] divide-y divide-black/[0.06] overflow-y-auto rounded-2xl border border-black/[0.08]">
           {reports.uploads.map((report) => (
-            <div key={report.id} className="flex flex-wrap items-center justify-between gap-2 bg-white px-4 py-3">
-              <div className="text-sm font-extrabold text-black">№{report.id}</div>
-              <div className="text-xs font-semibold text-black/45">{formatDateTime(report.startedAt)}</div>
-              <Pill tone={reportTone(report.status)}>{STATUS_LABEL[report.status] ?? report.status}</Pill>
+            <div key={report.id} className="min-w-0 bg-white px-3.5 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <span className="text-sm font-extrabold text-black">№{report.id}</span>
+                <Pill tone={reportTone(report.status)}>{STATUS_LABEL[report.status] ?? report.status}</Pill>
+              </div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs font-semibold text-black/45">
+                <span>{formatDateTime(report.startedAt)}</span>
+                <span className="min-w-0 truncate">· {sourceLabel(report.source)}</span>
+              </div>
             </div>
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }

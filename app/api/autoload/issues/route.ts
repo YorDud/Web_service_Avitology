@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { avito, AvitoApiError } from "@/lib/autoload/avito";
-import { normalizeUpload, requireAccount, requireAutoloadUser, routeError } from "@/lib/autoload/server";
+import { pickUpload, requireAccount, requireAutoloadUser, routeError } from "@/lib/autoload/server";
 import type { IssueAd, IssueGroup, IssuesResponse } from "@/lib/autoload/types";
 
 export const runtime = "nodejs";
@@ -25,14 +25,19 @@ export async function GET() {
   if (!account) return response;
 
   try {
-    const current = await avito.currentUpload(account);
-    const upload = current ?? (await avito.lastSuccessfulUpload(account));
-    if (!upload) {
-      const empty: IssuesResponse = { upload: null, partial: false, groups: [], adsWithIssues: 0, totalAds: 0 };
+    const pick = await pickUpload(account);
+    if (!pick) {
+      const empty: IssuesResponse = { upload: null, partial: false, stale: false, latestId: null, groups: [], adsWithIssues: 0, totalAds: 0 };
       return NextResponse.json(empty);
     }
-    const summary = normalizeUpload(upload);
-    const useCurrent = Boolean(current);
+    // Самая свежая загрузка завершилась без ошибок, а Авито ещё отдаёт данные предыдущей —
+    // замечаний в свежей нет, старые показывать не нужно.
+    if (pick.stale && pick.latest && pick.latest.status === "success") {
+      const clean: IssuesResponse = { upload: pick.latest, partial: false, stale: false, latestId: pick.latest.id, groups: [], adsWithIssues: 0, totalAds: 0 };
+      return NextResponse.json(clean);
+    }
+    const summary = pick.upload;
+    const useCurrent = pick.which === "current";
 
     type RawItem = { ad_id?: unknown; avito_id?: unknown; avito_status?: unknown; url?: unknown; messages?: unknown };
     const problemItems: { adKey: string; avitoId: string | null; url: string | null; messages: { type: string; code: number; title: string; description: string }[] }[] = [];
@@ -114,6 +119,8 @@ export async function GET() {
     const result: IssuesResponse = {
       upload: summary,
       partial: summary.status === "processing",
+      stale: pick.stale,
+      latestId: pick.latest?.id ?? null,
       groups: [...groups.values()].sort((a, b) => SEVERITY[a.type] - SEVERITY[b.type] || b.count - a.count),
       adsWithIssues: problemItems.length,
       totalAds,

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { avito, AvitoApiError } from "@/lib/autoload/avito";
 import {
   fail,
-  normalizeUpload,
+  pickUpload,
   parseFeedId,
   requireAccount,
   requireAutoloadUser,
@@ -42,21 +42,11 @@ export async function POST(_request: Request, context: Context) {
     const feed = await prisma.autoloadFeed.findFirst({ where: { id: feedId, userId: auth.user.id } });
     if (!feed) return fail("Таблица не найдена.", 404);
 
-    // Берём самую свежую загрузку (в т.ч. завершившуюся с замечаниями): «last_successful» у Авито
-    // может указывать на более старую загрузку без ошибок, и тогда статусы были бы устаревшими.
-    let uploadId = "";
-    let partial = false;
-    let useCurrent = false;
-    const current = await avito.currentUpload(account);
-    if (current) {
-      const summary = normalizeUpload(current);
-      uploadId = summary.id;
-      partial = summary.status === "processing";
-      useCurrent = true;
-    } else {
-      const last = await avito.lastSuccessfulUpload(account);
-      if (last) uploadId = normalizeUpload(last).id;
-    }
+    // Самая свежая загрузка по истории (last_successful у Авито может отставать).
+    const pick = await pickUpload(account);
+    const uploadId = pick?.upload.id ?? "";
+    const partial = pick?.upload.status === "processing";
+    const useCurrent = pick?.which === "current";
 
     if (!uploadId) {
       return fail("У Авито пока нет ни одной загрузки по вашим файлам. Запустите выгрузку и подождите её окончания.");
@@ -124,6 +114,8 @@ export async function POST(_request: Request, context: Context) {
     const result: SyncResult = {
       uploadId,
       partial,
+      stale: pick?.stale ?? false,
+      latestId: pick?.latest?.id ?? null,
       matched: found.size,
       notFound: ads.length - found.size,
       errors: entries.filter(([, info]) => info.messages.some((m) => m.type === "error")).length,

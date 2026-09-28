@@ -460,6 +460,59 @@ export function SearchableSelect({
   );
 }
 
+/**
+ * Сворачиваемый блок: в заголовке — название и одна строка-сводка, всё остальное скрыто.
+ * Содержимое остаётся смонтированным (не теряются несохранённые правки в формах), но недоступно
+ * для табуляции, пока блок закрыт.
+ */
+export function Accordion({
+  title,
+  summary,
+  badge,
+  icon,
+  open,
+  onToggle,
+  children,
+  id,
+}: {
+  title: string;
+  summary?: ReactNode;
+  badge?: ReactNode;
+  icon?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+  id?: string;
+}) {
+  return (
+    <section id={id} className="min-w-0 scroll-mt-4 overflow-hidden rounded-3xl border border-black/[0.08] bg-white shadow-[0_10px_30px_rgba(16,24,40,0.05)]">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-black/[0.02] sm:px-5"
+      >
+        {icon && (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black text-[#78f8a6]">
+            <Icon name={icon} />
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-extrabold text-black sm:text-[15px]">{title}</span>
+          {summary && <span className="mt-0.5 block truncate text-xs font-semibold text-black/50">{summary}</span>}
+        </span>
+        {badge && <span className="shrink-0">{badge}</span>}
+        <Icon name="chevron" className={`h-4 w-4 shrink-0 text-black/40 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+      </button>
+      <div className={`grid transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+        <div className="min-h-0 overflow-hidden" {...({ inert: !open } as object)}>
+          <div className="min-w-0 border-t border-black/[0.06] p-4 sm:p-5">{children}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function SectionTitle({ badge, title, right }: { badge: string; title: string; right?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
