@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { avito } from "@/lib/autoload/avito";
+import { avito, AvitoApiError } from "@/lib/autoload/avito";
 import {
   isStaleProcessing,
   normalizeUpload,
@@ -8,15 +8,27 @@ import {
   routeError,
   sortUploadsNewestFirst,
 } from "@/lib/autoload/server";
+import type { ReportSummary } from "@/lib/autoload/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type CachedReports = { last: ReportSummary | null; current: ReportSummary | null; uploads: ReportSummary[] };
+
 /**
- * История загрузок (/autoload/v4/uploads) — главный источник: «самая свежая в начале».
- * «Последняя завершённая» и «идёт сейчас» вычисляем из неё, а не берём из /last_successful:
- * тот метод у Авито может отставать и показывать более старую загрузку, чем есть на самом деле.
- * Если история недоступна — запасной вариант через /last_successful и /current.
+ * Короткий кэш в памяти сервера: сколько бы вкладок или таймеров ни опрашивали этот
+ * роут одновременно, сам Авито дёргается не чаще раза в CACHE_TTL_MS — это и есть
+ * главная защита от «слишком много запросов к API Авито».
+ */
+const CACHE_TTL_MS = 15_000;
+const cache = new Map<number, { at: number; data: CachedReports }>();
+
+/**
+ * История загрузок (/autoload/v4/uploads) — единственный запрос к Авито в обычном
+ * случае: она уже содержит и «текущую», и «последнюю завершённую» загрузку. Отдельные
+ * методы /last_successful и /current дёргаем, только если сама история пуста или
+ * недоступна — так расход лимита на этот раздел меньше в 3 раза по сравнению с тем,
+ * чтобы спрашивать все три метода каждый раз.
  */
 export async function GET() {
   const auth = await requireAutoloadUser();
@@ -25,17 +37,14 @@ export async function GET() {
   const { account, response } = await requireAccount(auth.user.id);
   if (!account) return response;
 
+  const cached = cache.get(account.id);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    return NextResponse.json(cached.data);
+  }
+
   try {
-    const [historyR, lastR, currentR] = await Promise.allSettled([
-      avito.uploads(account, { perPage: 15, page: 1 }),
-      avito.lastSuccessfulUpload(account),
-      avito.currentUpload(account),
-    ]);
-
-    if (historyR.status === "rejected" && lastR.status === "rejected") throw historyR.reason;
-
-    const rawHistory =
-      historyR.status === "fulfilled" && Array.isArray(historyR.value?.uploads) ? sortUploadsNewestFirst(historyR.value.uploads as Record<string, unknown>[]) : [];
+    const historyRaw = await avito.uploads(account, { perPage: 15, page: 1 });
+    const rawHistory = Array.isArray(historyRaw?.uploads) ? sortUploadsNewestFirst(historyRaw.uploads as Record<string, unknown>[]) : [];
     const uploads = rawHistory.map((item) => normalizeUpload(item)).filter((item) => item.id);
 
     // Если Авито надолго завис в «processing» (см. isStaleProcessing) — не показываем
@@ -45,17 +54,26 @@ export async function GET() {
     let last = uploads.find((item) => item.status !== "processing") ?? null;
 
     if (uploads.length === 0) {
-      // история пуста или недоступна — запасной путь
+      // история пуста или недоступна — запасной путь двумя отдельными запросами
+      const [lastR, currentR] = await Promise.allSettled([avito.lastSuccessfulUpload(account), avito.currentUpload(account)]);
       if (lastR.status === "fulfilled" && lastR.value) last = normalizeUpload(lastR.value);
       if (currentR.status === "fulfilled" && currentR.value) {
         const candidate = normalizeUpload(currentR.value);
-        if (candidate.status === "processing") current = candidate;
+        if (candidate.status === "processing" && !isStaleProcessing(currentR.value)) current = candidate;
         else if (!last || Number(candidate.id) > Number(last.id)) last = candidate;
       }
     }
 
-    return NextResponse.json({ last, current, uploads });
+    const data: CachedReports = { last, current, uploads };
+    cache.set(account.id, { at: Date.now(), data });
+    return NextResponse.json(data);
   } catch (error) {
+    // При 429 отдаём то, что уже знаем (пусть и устаревшее), а не пустой экран с ошибкой —
+    // это то самое сообщение, из-за которого разработчик обращался: теперь оно не мешает
+    // видеть последний известный статус, если он есть.
+    if (error instanceof AvitoApiError && error.status === 429 && cached) {
+      return NextResponse.json(cached.data);
+    }
     return routeError(error);
   }
 }

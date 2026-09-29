@@ -218,19 +218,43 @@ export default function AutoloadService() {
     }
   }, [profile]);
 
-  // Пока Авито ещё «Идёт загрузка», сами проверяем статус каждые 20 секунд —
-  // чтобы баннер пропал сам, как только Авито обновит статус, без нажатия «Обновить».
+  // Пока Авито ещё «Идёт загрузка», сами проверяем статус — чтобы баннер пропал сам,
+  // без нажатия «Обновить». Раз в 45 секунд как минимум; при ошибке (например, «слишком
+  // много запросов») пауза удваивается (до 8 минут) вместо того, чтобы долбить Авито
+  // с той же частотой. Пока вкладка свёрнута, вообще не спрашиваем — тоже экономит лимит.
   useEffect(() => {
     if (!connected || !reports?.current) return;
     let alive = true;
-    const timer = window.setInterval(() => {
-      api<ReportsState>("/api/autoload/reports")
-        .then((data) => alive && setReports(data))
-        .catch(() => null);
-    }, 20_000);
+    let timer: number | undefined;
+    let delay = 45_000;
+    const MAX_DELAY = 8 * 60_000;
+
+    const schedule = () => {
+      if (!alive) return;
+      timer = window.setTimeout(tick, delay);
+    };
+
+    const tick = async () => {
+      if (!alive) return;
+      if (document.visibilityState === "hidden") {
+        schedule();
+        return;
+      }
+      try {
+        const data = await api<ReportsState>("/api/autoload/reports");
+        if (!alive) return;
+        setReports(data);
+        delay = 45_000; // получилось — возвращаем обычный темп
+      } catch {
+        delay = Math.min(delay * 2, MAX_DELAY); // не получилось — реже спрашиваем, а не чаще
+      }
+      schedule();
+    };
+
+    schedule();
     return () => {
       alive = false;
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [connected, reports?.current?.id]);
 

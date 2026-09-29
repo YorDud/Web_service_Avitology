@@ -154,6 +154,18 @@ sudo systemctl restart cron
 sudo systemctl status cron
 
 
+
+
+
+
+git status
+git add .
+git commit -m "V8"
+git push origin main
+
+
+
+
 cd /opt/avitology
 git pull --ff-only origin main
 npm run build
