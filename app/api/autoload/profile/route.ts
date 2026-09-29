@@ -24,7 +24,8 @@ export async function GET() {
   if (!account) return response;
 
   try {
-    return NextResponse.json({ profile: mapProfile(await avito.getProfile(account)) });
+    const raw = await avito.getProfile(account);
+    return NextResponse.json({ profile: mapProfile(raw), raw });
   } catch (error) {
     return routeError(error);
   }

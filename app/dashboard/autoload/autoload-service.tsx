@@ -134,6 +134,7 @@ export default function AutoloadService() {
   const [feeds, setFeeds] = useState<FeedSummary[] | null>(null);
   const [profile, setProfile] = useState<ProfileDto | null>(null);
   const [profileError, setProfileError] = useState("");
+  const [profileRaw, setProfileRaw] = useState<unknown>(null);
   const [reports, setReports] = useState<ReportsState | null>(null);
   const [reportsError, setReportsError] = useState("");
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -186,8 +187,12 @@ export default function AutoloadService() {
     if (!connected) return;
     let alive = true;
 
-    api<{ profile: ProfileDto }>("/api/autoload/profile")
-      .then((data) => alive && setProfile(data.profile))
+    api<{ profile: ProfileDto; raw?: unknown }>("/api/autoload/profile")
+      .then((data) => {
+        if (!alive) return;
+        setProfile(data.profile);
+        setProfileRaw(data.raw ?? null);
+      })
       .catch((error) => alive && setProfileError(errorText(error)));
 
     api<ReportsState>("/api/autoload/reports")
@@ -586,6 +591,21 @@ export default function AutoloadService() {
                 }}
                 toast={toast.push}
               />
+
+              <details className="group rounded-2xl border border-black/[0.08] bg-white">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-3 text-xs font-extrabold text-black/50 [&::-webkit-details-marker]:hidden">
+                  <span>Техническое: как это видит Авито (сырой ответ API)</span>
+                  <Icon name="chevron" className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="border-t border-black/[0.06] p-3">
+                  <p className="mb-2 text-xs leading-5 text-black/45">
+                    Ответ GET /autoload/v2/profile от Авито без обработки — пригодится, если что-то не сходится с тем, что показано выше.
+                  </p>
+                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-black p-3 text-[11px] leading-5 text-[#78f8a6]">
+                    {profileRaw ? JSON.stringify(profileRaw, null, 2) : "нет данных (профиль ещё не создан)"}
+                  </pre>
+                </div>
+              </details>
             </Accordion>
           )}
 
