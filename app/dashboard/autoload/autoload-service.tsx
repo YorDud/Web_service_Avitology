@@ -1010,19 +1010,26 @@ function ScheduleDiagnostics({
   uploads: ReportSummary[];
   lastScheduled: ReportSummary | null;
 }) {
-  const problems: string[] = [];
+  const problems: { text: string; action?: { href: string; label: string } }[] = [];
   if (!profile.exists) {
-    problems.push("Профиль автозагрузки ещё не создан — укажите почту и расписание ниже и нажмите «Создать профиль».");
+    problems.push({ text: "Профиль автозагрузки ещё не создан — укажите почту и расписание ниже и нажмите «Создать профиль»." });
   } else {
+    if (profile.uploadMode && profile.uploadMode !== "auto") {
+      problems.push({
+        text:
+          "У Авито включён режим «вручную» — это их отдельная внутренняя настройка, не связанная с переключателем и расписанием ниже. Пока он стоит на «вручную», Авито не заходит на файл сам, даже если здесь всё включено и расписание задано. Откройте настройки Авито и один раз включите там автозагрузку по расписанию (по ссылке) — дальше расписание из HelpSell будет применяться само.",
+        action: { href: "https://www.avito.ru/autoload/settings", label: "Открыть настройки Авито" },
+      });
+    }
     if (!profile.autoloadEnabled) {
-      problems.push("Автозагрузка по расписанию выключена в профиле Авито. Включите переключатель ниже и нажмите «Сохранить профиль» — иначе Авито сам файл не заберёт, работает только «Запустить сейчас».");
+      problems.push({ text: "Автозагрузка по расписанию выключена в профиле Авито. Включите переключатель ниже и нажмите «Сохранить профиль» — иначе Авито сам файл не заберёт, работает только «Запустить сейчас»." });
     }
     if (profile.feeds.length === 0) {
-      problems.push("В профиле Авито нет ни одного файла. Откройте таблицу → вкладка «Подключение» → «Подключить к автозагрузке Авито».");
+      problems.push({ text: "В профиле Авито нет ни одного файла. Откройте таблицу → вкладка «Подключение» → «Подключить к автозагрузке Авито»." });
     } else if (linkedCount === 0 && !profile.feeds.some((feed) => !feed.ours)) {
-      problems.push("Ни одна таблица HelpSell не подключена к автозагрузке.");
+      problems.push({ text: "Ни одна таблица HelpSell не подключена к автозагрузке." });
     }
-    if (profile.schedule.length === 0) problems.push("Не задано ни одного окна расписания.");
+    if (profile.schedule.length === 0) problems.push({ text: "Не задано ни одного окна расписания." });
   }
 
   const slots = profile.exists && profile.autoloadEnabled ? nextSlots(profile.schedule, 3) : [];
@@ -1034,14 +1041,31 @@ function ScheduleDiagnostics({
       {problems.length > 0 ? (
         <ul className="mt-2.5 space-y-2">
           {problems.map((problem) => (
-            <li key={problem} className="flex gap-2.5 rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-semibold leading-5 text-amber-900">
+            <li key={problem.text} className="flex gap-2.5 rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-semibold leading-5 text-amber-900">
               <Icon name="warning" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0">{problem}</span>
+              <span className="min-w-0">
+                {problem.text}
+                {problem.action && (
+                  <a
+                    href={problem.action.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-1.5 inline-flex items-center gap-1 whitespace-nowrap font-extrabold text-amber-900 underline underline-offset-2 hover:text-black"
+                  >
+                    {problem.action.label} <Icon name="link" className="h-3 w-3" />
+                  </a>
+                )}
+              </span>
             </li>
           ))}
         </ul>
       ) : (
         <div className="mt-2.5 space-y-2.5">
+          {profile.uploadMode === "auto" && (
+            <div className="flex items-center gap-2 text-xs font-bold text-[#027a30]">
+              <Icon name="check" className="h-3.5 w-3.5 shrink-0" /> Режим у Авито: автоматически по расписанию.
+            </div>
+          )}
           <div>
             <div className="text-xs font-bold text-black/50">Ближайшие запуски (время московское)</div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">

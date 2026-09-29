@@ -268,10 +268,17 @@ function normalizeHeaderText(raw: string): string {
     .trim();
 }
 
+const TAGGED_HEADER = /\(([A-Za-z_][A-Za-z0-9_.\/-]*)\)\s*$/;
+
 /** Превращает заголовок столбца в XML-тег или возвращает null, если столбец не распознан. */
 export function resolveTag(header: string): string | null {
   const raw = header.trim().replace(/^\uFEFF/, "");
   if (!raw) return null;
+
+  // «Модель (Model)» — из наших образцов для конкретной категории: тег в скобках надёжнее
+  // и работает для полей, которых нет в общем справочнике.
+  const tagged = TAGGED_HEADER.exec(raw)?.[1];
+  if (tagged && isValidTagPath(tagged)) return tagged;
 
   const exact = ALIAS_LOOKUP[raw.toLowerCase()];
   if (exact) return exact;
@@ -311,7 +318,7 @@ export const TEMPLATE_TAGS = [
   "Condition",
 ];
 
-const TEMPLATE_EXAMPLES: Record<string, string> = {
+export const TEMPLATE_EXAMPLES: Record<string, string> = {
   Id: "sku-1001",
   Category: "Товары для детей и игрушки",
   Title: "Коляска-трансформер",
@@ -332,6 +339,16 @@ export function buildTemplateRows(tags: string[] = TEMPLATE_TAGS): { headers: st
     headers: tags.map((tag) => tagLabel(tag)),
     example: tags.map((tag) => TEMPLATE_EXAMPLES[tag] ?? ""),
   };
+}
+
+/**
+ * Заголовок «Название (Tag)» — с явным именем тега в скобках. Такой заголовок resolveTag()
+ * распознаёт напрямую, без сопоставления по словам — это нужно для образцов конкретной
+ * категории, где часть столбцов (например «Модель», «Цвет») не входит в общий справочник
+ * и на кириллице не прошла бы обычное распознавание.
+ */
+export function taggedHeader(tag: string, label: string): string {
+  return `${label} (${tag})`;
 }
 
 /* ---------- Нормализация цены ----------

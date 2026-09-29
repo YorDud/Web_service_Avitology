@@ -64,6 +64,12 @@ export type ProfileDto = {
   reportEmail: string;
   schedule: ScheduleRule[];
   feeds: { name: string; url: string; ours: boolean }[];
+  /**
+   * Недокументированный флаг самого Авито (не описан ни в одной версии их API).
+   * "manual" — Авито не заходит на файл сам, даже при autoload_enabled=true и заданном
+   * расписании; переключается только на их стороне, в веб-кабинете autoload/settings.
+   */
+  uploadMode: string | null;
 };
 
 export type ReportSummary = {

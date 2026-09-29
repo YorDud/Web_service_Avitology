@@ -174,7 +174,7 @@ export function serializeFeed(feed: FeedWithCount, base: string): FeedSummary {
 
 export function mapProfile(raw: Json | null): ProfileDto {
   if (!raw) {
-    return { exists: false, autoloadEnabled: false, reportEmail: "", schedule: [], feeds: [] };
+    return { exists: false, autoloadEnabled: false, reportEmail: "", schedule: [], feeds: [], uploadMode: null };
   }
 
   // С 23.12.2024 Авито отдаёт feeds_data вместо одиночного upload_url.
@@ -203,6 +203,7 @@ export function mapProfile(raw: Json | null): ProfileDto {
         ours: url.includes(FEED_PATH_MARK),
       };
     }),
+    uploadMode: typeof raw.uploadMode === "string" ? raw.uploadMode : null,
   };
 }
 

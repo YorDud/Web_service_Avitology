@@ -11,11 +11,12 @@ import {
   buildTemplateRows,
   isValidTagPath,
   tagLabel,
+  taggedHeader,
   type AdData,
   type FieldOption,
   type KnownField,
 } from "@/lib/autoload/fields";
-import { USER_TAGS, resolveCategoryFields } from "@/lib/autoload/category";
+import { USER_TAGS, buildCategoryTemplateColumns, resolveCategoryFields } from "@/lib/autoload/category";
 import { buildImport, buildTemplateCsv, parseDelimited, toCsv, type ImportResult } from "@/lib/autoload/import";
 import { MESSAGE_KIND, fixHint, kindOf } from "@/lib/autoload/hints";
 import { buildFeedXml, splitImages, validateAds, type AdIssue } from "@/lib/autoload/xml";
@@ -145,6 +146,7 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
   const [bulkOpen, setBulkOpen] = useState(false);
   const [categoryTarget, setCategoryTarget] = useState<CategoryTarget | null>(null);
   const [categoryBusy, setCategoryBusy] = useState(false);
+  const [templateCategoryOpen, setTemplateCategoryOpen] = useState(false);
   const [issueFilter, setIssueFilter] = useState<"error" | "warning">("error");
   const [issueLimit, setIssueLimit] = useState(50);
 
@@ -1247,7 +1249,22 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
       )}
 
       {importOpen && (
-        <ImportModal currentCount={ads.length} onApply={applyImport} onClose={() => setImportOpen(false)} toast={toast} />
+        <ImportModal
+          currentCount={ads.length}
+          onApply={applyImport}
+          onClose={() => setImportOpen(false)}
+          onOpenCategoryTemplate={() => setTemplateCategoryOpen(true)}
+          toast={toast}
+        />
+      )}
+
+      {templateCategoryOpen && (
+        <CategoryModal
+          mode="template"
+          onClose={() => setTemplateCategoryOpen(false)}
+          onAddColumn={() => {}}
+          onDownloadTemplate={(node, fields, format) => void downloadCategoryTemplateFile(node, fields, format, toast)}
+        />
       )}
 
       {bulkOpen && (
@@ -1799,17 +1816,60 @@ function RowEditor({
 }
 
 /* ---------- Импорт ---------- */
+/** CSV или XLSX из заголовков и одной строки-примера — общая функция для обоих видов образца. */
+async function downloadTemplateRows(
+  headers: string[],
+  example: string[],
+  format: "csv" | "xlsx",
+  fileBase: string,
+  toast: (text: string, kind?: "ok" | "error") => void,
+) {
+  if (format === "csv") {
+    downloadFile(buildTemplateCsv(headers, example), `${fileBase}.csv`, "text/csv;charset=utf-8");
+    return;
+  }
+  try {
+    const XLSX = await import("xlsx");
+    const sheet = XLSX.utils.aoa_to_sheet([headers, example]);
+    (sheet as { ["!cols"]?: { wch: number }[] })["!cols"] = headers.map(() => ({ wch: 24 }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Объявления");
+    const data = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    downloadBinary(data, `${fileBase}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  } catch {
+    toast("Не удалось собрать Excel-файл. Скачайте образец в формате CSV — он открывается и в Excel.", "error");
+  }
+}
+
+/** Образец для конкретной категории: заголовки «Подпись (Tag)» + строка с реальными допустимыми значениями. */
+async function downloadCategoryTemplateFile(
+  node: CatalogNode,
+  fields: CatalogField[],
+  format: "csv" | "xlsx",
+  toast: (text: string, kind?: "ok" | "error") => void,
+) {
+  const columns = buildCategoryTemplateColumns(node, fields);
+  const headers = columns.map((column) => taggedHeader(column.tag, column.label));
+  const example = columns.map((column) => column.example);
+  const safeName = node.name.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 40) || "kategoriya";
+  await downloadTemplateRows(headers, example, format, `helpsell-avito-shablon-${safeName}`, toast);
+  const requiredCount = fields.filter((field) => field.required && columns.some((column) => column.tag === field.tag)).length;
+  toast(`Образец для категории «${node.name}» скачан: ${headers.length} столбцов, обязательных — ${requiredCount}.`);
+}
+
 type ImportTab = "paste" | "file" | "url";
 
 function ImportModal({
   currentCount,
   onApply,
   onClose,
+  onOpenCategoryTemplate,
   toast,
 }: {
   currentCount: number;
   onApply: (result: ImportResult, mode: ImportMode) => void;
   onClose: () => void;
+  onOpenCategoryTemplate: () => void;
   toast: (text: string, kind?: "ok" | "error") => void;
 }) {
   const [tab, setTab] = useState<ImportTab>("paste");
@@ -1835,25 +1895,7 @@ function ImportModal({
   async function downloadTemplate(format: "csv" | "xlsx") {
     (document.getElementById("al-template-menu") as HTMLDetailsElement | null)?.removeAttribute("open");
     const { headers, example } = buildTemplateRows();
-    if (format === "csv") {
-      downloadFile(buildTemplateCsv(headers, example), "helpsell-avito-shablon.csv", "text/csv;charset=utf-8");
-      return;
-    }
-    try {
-      const XLSX = await import("xlsx");
-      const sheet = XLSX.utils.aoa_to_sheet([headers, example]);
-      (sheet as { ["!cols"]?: { wch: number }[] })["!cols"] = headers.map(() => ({ wch: 24 }));
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, "Объявления");
-      const data = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
-      downloadBinary(
-        data,
-        "helpsell-avito-shablon.xlsx",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      );
-    } catch {
-      toast("Не удалось собрать Excel-файл. Скачайте образец в формате CSV — он открывается и в Excel.", "error");
-    }
+    await downloadTemplateRows(headers, example, format, "helpsell-avito-shablon", toast);
   }
 
   async function handleExcelFile(file: File) {
@@ -1961,6 +2003,16 @@ function ImportModal({
                 className="flex w-full items-center gap-2.5 border-t border-black/[0.06] px-4 py-3 text-left text-sm font-bold text-black/75 transition hover:bg-black/[0.04]"
               >
                 <Icon name="file" className="h-4 w-4 shrink-0" /> CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  (document.getElementById("al-template-menu") as HTMLDetailsElement | null)?.removeAttribute("open");
+                  onOpenCategoryTemplate();
+                }}
+                className="flex w-full items-center gap-2.5 border-t border-black/[0.06] px-4 py-3 text-left text-sm font-bold text-black/75 transition hover:bg-black/[0.04]"
+              >
+                <Icon name="search" className="h-4 w-4 shrink-0" /> Для категории…
               </button>
             </div>
           </details>
@@ -2387,12 +2439,16 @@ function FieldSection({
 }
 
 function CategoryModal({
+  mode = "pick",
   onPick,
+  onDownloadTemplate,
   onAddColumn,
   onClose,
 }: {
-  onPick: (node: CatalogNode) => void;
-  onAddColumn: (tag: string, values?: string[]) => void;
+  mode?: "pick" | "template";
+  onPick?: (node: CatalogNode) => void;
+  onDownloadTemplate?: (node: CatalogNode, fields: CatalogField[], format: "csv" | "xlsx") => void;
+  onAddColumn?: (tag: string, values?: string[]) => void;
   onClose: () => void;
 }) {
   const { nodes, loading, error, ensureLoaded } = useCatalogNodes();
@@ -2447,17 +2503,42 @@ function CategoryModal({
   return (
     <Modal
       wide
-      title="Каталог категорий Авито"
-      subtitle="Выберите самый вложенный раздел (например, «Наушники»): точную категорию Авито и обязательные значения (вид товара и т.п.) мы подставим сами."
+      title={mode === "template" ? "Образец для категории" : "Каталог категорий Авито"}
+      subtitle={
+        mode === "template"
+          ? "Выберите самый вложенный раздел — в файл добавим все обязательные для него столбцы с примерами допустимых значений."
+          : "Выберите самый вложенный раздел (например, «Наушники»): точную категорию Авито и обязательные значения (вид товара и т.п.) мы подставим сами."
+      }
       onClose={onClose}
       footer={
         <>
           <button type="button" onClick={onClose} className={ghostButton}>
             Отмена
           </button>
-          <button type="button" disabled={!current} onClick={() => current && onPick(current)} className="btn-primary !px-6 !py-3 text-sm disabled:opacity-50">
-            Выбрать «{current?.name ?? "…"}»
-          </button>
+          {mode === "template" ? (
+            <>
+              <button
+                type="button"
+                disabled={!current || fieldsLoading}
+                onClick={() => current && onDownloadTemplate?.(current, fields ?? [], "csv")}
+                className={`${ghostButton} disabled:opacity-50`}
+              >
+                <Icon name="download" /> CSV
+              </button>
+              <button
+                type="button"
+                disabled={!current || fieldsLoading}
+                onClick={() => current && onDownloadTemplate?.(current, fields ?? [], "xlsx")}
+                className="btn-primary !px-6 !py-3 text-sm disabled:opacity-50"
+              >
+                <Icon name="download" /> Excel
+              </button>
+            </>
+          ) : (
+            <button type="button" disabled={!current} onClick={() => current && onPick?.(current)} className="btn-primary !px-6 !py-3 text-sm disabled:opacity-50">
+              Выбрать «{current?.name ?? "…"}»
+            </button>
+          )}
         </>
       }
     >
@@ -2527,7 +2608,7 @@ function CategoryModal({
                   title="Поля именно этой категории"
                   note="Обязательные добавим столбцами таблицы сами — заполните их у каждого объявления."
                   fields={sections.own}
-                  onAddColumn={onAddColumn}
+                  onAddColumn={mode === "template" ? undefined : onAddColumn}
                 />
               )}
               {sections.standard.length > 0 && (
@@ -2543,7 +2624,7 @@ function CategoryModal({
                   title="Необязательные поля"
                   note="Можно добавить столбцом «+», если нужно."
                   fields={sections.optional}
-                  onAddColumn={onAddColumn}
+                  onAddColumn={mode === "template" ? undefined : onAddColumn}
                   collapsed
                 />
               )}

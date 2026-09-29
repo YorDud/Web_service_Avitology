@@ -1,4 +1,4 @@
-import { FIELD_BY_TAG, tagLabel } from "./fields";
+import { FIELD_BY_TAG, TEMPLATE_EXAMPLES, TEMPLATE_TAGS, tagLabel } from "./fields";
 import type { CatalogField } from "./types";
 
 /* =========================================================================
@@ -97,4 +97,38 @@ export function resolveCategoryFields(
   }
 
   return { values, options, requiredColumns, summary, warnings };
+}
+
+/** Столбец образца таблицы: тег, подпись и пример значения. */
+export type TemplateColumn = { tag: string; label: string; example: string };
+
+/**
+ * Образец для конкретной категории: стандартные столбцы (как в общем образце) плюс
+ * недостающие обязательные поля этой категории, с реальными допустимыми значениями
+ * Авито там, где они есть.
+ */
+export function buildCategoryTemplateColumns(
+  node: { name: string; path?: string; slug: string | null; group?: string | null },
+  fields: CatalogField[],
+): TemplateColumn[] {
+  const resolution = resolveCategoryFields(node, fields);
+  const byTag = new Map(fields.map((field) => [field.tag, field]));
+  const columns = new Map<string, TemplateColumn>();
+
+  for (const tag of TEMPLATE_TAGS) {
+    columns.set(tag, { tag, label: tagLabel(tag), example: TEMPLATE_EXAMPLES[tag] ?? "" });
+  }
+  for (const [tag, value] of Object.entries(resolution.values)) {
+    columns.set(tag, { tag, label: byTag.get(tag)?.label || tagLabel(tag), example: value });
+  }
+  for (const tag of resolution.requiredColumns) {
+    if (columns.has(tag)) continue;
+    columns.set(tag, { tag, label: byTag.get(tag)?.label || tagLabel(tag), example: resolution.options[tag]?.[0] ?? "" });
+  }
+  for (const [tag, values] of Object.entries(resolution.options)) {
+    const existing = columns.get(tag);
+    if (existing && !existing.example) existing.example = values[0] ?? "";
+  }
+
+  return [...columns.values()];
 }

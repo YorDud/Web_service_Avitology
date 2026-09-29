@@ -919,73 +919,6 @@ export default function DashboardClientPage({
   const [isTrialActivating, setIsTrialActivating] = useState(false);
   const [trialOfferError, setTrialOfferError] = useState<string | null>(null);
 
-  // Промокод (бонус-код)
-  const [isPromoOpen, setIsPromoOpen] = useState(false);
-  const [promoCode, setPromoCode] = useState("");
-  const [promoLoading, setPromoLoading] = useState(false);
-  const [promoError, setPromoError] = useState<string | null>(null);
-  const [promoSuccess, setPromoSuccess] = useState<string | null>(null);
-
-  function openPromoModal() {
-    setPromoError(null);
-    setPromoSuccess(null);
-    setPromoCode("");
-    setIsPromoOpen(true);
-  }
-
-  function closePromoModal() {
-    if (promoLoading || promoSuccess) return;
-    setIsPromoOpen(false);
-    setPromoCode("");
-    setPromoError(null);
-  }
-
-  async function activatePromoCode() {
-    if (promoLoading || promoSuccess) return;
-
-    if (!promoCode.trim()) {
-      setPromoError("Введите промокод");
-      return;
-    }
-
-    try {
-      setPromoLoading(true);
-      setPromoError(null);
-
-      const response = await fetch("/api/subscription/redeem-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: promoCode }),
-      });
-
-      const payload = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(payload?.error || "Не удалось активировать промокод.");
-      }
-
-      const tierName = payload?.tier === "pro" ? "Pro" : "Basic";
-      const days = Number(payload?.durationDays) || 0;
-
-      setPromoSuccess(
-        `Промокод активирован: тариф ${tierName}${days ? ` на ${days} дн.` : ""}.`,
-      );
-
-      // Перезагружаем страницу, чтобы подтянуть новый тариф и дату окончания.
-      window.setTimeout(() => {
-        window.location.href = "/dashboard";
-      }, 1600);
-    } catch (error) {
-      setPromoError(
-        error instanceof Error
-          ? error.message
-          : "Не удалось активировать промокод.",
-      );
-    } finally {
-      setPromoLoading(false);
-    }
-  }
-
   async function activateTrialFromDashboard() {
     try {
       setIsTrialActivating(true);
@@ -1198,53 +1131,51 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
         : "Доступно с подпиской Basic",
       available: hasAccess,
     },
+    {
+      id: "bid-manager",
+      index: "04",
+      title: "Бид-менеджер Авито",
+      description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
+      available: hasBidderAccess,
+      beta: true,
+    },
 
     {
       id: "reviews-calculator",
-      index: "04",
+      index: "05",
       title: "Калькулятор отзывов",
       description: "Расчёт рейтинга профиля Авито",
       available: true,
     },
 
     {
-      id: "image-uniqualizer",
-      index: "05",
-      title: "Уникализатор картинок",
-      description: "Уникальные копии фото для объявлений",
-      available: true,
-    },
-
-
-    {
-      id: "bid-manager",
-      index: "06",
-      title: "Бид-менеджер Авито",
-      description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
-      available: hasBidderAccess,
-      beta: true,
-    },
-    
-    {
-      id: "autoload",
-      index: "07",
-      title: "Автозагрузка объявлений Авито",
-      description: hasBidderAccess
-        ? "Таблицы Excel/Google/Яндекс и выгрузка через API Авито"
-        : "Доступно с подпиской Pro",
-      available: hasBidderAccess,
-      beta: true,
-    },
-
-    {
       id: "popular-queries",
-      index: "08",
+      index: "06",
       title: "Запросы по популярности Авито",
       description: hasAccess
         ? "Подбор популярных запросов"
         : "Доступно с подпиской Basic",
       available: hasAccess,
       inDevelopment: true,
+    },
+
+    {
+      id: "image-uniqualizer",
+      index: "07",
+      title: "Уникализатор картинок",
+      description: "Уникальные копии фото для объявлений",
+      available: true,
+    },
+
+    {
+      id: "autoload",
+      index: "08",
+      title: "Автозагрузка объявлений Авито",
+      description: hasBidderAccess
+        ? "Таблицы, Excel/Google/Яндекс Таблицы и выгрузка через API Авито"
+        : "Доступно с подпиской Pro",
+      available: hasBidderAccess,
+      beta: true,
     },
   ];
 
@@ -2393,7 +2324,7 @@ setExpandedBidderId(savedBidder.id);
           aria-modal="true"
           aria-labelledby="trial-offer-title"
         >
-          <div className="w-full max-w-lg rounded-3xl border border-[#03bd48]/30 bg-white p-6 shadow-2xl shadow-black/30">
+          <div className="w-full max-w-md rounded-3xl border border-[#03bd48]/30 bg-white p-6 shadow-2xl shadow-black/30">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#03bd48]/20 bg-[#03bd48]/10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#028c36]">
               <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
               Пробный доступ
@@ -2429,139 +2360,27 @@ setExpandedBidderId(savedBidder.id);
               </div>
             )}
 
-            <div className="mt-6 flex flex-col gap-3">
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setIsTrialOfferOpen(false)}
+                disabled={isTrialActivating}
+                className="rounded-xl border border-black/10 bg-black/[0.025] px-5 py-3 text-sm font-extrabold text-black/65 transition hover:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Позже
+              </button>
+
               <button
                 type="button"
                 onClick={activateTrialFromDashboard}
                 disabled={isTrialActivating}
-                className="w-full rounded-xl bg-[#03bd48] px-5 py-3.5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(3,189,72,0.28)] transition hover:-translate-y-0.5 hover:bg-[#029d3c] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl bg-[#03bd48] px-5 py-3 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(3,189,72,0.28)] transition hover:-translate-y-0.5 hover:bg-[#029d3c] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isTrialActivating
                   ? "Активация…"
                   : "Активировать Basic на 1 день"}
               </button>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsTrialOfferOpen(false)}
-                  disabled={isTrialActivating}
-                  className="whitespace-nowrap rounded-xl border border-black/10 bg-black/[0.025] px-4 py-3 text-sm font-extrabold text-black/65 transition hover:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Позже
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTrialOfferOpen(false);
-                    openPromoModal();
-                  }}
-                  disabled={isTrialActivating}
-                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-[#03bd48]/30 bg-[#03bd48]/10 px-4 py-3 text-sm font-extrabold text-[#028c36] transition hover:bg-[#03bd48] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    className="h-4 w-4 shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" />
-                    <circle cx="7.5" cy="7.5" r="1.2" />
-                  </svg>
-                  Промокод
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
-      )}
-      {isPromoOpen && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="promo-title"
-          onClick={closePromoModal}
-        >
-          <div
-            className="w-full max-w-md rounded-3xl border border-[#03bd48]/30 bg-white p-6 shadow-2xl shadow-black/30"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#03bd48]/20 bg-[#03bd48]/10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#028c36]">
-                <span className="h-2 w-2 rounded-full bg-[#03bd48]" />
-                Промокод
-              </div>
-
-              <button
-                type="button"
-                onClick={closePromoModal}
-                disabled={promoLoading || !!promoSuccess}
-                aria-label="Закрыть"
-                className="flex h-8 w-8 items-center justify-center rounded-full text-lg font-bold text-black/40 transition hover:bg-black/[0.06] hover:text-black disabled:opacity-40"
-              >
-                ×
-              </button>
-            </div>
-
-            <h2
-              id="promo-title"
-              className="mt-4 text-2xl font-extrabold tracking-tight text-black"
-            >
-              Активировать промокод
-            </h2>
-
-            <p className="mt-3 text-sm leading-6 text-black/60">
-              Введите промокод, чтобы получить бонусный доступ к подписке.
-            </p>
-
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                activatePromoCode();
-              }}
-              className="mt-5 flex flex-col gap-3 sm:flex-row"
-            >
-              <input
-                value={promoCode}
-                onChange={(event) => {
-                  setPromoCode(event.target.value.toUpperCase());
-                  if (promoError) setPromoError(null);
-                }}
-                placeholder="Введите промокод"
-                autoFocus
-                autoComplete="off"
-                spellCheck={false}
-                maxLength={40}
-                disabled={promoLoading || !!promoSuccess}
-                className="min-w-0 flex-1 rounded-xl border border-black/10 bg-black/[0.02] px-4 py-3 font-mono text-sm font-bold uppercase tracking-wider text-black outline-none transition placeholder:font-sans placeholder:font-medium placeholder:normal-case placeholder:tracking-normal placeholder:text-black/35 focus:border-[#03bd48] focus:bg-white disabled:opacity-60"
-              />
-
-              <button
-                type="submit"
-                disabled={promoLoading || !!promoSuccess}
-                className="rounded-xl bg-[#03bd48] px-5 py-3 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(3,189,72,0.28)] transition hover:-translate-y-0.5 hover:bg-[#029d3c] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {promoLoading ? "Проверка…" : "Активировать"}
-              </button>
-            </form>
-
-            {promoError && (
-              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                {promoError}
-              </div>
-            )}
-
-            {promoSuccess && (
-              <div className="mt-4 rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/10 px-4 py-3 text-sm font-bold text-[#027a30]">
-                {promoSuccess}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -2646,9 +2465,11 @@ setExpandedBidderId(savedBidder.id);
                             </span>
                           )}
                         </span>
-                        <span className="mt-1 block text-xs leading-5 text-white/32">
-                          {item.description}
-                        </span>
+                        {isActive && (
+                          <span className="mt-1 block text-xs leading-5 text-white/32">
+                            {item.description}
+                          </span>
+                        )}
                       </span>
                       <span className="text-base">🔒</span>
                     </div>
@@ -2686,13 +2507,11 @@ setExpandedBidderId(savedBidder.id);
                           </span>
                         )}
                       </span>
-                      <span
-                        className={`mt-1 block text-xs leading-5 ${
-                          isActive ? "text-white/78" : "text-white/42"
-                        }`}
-                      >
-                        {item.description}
-                      </span>
+                      {isActive && (
+                        <span className="mt-1 block text-xs leading-5 text-white/78">
+                          {item.description}
+                        </span>
+                      )}
                     </span>
                     <span className="text-lg font-light">
                       {isActive ? "−" : "+"}
@@ -2767,30 +2586,17 @@ setExpandedBidderId(savedBidder.id);
                 </section>
 
                 <section className="white-card min-w-0 p-6 md:p-8">
-                  <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="badge-green mb-3">
-                        Информация о подписке
-                      </div>
-                      <h2 className="text-3xl font-extrabold tracking-[-0.04em] text-black">
-                        Ваши данные
-                      </h2>
-                      <p className="mt-2 text-sm leading-7 text-black/50">
-                        Здесь отображается актуальная информация по вашему
-                        аккаунту и доступу к сервису.
-                      </p>
+                  <div className="mb-7">
+                    <div className="badge-green mb-3">
+                      Информация о подписке
                     </div>
-
-                    {user.subscriptionLevel.toLowerCase() !== "admin" && (
-                      <button
-                        type="button"
-                        onClick={openPromoModal}
-                        className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-[#03bd48]/30 bg-[#03bd48]/10 px-4 py-2.5 text-sm font-extrabold text-[#028c36] transition hover:-translate-y-0.5 hover:bg-[#03bd48] hover:text-white"
-                      >
-                        <span aria-hidden="true">🎟</span>
-                        Промокод
-                      </button>
-                    )}
+                    <h2 className="text-3xl font-extrabold tracking-[-0.04em] text-black">
+                      Ваши данные
+                    </h2>
+                    <p className="mt-2 text-sm leading-7 text-black/50">
+                      Здесь отображается актуальная информация по вашему
+                      аккаунту и доступу к сервису.
+                    </p>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
