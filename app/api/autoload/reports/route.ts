@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { avito } from "@/lib/autoload/avito";
 import {
+  isStaleProcessing,
   normalizeUpload,
   requireAccount,
   requireAutoloadUser,
@@ -37,7 +38,10 @@ export async function GET() {
       historyR.status === "fulfilled" && Array.isArray(historyR.value?.uploads) ? sortUploadsNewestFirst(historyR.value.uploads as Record<string, unknown>[]) : [];
     const uploads = rawHistory.map((item) => normalizeUpload(item)).filter((item) => item.id);
 
-    let current = uploads.find((item) => item.status === "processing") ?? null;
+    // Если Авито надолго завис в «processing» (см. isStaleProcessing) — не показываем
+    // это как текущую загрузку, а считаем, что она на самом деле уже завершилась.
+    const rawCurrentFromHistory = rawHistory.find((item) => String(item.status) === "processing") ?? null;
+    let current = isStaleProcessing(rawCurrentFromHistory) ? null : uploads.find((item) => item.status === "processing") ?? null;
     let last = uploads.find((item) => item.status !== "processing") ?? null;
 
     if (uploads.length === 0) {

@@ -218,6 +218,22 @@ export default function AutoloadService() {
     }
   }, [profile]);
 
+  // Пока Авито ещё «Идёт загрузка», сами проверяем статус каждые 20 секунд —
+  // чтобы баннер пропал сам, как только Авито обновит статус, без нажатия «Обновить».
+  useEffect(() => {
+    if (!connected || !reports?.current) return;
+    let alive = true;
+    const timer = window.setInterval(() => {
+      api<ReportsState>("/api/autoload/reports")
+        .then((data) => alive && setReports(data))
+        .catch(() => null);
+    }, 20_000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [connected, reports?.current?.id]);
+
   const refreshFeeds = useCallback(async () => {
     try {
       const data = await api<{ feeds: FeedSummary[] }>("/api/autoload/feeds");

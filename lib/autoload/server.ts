@@ -322,6 +322,23 @@ export function normalizeUpload(raw: Json): ReportSummary {
   };
 }
 
+/**
+ * Сколько загрузка у Авито может честно висеть в статусе «processing», прежде чем мы
+ * перестанем ей доверять. У Авито статус в /uploads/current и в истории иногда не
+ * обновляется вовремя после реального завершения загрузки — тогда в интерфейсе
+ * бесконечно висело бы «Идёт загрузка», хотя объявления уже опубликованы. Если с
+ * начала прошло больше этого времени, считаем статус устаревшим и берём последнюю
+ * завершённую загрузку вместо него.
+ */
+export const STALE_PROCESSING_MS = 20 * 60 * 1000;
+
+export function isStaleProcessing(raw: { status?: unknown; started_at?: unknown } | null): boolean {
+  if (!raw || raw.status !== "processing") return false;
+  const startedAt = Date.parse(String(raw.started_at ?? ""));
+  if (!Number.isFinite(startedAt)) return false;
+  return Date.now() - startedAt > STALE_PROCESSING_MS;
+}
+
 export type UploadPick = {
   /** Откуда брать объявления загрузки: /uploads/current/items или /uploads/last_successful/items. */
   which: "current" | "last";
@@ -358,7 +375,8 @@ export async function pickUpload(connection: AvitoAccountConnection): Promise<Up
 
   const history = historyR.status === "fulfilled" && Array.isArray(historyR.value?.uploads) ? sortUploadsNewestFirst(historyR.value.uploads as Json[]) : [];
   const latestRaw: Json | null = history[0] ?? null;
-  const current: Json | null = currentR.status === "fulfilled" ? currentR.value : null;
+  const currentRaw: Json | null = currentR.status === "fulfilled" ? currentR.value : null;
+  const current = isStaleProcessing(currentRaw) ? null : currentRaw;
   const last: Json | null = lastR.status === "fulfilled" ? lastR.value : null;
 
   const choice = choosePickSource(latestRaw, current, last);
