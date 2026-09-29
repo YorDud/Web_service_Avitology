@@ -152,3 +152,15 @@ pm2 status
 # перезапуск cron
 sudo systemctl restart cron
 sudo systemctl status cron
+
+
+cd /opt/avitology
+git pull --ff-only origin main
+npm run build
+pm2 restart helpsell
+
+
+
+
+
+
