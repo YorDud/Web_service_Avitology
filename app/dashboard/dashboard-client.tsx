@@ -1131,51 +1131,53 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
         : "Доступно с подпиской Basic",
       available: hasAccess,
     },
-    {
-      id: "bid-manager",
-      index: "04",
-      title: "Бид-менеджер Авито",
-      description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
-      available: hasBidderAccess,
-      beta: true,
-    },
 
     {
       id: "reviews-calculator",
-      index: "05",
+      index: "04",
       title: "Калькулятор отзывов",
       description: "Расчёт рейтинга профиля Авито",
       available: true,
     },
 
     {
-      id: "popular-queries",
+      id: "image-uniqualizer",
+      index: "05",
+      title: "Уникализатор картинок",
+      description: "Уникальные копии фото для объявлений",
+      available: true,
+    },
+
+
+    {
+      id: "bid-manager",
       index: "06",
+      title: "Бид-менеджер Авито",
+      description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
+      available: hasBidderAccess,
+      beta: true,
+    },
+    
+    {
+      id: "autoload",
+      index: "07",
+      title: "Автозагрузка объявлений Авито",
+      description: hasBidderAccess
+        ? "Таблицы Excel/Google/Яндекс и выгрузка через API Авито"
+        : "Доступно с подпиской Pro",
+      available: hasBidderAccess,
+      beta: true,
+    },
+
+    {
+      id: "popular-queries",
+      index: "08",
       title: "Запросы по популярности Авито",
       description: hasAccess
         ? "Подбор популярных запросов"
         : "Доступно с подпиской Basic",
       available: hasAccess,
       inDevelopment: true,
-    },
-
-    {
-      id: "image-uniqualizer",
-      index: "07",
-      title: "Уникализатор картинок",
-      description: "Уникальные копии фото для объявлений",
-      available: true,
-    },
-
-    {
-      id: "autoload",
-      index: "08",
-      title: "Автозагрузка объявлений Авито",
-      description: hasBidderAccess
-        ? "Таблицы, Excel/Google/Яндекс Таблицы и выгрузка через API Авито"
-        : "Доступно с подпиской Pro",
-      available: hasBidderAccess,
-      beta: true,
     },
   ];
 
