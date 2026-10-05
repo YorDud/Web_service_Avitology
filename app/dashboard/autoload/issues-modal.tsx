@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { MESSAGE_KIND, fixHint, kindOf } from "@/lib/autoload/hints";
 import type { IssueGroup, IssuesResponse } from "@/lib/autoload/types";
-import { Icon, Modal, Pill, Spinner, api, errorText, ghostButton } from "./ui";
+import { Icon, Modal, Pill, Spinner, api, errorText, ghostButton, useClientKey, withClient } from "./ui";
 
 /* Окно «Что исправить»: замечания Авито по последней загрузке простым языком. */
 
@@ -16,13 +16,14 @@ export default function IssuesModal({
   onClose: () => void;
   onOpenAd: (feedId: number, adKey: string) => void;
 }) {
+  const clientKey = useClientKey();
   const [data, setData] = useState<IssuesResponse | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    api<IssuesResponse>("/api/autoload/issues")
+    api<IssuesResponse>(withClient("/api/autoload/issues", clientKey))
       .then((result) => {
         if (!alive) return;
         setData(result);
@@ -32,7 +33,7 @@ export default function IssuesModal({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [clientKey]);
 
   return (
     <Modal

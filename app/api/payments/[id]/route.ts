@@ -53,6 +53,7 @@ export async function GET(_req: Request, context: RouteContext) {
         amount: payment.amount,
         currency: payment.currency,
         description: payment.description,
+        planCode: payment.planCode,
         confirmationUrl: payment.confirmationUrl,
         externalPaymentId: payment.externalPaymentId,
         paidAt: payment.paidAt,

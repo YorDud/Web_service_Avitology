@@ -157,7 +157,7 @@ sudo systemctl status cron
 
 
 
-
+# с файла в репозиторий 
 git status
 git add .
 git commit -m "V8"
@@ -165,14 +165,14 @@ git push origin main
 
 
 
-
+# из репозитория на сервер
 cd /opt/avitology
 git pull --ff-only origin main
 npm run build
 pm2 restart helpsell
 
 
-
-
-
+# при изменение БД
+npx prisma db push
+npx prisma generate
 

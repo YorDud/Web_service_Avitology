@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { avito, AvitoApiError } from "@/lib/autoload/avito";
 import {
+  accountForFeed,
   fail,
   pickUpload,
   parseFeedId,
-  requireAccount,
   requireAutoloadUser,
   routeError,
 } from "@/lib/autoload/server";
@@ -35,12 +35,15 @@ export async function POST(_request: Request, context: Context) {
   const feedId = parseFeedId((await context.params).id);
   if (!feedId) return fail("Таблица не найдена.", 404);
 
-  const { account, response } = await requireAccount(auth.user.id);
-  if (!account) return response;
-
   try {
     const feed = await prisma.autoloadFeed.findFirst({ where: { id: feedId, userId: auth.user.id } });
     if (!feed) return fail("Таблица не найдена.", 404);
+
+    // Статусы берём из отчётов того аккаунта Авито, которому принадлежит таблица.
+    const account = await accountForFeed(auth.user.id, feed);
+    if (!account) {
+      return fail("Сначала подключите Avito API: укажите client_id и client_secret.", 400, { code: "NO_ACCOUNT" });
+    }
 
     // Самая свежая загрузка по истории (last_successful у Авито может отставать).
     const pick = await pickUpload(account);

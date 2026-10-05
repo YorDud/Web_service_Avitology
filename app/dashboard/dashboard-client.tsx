@@ -157,6 +157,9 @@ type DashboardPageProps = {
   // доступно ли предложение конкретному пользователю.
   trialOfferEnabled: boolean;
   canUseFreeTrial: boolean;
+
+  // Раздел, который нужно открыть сразу (например, после оплаты слотов клиентов автозагрузки).
+  initialSection?: DashboardSection;
 };
 
 type DashboardSection =
@@ -898,9 +901,10 @@ export default function DashboardClientPage({
   initialAvitoConnection,
   trialOfferEnabled,
   canUseFreeTrial,
+  initialSection,
 }: DashboardPageProps) {
   const [activeSection, setActiveSection] =
-    useState<DashboardSection>("profile");
+    useState<DashboardSection>(initialSection ?? "profile");
 
       /*
    * Показываем предложение только:
@@ -1833,10 +1837,8 @@ async function toggleBidderEvents(bidderId: number) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title:
-          typeof item?.title === "string" && item.title.trim().length > 0
-            ? item.title.trim()
-            : bidder.title,
+        // Название бидера задаёт пользователь — после проверки оно НЕ перезаписывается
+        // названием объявления из Авито (обновляем только ссылку на объявление).
         avitoItemUrl:
           typeof item?.url === "string" && item.url.trim().length > 0
             ? item.url.trim()

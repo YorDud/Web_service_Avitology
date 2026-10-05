@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { avito, AvitoApiError } from "@/lib/autoload/avito";
-import { pickUpload, requireAccount, requireAutoloadUser, routeError } from "@/lib/autoload/server";
+import { feedScope, pickUpload, readClientKey, requireAccount, requireAutoloadUser, routeError } from "@/lib/autoload/server";
 import type { IssueAd, IssueGroup, IssuesResponse } from "@/lib/autoload/types";
 
 export const runtime = "nodejs";
@@ -17,11 +17,11 @@ const SEVERITY: Record<string, number> = { error: 0, warning: 1, alarm: 2 };
  * Что именно не так в последней загрузке: сообщения Авито по объявлениям, сгруппированные по причине,
  * со ссылкой на нужные объявления в таблицах пользователя.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireAutoloadUser();
   if (!auth.ok) return auth.response;
 
-  const { account, response } = await requireAccount(auth.user.id);
+  const { account, response } = await requireAccount(auth.user.id, readClientKey(request));
   if (!account) return response;
 
   try {
@@ -81,7 +81,7 @@ export async function GET() {
     const keys = [...new Set(problemItems.map((item) => item.adKey).filter(Boolean))];
     for (let i = 0; i < keys.length; i += 500) {
       const rows = await prisma.autoloadAd.findMany({
-        where: { adKey: { in: keys.slice(i, i + 500) }, feed: { userId: auth.user.id } },
+        where: { adKey: { in: keys.slice(i, i + 500) }, feed: { userId: auth.user.id, ...feedScope(account) } },
         select: { adKey: true, data: true, feed: { select: { id: true, name: true } } },
       });
       for (const row of rows) {

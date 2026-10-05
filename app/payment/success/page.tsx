@@ -7,6 +7,8 @@ export default function PaymentSuccessPage() {
   const [message, setMessage] = useState(
     "Проверяем и подтверждаем статус оплаты..."
   );
+  // true — оплачены слоты для клиентов автозагрузки (а не подписка)
+  const [isClientsPayment, setIsClientsPayment] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -40,9 +42,15 @@ export default function PaymentSuccessPage() {
         }
 
         const status = data.payment?.status;
+        const clientsPayment = String(data.payment?.planCode ?? "").startsWith("autoload_clients_x");
+        setIsClientsPayment(clientsPayment);
 
         if (status === "succeeded") {
-          setMessage("Оплата подтверждена. Подписка Basic активирована.");
+          setMessage(
+            clientsPayment
+              ? "Оплата подтверждена. Новые слоты для клиентов автозагрузки добавлены — вернитесь в «Автозагрузку» и добавьте клиента."
+              : "Оплата подтверждена. Подписка Basic активирована."
+          );
           return;
         }
 
@@ -86,8 +94,11 @@ export default function PaymentSuccessPage() {
             <p className="section-text mb-8">{message}</p>
 
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
-              <Link href="/dashboard" className="btn-primary">
-                Открыть личный кабинет
+              <Link
+                href={isClientsPayment ? "/dashboard?section=autoload" : "/dashboard"}
+                className="btn-primary"
+              >
+                {isClientsPayment ? "Вернуться к автозагрузке" : "Открыть личный кабинет"}
               </Link>
               <Link href="/" className="btn-secondary">
                 На главную

@@ -6,7 +6,28 @@ import { getServiceSettings } from "@/lib/service-settings";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+const OPENABLE_SECTIONS = [
+  "profile",
+  "avito",
+  "financial",
+  "bid-manager",
+  "reviews-calculator",
+  "popular-queries",
+  "image-uniqualizer",
+  "autoload",
+] as const;
+
+type OpenableSection = (typeof OPENABLE_SECTIONS)[number];
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ section?: string | string[] }>;
+}) {
+  const query = (await searchParams) ?? {};
+  const sectionParam = Array.isArray(query.section) ? query.section[0] : query.section;
+  const initialSection: OpenableSection | undefined = OPENABLE_SECTIONS.find((item) => item === sectionParam);
+
   const sessionUser = await getSessionUser();
 
   const serviceSettings = await getServiceSettings();
@@ -177,6 +198,7 @@ lastPositionError: bidder.lastPositionError,
       initialAvitoConnection={initialAvitoConnection}
       trialOfferEnabled={serviceSettings.isFreeTrialEnabled}
       canUseFreeTrial={!user.usedFreeTrial}
+      initialSection={initialSection}
     />
   );
 }

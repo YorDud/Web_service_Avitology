@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 /* Общие мелочи интерфейса услуги «Автозагрузка объявлений Авито». */
@@ -37,6 +37,21 @@ export async function api<T>(url: string, options: { method?: string; json?: unk
     throw new ApiError(data?.error || "Не удалось выполнить запрос.", response.status, data?.code);
   }
   return data as T;
+}
+
+/* ---------- Выбранный аккаунт Авито (основной или клиент) ----------
+   Ключ «main» — основной аккаунт, число — id дополнительного клиента. Его задаёт
+   AutoloadService, а компоненты ниже по дереву добавляют его к запросам через withClient(). */
+export const ClientKeyContext = createContext<string>("main");
+
+export function useClientKey() {
+  return useContext(ClientKeyContext);
+}
+
+/** Добавляет к адресу API ?client=… для дополнительного клиента; для основного аккаунта адрес не меняется. */
+export function withClient(url: string, clientKey: string) {
+  if (!clientKey || clientKey === "main") return url;
+  return `${url}${url.includes("?") ? "&" : "?"}client=${encodeURIComponent(clientKey)}`;
 }
 
 export function errorText(error: unknown) {
@@ -180,6 +195,10 @@ const ICONS: Record<string, ReactNode> = {
   sparkle: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4" /><path d="m6.5 6.5 2 2M15.5 15.5l2 2M17.5 6.5l-2 2M8.5 15.5l-2 2" /></>,
   file: <><path d="M6 3h8l4 4v14H6V3Z" /><path d="M14 3v4h4M9 13h6M9 17h6" /></>,
   columns: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 4v16" /></>,
+  users: <><circle cx="9" cy="8" r="3.2" /><path d="M3 20a6 6 0 0 1 12 0" /><circle cx="17" cy="9" r="2.4" /><path d="M16 14.2A5 5 0 0 1 21 19" /></>,
+  card: <><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M3 10h18M7 15h4" /></>,
+  minus: <path d="M5 12h14" />,
+  lock: <><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>,
 };
 
 export function Icon({ name, className = "h-4 w-4" }: { name: string; className?: string }) {

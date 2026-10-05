@@ -143,3 +143,34 @@ export type IssuesResponse = {
   adsWithIssues: number;
   totalAds: number;
 };
+
+/* ---------- Дополнительные клиенты (аккаунты Авито) ---------- */
+
+export type AutoloadClientDto = {
+  id: number;
+  name: string;
+  clientIdMasked: string;
+  tokenExpiresAt: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  feedsCount: number;
+  createdAt: string;
+};
+
+export type ClientSlots = {
+  /** Сколько дополнительных клиентов можно завести (куплено слотов). */
+  purchased: number;
+  /** Сколько уже заведено. */
+  used: number;
+  /** Сколько ещё можно завести; null — без ограничений (полный доступ). */
+  free: number | null;
+  unlimited: boolean;
+  packSize: number;
+  packPrice: number;
+  maxPacksPerPayment: number;
+};
+
+export type ClientsOverview = {
+  clients: AutoloadClientDto[];
+  slots: ClientSlots;
+};

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { avito, AvitoApiError } from "@/lib/autoload/avito";
+import { avito, AvitoApiError, credentialsKey } from "@/lib/autoload/avito";
 import {
   isStaleProcessing,
   normalizeUpload,
+  readClientKey,
   requireAccount,
   requireAutoloadUser,
   routeError,
@@ -21,7 +22,7 @@ type CachedReports = { last: ReportSummary | null; current: ReportSummary | null
  * главная защита от «слишком много запросов к API Авито».
  */
 const CACHE_TTL_MS = 15_000;
-const cache = new Map<number, { at: number; data: CachedReports }>();
+const cache = new Map<string, { at: number; data: CachedReports }>();
 
 /**
  * История загрузок (/autoload/v4/uploads) — единственный запрос к Авито в обычном
@@ -30,14 +31,16 @@ const cache = new Map<number, { at: number; data: CachedReports }>();
  * недоступна — так расход лимита на этот раздел меньше в 3 раза по сравнению с тем,
  * чтобы спрашивать все три метода каждый раз.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireAutoloadUser();
   if (!auth.ok) return auth.response;
 
-  const { account, response } = await requireAccount(auth.user.id);
+  const { account, response } = await requireAccount(auth.user.id, readClientKey(request));
   if (!account) return response;
 
-  const cached = cache.get(account.id);
+  // Ключ кэша — «main:1» / «client:7»: у основного аккаунта и клиента числовые id могут совпадать.
+  const cacheKey = credentialsKey(account);
+  const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
     return NextResponse.json(cached.data);
   }
@@ -65,7 +68,7 @@ export async function GET() {
     }
 
     const data: CachedReports = { last, current, uploads };
-    cache.set(account.id, { at: Date.now(), data });
+    cache.set(cacheKey, { at: Date.now(), data });
     return NextResponse.json(data);
   } catch (error) {
     // При 429 отдаём то, что уже знаем (пусть и устаревшее), а не пустой экран с ошибкой —

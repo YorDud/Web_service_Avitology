@@ -1,6 +1,43 @@
 import { prisma } from "@/lib/prisma";
 import { decryptAvitoSecret, encryptAvitoSecret } from "@/lib/avito-credentials";
-import type { AvitoAccountConnection } from "@prisma/client";
+
+/**
+ * Учётные данные аккаунта Авито для автозагрузки. Подходит и основное подключение
+ * (строка AvitoAccountConnection — общая с Бид-менеджером), и дополнительный клиент
+ * (строка AutoloadClient). kind не задан или "main" — основной аккаунт, "client" — клиент:
+ * от этого зависит, в какую таблицу сохраняется кэш токена и последняя ошибка.
+ */
+export type AvitoCredentials = {
+  id: number;
+  userId: number;
+  clientId: string;
+  encryptedClientSecret: string;
+  accessTokenEnc: string | null;
+  tokenExpiresAt: Date | null;
+  lastCheckedAt: Date | null;
+  lastError: string | null;
+  kind?: "main" | "client";
+};
+
+/** Уникальный ключ аккаунта (для кэшей): у основного и клиента могут совпадать числовые id. */
+export function credentialsKey(connection: Pick<AvitoCredentials, "id" | "kind">) {
+  return `${connection.kind === "client" ? "client" : "main"}:${connection.id}`;
+}
+
+type CredentialsPatch = {
+  accessTokenEnc?: string | null;
+  tokenExpiresAt?: Date | null;
+  lastCheckedAt?: Date | null;
+  lastError?: string | null;
+};
+
+/** Сохраняет кэш токена / ошибку в той таблице, где лежат ключи этого аккаунта. */
+async function persistCredentials(connection: AvitoCredentials, data: CredentialsPatch) {
+  if (connection.kind === "client") {
+    return prisma.autoloadClient.update({ where: { id: connection.id }, data });
+  }
+  return prisma.avitoAccountConnection.update({ where: { id: connection.id }, data });
+}
 
 /* =========================================================================
    Клиент API Авито для Автозагрузки.
@@ -148,7 +185,7 @@ export async function requestToken(clientId: string, clientSecret: string) {
  * использовалось; accessTokenEnc — новое поле). Бид-менеджер (lib/avito-api.ts)
  * этот кэш не читает и продолжает получать токен как раньше — конфликта нет.
  */
-export async function getAccessToken(connection: AvitoAccountConnection, force = false): Promise<string> {
+export async function getAccessToken(connection: AvitoCredentials, force = false): Promise<string> {
   const valid =
     !force &&
     connection.accessTokenEnc &&
@@ -167,14 +204,11 @@ export async function getAccessToken(connection: AvitoAccountConnection, force =
   const { token, expiresIn } = await requestToken(connection.clientId, clientSecret);
 
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
-  const updated = await prisma.avitoAccountConnection.update({
-    where: { id: connection.id },
-    data: {
-      accessTokenEnc: encryptAvitoSecret(token),
-      tokenExpiresAt: expiresAt,
-      lastCheckedAt: new Date(),
-      lastError: null,
-    },
+  const updated = await persistCredentials(connection, {
+    accessTokenEnc: encryptAvitoSecret(token),
+    tokenExpiresAt: expiresAt,
+    lastCheckedAt: new Date(),
+    lastError: null,
   });
   connection.accessTokenEnc = updated.accessTokenEnc;
   connection.tokenExpiresAt = updated.tokenExpiresAt;
@@ -188,7 +222,7 @@ type RequestOptions = {
 };
 
 export async function avitoRequest<T = Json>(
-  connection: AvitoAccountConnection,
+  connection: AvitoCredentials,
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
@@ -235,18 +269,14 @@ export async function avitoRequest<T = Json>(
     throw new AvitoApiError(explain(response.status, payload), response.status, payload);
   }
 
-  await prisma.avitoAccountConnection
-    .update({ where: { id: connection.id }, data: { lastError: null } })
-    .catch(() => null);
+  await persistCredentials(connection, { lastError: null }).catch(() => null);
 
   return payload as T;
 }
 
-async function markError(connection: AvitoAccountConnection, error: unknown) {
+async function markError(connection: AvitoCredentials, error: unknown) {
   const message = error instanceof AvitoApiError ? error.message : "Не удалось связаться с API Авито.";
-  await prisma.avitoAccountConnection
-    .update({ where: { id: connection.id }, data: { lastError: message } })
-    .catch(() => null);
+  await persistCredentials(connection, { lastError: message }).catch(() => null);
 }
 
 /* ---------- Методы Автозагрузки ---------- */
@@ -256,11 +286,11 @@ type UploadItemsQuery = { query?: string; sections?: string; page?: number; perP
 
 export const avito = {
   /** Лёгкий вызов для проверки, что ключи рабочие (не требует уже созданного профиля автозагрузки). */
-  async ping(connection: AvitoAccountConnection): Promise<void> {
+  async ping(connection: AvitoCredentials): Promise<void> {
     await avitoRequest<Json>(connection, ENDPOINTS.items, { query: { per_page: 1, page: 1 } });
   },
 
-  async getProfile(connection: AvitoAccountConnection): Promise<Json | null> {
+  async getProfile(connection: AvitoCredentials): Promise<Json | null> {
     try {
       return await avitoRequest<Json>(connection, ENDPOINTS.profile);
     } catch (error) {
@@ -269,19 +299,19 @@ export const avito = {
     }
   },
 
-  saveProfile: (connection: AvitoAccountConnection, body: unknown) =>
+  saveProfile: (connection: AvitoCredentials, body: unknown) =>
     avitoRequest<Json>(connection, ENDPOINTS.profile, { method: "POST", body }),
 
   /** Запускает выгрузку по ссылке сейчас же (не чаще раза в час — ограничение самого Авито). */
-  upload: (connection: AvitoAccountConnection) =>
+  upload: (connection: AvitoCredentials) =>
     avitoRequest<Json>(connection, ENDPOINTS.upload, { method: "POST" }),
 
-  uploads: (connection: AvitoAccountConnection, params: UploadsQuery = {}) =>
+  uploads: (connection: AvitoCredentials, params: UploadsQuery = {}) =>
     avitoRequest<Json>(connection, ENDPOINTS.uploads, {
       query: { perPage: params.perPage ?? 10, page: params.page ?? 1, dateFrom: params.dateFrom, dateTo: params.dateTo },
     }),
 
-  async currentUpload(connection: AvitoAccountConnection): Promise<Json | null> {
+  async currentUpload(connection: AvitoCredentials): Promise<Json | null> {
     try {
       return await avitoRequest<Json>(connection, ENDPOINTS.currentUpload);
     } catch (error) {
@@ -290,7 +320,7 @@ export const avito = {
     }
   },
 
-  async lastSuccessfulUpload(connection: AvitoAccountConnection): Promise<Json | null> {
+  async lastSuccessfulUpload(connection: AvitoCredentials): Promise<Json | null> {
     try {
       return await avitoRequest<Json>(connection, ENDPOINTS.lastSuccessfulUpload);
     } catch (error) {
@@ -299,19 +329,19 @@ export const avito = {
     }
   },
 
-  currentUploadItems: (connection: AvitoAccountConnection, params: UploadItemsQuery) =>
+  currentUploadItems: (connection: AvitoCredentials, params: UploadItemsQuery) =>
     avitoRequest<Json>(connection, ENDPOINTS.currentUploadItems, {
       query: { query: params.query, sections: params.sections, page: params.page ?? 1, perPage: params.perPage ?? 100 },
     }),
 
-  lastSuccessfulUploadItems: (connection: AvitoAccountConnection, params: UploadItemsQuery) =>
+  lastSuccessfulUploadItems: (connection: AvitoCredentials, params: UploadItemsQuery) =>
     avitoRequest<Json>(connection, ENDPOINTS.lastSuccessfulUploadItems, {
       query: { query: params.query, sections: params.sections, page: params.page ?? 1, perPage: params.perPage ?? 100 },
     }),
 
-  tree: (connection: AvitoAccountConnection) => avitoRequest<Json>(connection, ENDPOINTS.tree),
+  tree: (connection: AvitoCredentials) => avitoRequest<Json>(connection, ENDPOINTS.tree),
 
-  nodeFields: (connection: AvitoAccountConnection, slug: string) =>
+  nodeFields: (connection: AvitoCredentials, slug: string) =>
     avitoRequest<Json>(connection, ENDPOINTS.nodeFields(slug)),
 };
 

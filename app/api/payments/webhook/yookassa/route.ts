@@ -2,6 +2,8 @@ import { getSubscriptionPlan } from "@/lib/subscription-plans";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { activateSubscription } from "@/lib/payments/activate-subscription";
+import { fulfilAutoloadClientsPayment } from "@/lib/payments/fulfil-autoload-clients";
+import { isAutoloadClientsPlanCode } from "@/lib/autoload/clients-plan";
 
 type YookassaWebhookBody = {
   event?: string;
@@ -52,6 +54,16 @@ export async function POST(req: Request) {
     }
 
     if (event === "payment.succeeded" || status === "succeeded") {
+      // Оплата слотов для клиентов автозагрузки — это не подписка: зачисляем слоты.
+      if (isAutoloadClientsPlanCode(payment.planCode)) {
+        await fulfilAutoloadClientsPayment(payment.id, {
+          source: "yookassa-webhook",
+          webhookEvent: event,
+          yookassaStatus: status,
+        });
+        return NextResponse.json({ ok: true });
+      }
+
       if (payment.status !== "succeeded") {
         await activateSubscription(payment.userId, getSubscriptionPlan(payment.planCode).tier, { months: payment.durationMonths || 1, price: payment.amount });
 

@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { activateSubscription } from "@/lib/payments/activate-subscription";
 import { getYookassaPayment } from "@/lib/payments/yookassa";
 import { getSubscriptionPlan } from "@/lib/subscription-plans";
+import { fulfilAutoloadClientsPayment } from "@/lib/payments/fulfil-autoload-clients";
+import { isAutoloadClientsPlanCode } from "@/lib/autoload/clients-plan";
 
 export async function syncYookassaPaymentByInternalId(internalPaymentId: number) {
   const payment = await prisma.payment.findUnique({
@@ -26,6 +28,12 @@ export async function syncYookassaPaymentByInternalId(internalPaymentId: number)
   const paid = (yookassaPayment as any)?.paid ?? false;
 
   if (status === "succeeded" || paid === true) {
+    // Оплата слотов для клиентов автозагрузки — это не подписка: зачисляем слоты.
+    if (isAutoloadClientsPlanCode(payment.planCode)) {
+      await fulfilAutoloadClientsPayment(payment.id, { source: "sync-yookassa-payment", yookassaStatus: status, paid });
+      return await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
+    }
+
     if (payment.status !== "succeeded") {
       await activateSubscription(payment.userId, getSubscriptionPlan(payment.planCode).tier, { months: payment.durationMonths || 1, price: payment.amount });
 

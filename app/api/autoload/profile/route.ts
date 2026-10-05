@@ -4,9 +4,11 @@ import { avito } from "@/lib/autoload/avito";
 import {
   applyProfile,
   fail,
+  feedScope,
   mapProfile,
   parseSchedule,
   publicBaseUrl,
+  readClientKey,
   requireAccount,
   requireAutoloadUser,
   routeError,
@@ -16,11 +18,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Текущий профиль автозагрузки из Авито. */
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireAutoloadUser();
   if (!auth.ok) return auth.response;
 
-  const { account, response } = await requireAccount(auth.user.id);
+  const { account, response } = await requireAccount(auth.user.id, readClientKey(request));
   if (!account) return response;
 
   try {
@@ -36,7 +38,7 @@ export async function POST(request: Request) {
   const auth = await requireAutoloadUser();
   if (!auth.ok) return auth.response;
 
-  const { account, response } = await requireAccount(auth.user.id);
+  const { account, response } = await requireAccount(auth.user.id, readClientKey(request));
   if (!account) return response;
 
   const body = await request.json().catch(() => null);
@@ -48,7 +50,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const feeds = await prisma.autoloadFeed.findMany({ where: { userId: auth.user.id } });
+    // В профиль аккаунта попадают только таблицы ЭТОГО аккаунта (основного или клиента).
+    const feeds = await prisma.autoloadFeed.findMany({ where: { userId: auth.user.id, ...feedScope(account) } });
     const profile = await applyProfile(account, feeds, publicBaseUrl(request), {
       autoloadEnabled: typeof body.autoloadEnabled === "boolean" ? body.autoloadEnabled : undefined,
       reportEmail: typeof body.reportEmail === "string" ? body.reportEmail : undefined,

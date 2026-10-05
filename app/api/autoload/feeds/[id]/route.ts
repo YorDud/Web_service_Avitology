@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
+  accountForFeed,
   applyProfile,
   fail,
-  getAccount,
+  feedScope,
   parseFeedId,
   publicBaseUrl,
   readDefaults,
@@ -104,9 +105,9 @@ export async function PATCH(request: Request, context: Context) {
 
     // Название файла показывается в отчётах Авито — обновим его в профиле.
     if (data.name && feed.linked) {
-      const account = await getAccount(auth.user.id);
+      const account = await accountForFeed(auth.user.id, feed);
       if (account) {
-        const feeds = await prisma.autoloadFeed.findMany({ where: { userId: auth.user.id } });
+        const feeds = await prisma.autoloadFeed.findMany({ where: { userId: auth.user.id, ...feedScope(account) } });
         await applyProfile(account, feeds, publicBaseUrl(request)).catch(() => null);
       }
     }
@@ -132,9 +133,9 @@ export async function DELETE(request: Request, context: Context) {
     await prisma.autoloadFeed.delete({ where: { id } });
 
     if (existing.linked) {
-      const account = await getAccount(auth.user.id);
+      const account = await accountForFeed(auth.user.id, existing);
       if (account) {
-        const feeds = await prisma.autoloadFeed.findMany({ where: { userId: auth.user.id } });
+        const feeds = await prisma.autoloadFeed.findMany({ where: { userId: auth.user.id, ...feedScope(account) } });
         await applyProfile(account, feeds, publicBaseUrl(request)).catch(() => null);
       }
     }

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import type { AutoloadFeed, AvitoAccountConnection } from "@prisma/client";
-import { avito, AvitoApiError, markAvitoError } from "./avito";
+import type { AutoloadClient, AutoloadFeed } from "@prisma/client";
+import { avito, AvitoApiError, markAvitoError, type AvitoCredentials } from "./avito";
 import { choosePickSource } from "./pick";
 import {
   MAX_FIELD_OPTION_VALUES,
@@ -40,7 +40,7 @@ export async function requireAutoloadUser() {
 
   const user = await prisma.user.findUnique({
     where: { id: sessionUser.id },
-    select: { id: true, subscriptionLevel: true },
+    select: { id: true, subscriptionLevel: true, autoloadExtraClientSlots: true },
   });
   if (!user) {
     return { ok: false as const, response: fail("Войдите в аккаунт HelpSell.", 401) };
@@ -96,7 +96,7 @@ export async function requireConnection(userId: number) {
   return { connection, response: null };
 }
 
-export async function withAvito<T>(connection: AvitoAccountConnection, fn: () => Promise<T>): Promise<T> {
+export async function withAvito<T>(connection: AvitoCredentials, fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (error) {
@@ -109,26 +109,109 @@ export async function getAccount(userId: number) {
   return getConnection(userId);
 }
 
-/** requireAccount — то же самое, что requireConnection, но с именем поля account
- *  (так исторически называлось в API-роутах). Реализован отдельно, а не через
- *  прокидывание результата requireConnection: пересборка объекта после
- *  деструктуризации «расклеивает» связь между полями account/response для
- *  TypeScript (он перестаёт видеть, что response не может быть null, когда
- *  account есть), из-за чего Next.js считает, что обработчик роута может
- *  вернуть null, и билд падает с ошибкой типов. */
-export async function requireAccount(userId: number) {
-  const account = await getConnection(userId);
-  if (!account) {
-    return {
-      account: null,
-      response: fail(
-        "Сначала подключите Avito API: укажите client_id и client_secret (это тот же ключ, что и в Бид-менеджере).",
-        400,
-        { code: "NO_ACCOUNT" },
-      ),
-    };
+/* ---------- Аккаунты Авито: основной и дополнительные клиенты ----------
+   Ключ аккаунта приходит из интерфейса в параметре ?client=:
+     отсутствует или «main» — основной аккаунт (AvitoAccountConnection, общий с Бид-менеджером);
+     число — id дополнительного клиента (AutoloadClient) этого пользователя. */
+
+export const MAIN_CLIENT_KEY = "main";
+
+/** Ключ аккаунта из адреса запроса (по умолчанию — основной). */
+export function readClientKey(request: Request): string {
+  try {
+    return new URL(request.url).searchParams.get("client")?.trim() || MAIN_CLIENT_KEY;
+  } catch {
+    return MAIN_CLIENT_KEY;
   }
-  return { account, response: null };
+}
+
+/** null — основной аккаунт, число — id клиента, undefined — некорректный ключ. */
+export function parseClientKey(key: string | null | undefined): number | null | undefined {
+  if (!key || key === MAIN_CLIENT_KEY) return null;
+  if (!/^\d{1,9}$/.test(key)) return undefined;
+  const id = Number(key);
+  return id > 0 ? id : undefined;
+}
+
+export function credentialsFromClient(client: AutoloadClient): AvitoCredentials {
+  return { ...client, kind: "client" };
+}
+
+type AccountResult =
+  | { account: AvitoCredentials; response: null }
+  | { account: null; response: Response };
+
+const NO_ACCOUNT_MESSAGE =
+  "Сначала подключите Avito API: укажите client_id и client_secret (это тот же ключ, что и в Бид-менеджере).";
+
+/**
+ * Учётные данные нужного аккаунта Авито. Раньше функция возвращала только основное
+ * подключение — с одним аргументом она работает точно так же. Реализована без
+ * пересборки результата через деструктуризацию: так TypeScript видит, что response
+ * не может быть null, когда account есть (иначе Next.js считает, что обработчик
+ * роута может вернуть null, и билд падает).
+ */
+export async function requireAccount(userId: number, clientKey: string = MAIN_CLIENT_KEY): Promise<AccountResult> {
+  const parsed = parseClientKey(clientKey);
+
+  if (parsed === undefined) {
+    return { account: null, response: fail("Неизвестный клиент автозагрузки.", 400, { code: "BAD_CLIENT" }) };
+  }
+
+  if (parsed === null) {
+    const account = await getConnection(userId);
+    if (!account) {
+      return { account: null, response: fail(NO_ACCOUNT_MESSAGE, 400, { code: "NO_ACCOUNT" }) };
+    }
+    return { account, response: null };
+  }
+
+  const client = await prisma.autoloadClient.findFirst({ where: { id: parsed, userId } });
+  if (!client) {
+    return { account: null, response: fail("Клиент не найден. Возможно, он был удалён.", 404, { code: "NO_CLIENT" }) };
+  }
+  return { account: credentialsFromClient(client), response: null };
+}
+
+/** Фильтр таблиц аккаунта: null — основной аккаунт, число — клиент. */
+export function feedScope(account: Pick<AvitoCredentials, "id" | "kind">): { autoloadClientId: number | null } {
+  return { autoloadClientId: account.kind === "client" ? account.id : null };
+}
+
+type ScopeResult =
+  | { scope: { autoloadClientId: number | null }; response: null }
+  | { scope: null; response: Response };
+
+/** То же, что requireAccount, но без ключей Авито: нужно только знать, чьи таблицы показывать. */
+export async function requireScope(userId: number, clientKey: string = MAIN_CLIENT_KEY): Promise<ScopeResult> {
+  const parsed = parseClientKey(clientKey);
+  if (parsed === undefined) {
+    return { scope: null, response: fail("Неизвестный клиент автозагрузки.", 400, { code: "BAD_CLIENT" }) };
+  }
+  if (parsed === null) return { scope: { autoloadClientId: null }, response: null };
+
+  const client = await prisma.autoloadClient.findFirst({ where: { id: parsed, userId }, select: { id: true } });
+  if (!client) {
+    return { scope: null, response: fail("Клиент не найден. Возможно, он был удалён.", 404, { code: "NO_CLIENT" }) };
+  }
+  return { scope: { autoloadClientId: parsed }, response: null };
+}
+
+/** Аккаунт Авито, к которому относится таблица (основной или её клиент). */
+export async function accountForFeed(
+  userId: number,
+  feed: { autoloadClientId: number | null },
+): Promise<AvitoCredentials | null> {
+  if (feed.autoloadClientId === null || feed.autoloadClientId === undefined) return getConnection(userId);
+  const client = await prisma.autoloadClient.findFirst({ where: { id: feed.autoloadClientId, userId } });
+  return client ? credentialsFromClient(client) : null;
+}
+
+/** Маска client_id для интерфейса: ключ целиком не отдаём. */
+export function maskClientId(clientId: string) {
+  if (clientId.length <= 4) return "••••";
+  if (clientId.length <= 8) return `${clientId.slice(0, 2)}••••${clientId.slice(-2)}`;
+  return `${clientId.slice(0, 4)}••••${clientId.slice(-4)}`;
 }
 
 /* ---------- Публичный адрес файла ---------- */
@@ -246,7 +329,7 @@ type ProfilePatch = {
  * подключённые вручную в кабинете Авито (или из другого сервиса), остаются.
  */
 export async function applyProfile(
-  connection: AvitoAccountConnection,
+  connection: AvitoCredentials,
   feeds: AutoloadFeed[],
   base: string,
   patch: ProfilePatch = {},
@@ -292,6 +375,20 @@ export async function applyProfile(
 
   await avito.saveProfile(connection, body);
   return mapProfile(await avito.getProfile(connection));
+}
+
+/**
+ * Убирает из профиля Авито все файлы HelpSell (внешние, подключённые вручную, остаются).
+ * Если после этого файлов не остаётся совсем, автозагрузка по расписанию выключается:
+ * Авито не принимает включённую автозагрузку без единого файла.
+ */
+export async function detachOurFeeds(connection: AvitoCredentials, base: string) {
+  const existing = await avito.getProfile(connection);
+  if (!existing) return;
+  const current = mapProfile(existing);
+  if (!current.feeds.some((feed) => feed.ours)) return;
+  const hasForeign = current.feeds.some((feed) => !feed.ours);
+  await applyProfile(connection, [], base, { autoloadEnabled: hasForeign ? undefined : false });
 }
 
 /* ---------- Загрузки (/autoload/v4/uploads/...) ----------
@@ -363,7 +460,7 @@ export function sortUploadsNewestFirst<T extends { started_at?: unknown; upload_
  * «для самой последней загрузки возможны задержки»), поэтому ориентируемся на историю:
  * берём самую свежую и подбираем к ней items из current или last_successful.
  */
-export async function pickUpload(connection: AvitoAccountConnection): Promise<UploadPick | null> {
+export async function pickUpload(connection: AvitoCredentials): Promise<UploadPick | null> {
   const [historyR, currentR, lastR] = await Promise.allSettled([
     avito.uploads(connection, { perPage: 5, page: 1 }),
     avito.currentUpload(connection),

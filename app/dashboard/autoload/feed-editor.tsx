@@ -48,7 +48,9 @@ import {
   ghostButton,
   inputClass,
   timeAgo,
+  useClientKey,
   useOutsideClose,
+  withClient,
 } from "./ui";
 
 /* =========================================================================
@@ -123,6 +125,8 @@ type Props = {
 };
 
 export default function FeedEditor({ feedId, focusAdKey, account, profile, onBack, onChanged, onProfile, toast }: Props) {
+  // Каталог категорий запрашивается от имени выбранного аккаунта Авито (основного или клиента).
+  const clientKey = useClientKey();
   const [feed, setFeed] = useState<FeedDetail | null>(null);
   const [loadError, setLoadError] = useState("");
   const [ads, setAds] = useState<AdRow[]>([]);
@@ -249,7 +253,7 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
       let fields: CatalogField[] = [];
       if (node.slug) {
         try {
-          fields = (await api<{ fields: CatalogField[] }>(`/api/autoload/catalog?slug=${encodeURIComponent(node.slug)}`)).fields;
+          fields = (await api<{ fields: CatalogField[] }>(withClient(`/api/autoload/catalog?slug=${encodeURIComponent(node.slug)}`, clientKey))).fields;
         } catch (error) {
           toast(`Не удалось загрузить поля раздела: ${errorText(error)}`, "error");
         }
@@ -2219,6 +2223,7 @@ let catalogCache: CatalogNode[] | null = null;
 
 /** Общий загрузчик каталога категорий: используют и инлайн-поиск у поля «Категория», и модалка «Каталог». */
 function useCatalogNodes() {
+  const clientKey = useClientKey();
   const [nodes, setNodes] = useState<CatalogNode[]>(catalogCache ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -2229,7 +2234,7 @@ function useCatalogNodes() {
     requested.current = true;
     setLoading(true);
     setError("");
-    api<{ nodes: CatalogNode[] }>("/api/autoload/catalog")
+    api<{ nodes: CatalogNode[] }>(withClient("/api/autoload/catalog", clientKey))
       .then((data) => {
         catalogCache = data.nodes;
         setNodes(data.nodes);
@@ -2239,7 +2244,7 @@ function useCatalogNodes() {
         setError(errorText(err));
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [clientKey]);
 
   return { nodes, loading, error, ensureLoaded, loaded: nodes.length > 0 };
 }
@@ -2451,6 +2456,7 @@ function CategoryModal({
   onAddColumn?: (tag: string, values?: string[]) => void;
   onClose: () => void;
 }) {
+  const clientKey = useClientKey();
   const { nodes, loading, error, ensureLoaded } = useCatalogNodes();
   const [search, setSearch] = useState("");
   const [current, setCurrent] = useState<CatalogNode | null>(null);
@@ -2491,7 +2497,7 @@ function CategoryModal({
     if (!node.slug) return;
     setFieldsLoading(true);
     try {
-      const data = await api<{ fields: CatalogField[] }>(`/api/autoload/catalog?slug=${encodeURIComponent(node.slug)}`);
+      const data = await api<{ fields: CatalogField[] }>(withClient(`/api/autoload/catalog?slug=${encodeURIComponent(node.slug)}`, clientKey));
       setFields(data.fields);
     } catch (err) {
       setFieldsError(errorText(err));

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
+  accountForFeed,
   applyProfile,
   fail,
+  feedScope,
   parseFeedId,
   publicBaseUrl,
-  requireAccount,
   requireAutoloadUser,
   routeError,
 } from "@/lib/autoload/server";
@@ -26,15 +27,18 @@ export async function POST(request: Request, context: Context) {
   const body = await request.json().catch(() => null);
   if (typeof body?.linked !== "boolean") return fail("Не указано, подключать или отключать таблицу.");
 
-  const { account, response } = await requireAccount(auth.user.id);
-  if (!account) return response;
-
   try {
     const feed = await prisma.autoloadFeed.findFirst({
       where: { id: feedId, userId: auth.user.id },
       include: { _count: { select: { ads: true } } },
     });
     if (!feed) return fail("Таблица не найдена.", 404);
+
+    // Таблица подключается к тому аккаунту Авито, которому она принадлежит (основному или клиенту).
+    const account = await accountForFeed(auth.user.id, feed);
+    if (!account) {
+      return fail("Сначала подключите Avito API: укажите client_id и client_secret.", 400, { code: "NO_ACCOUNT" });
+    }
 
     const base = publicBaseUrl(request);
 
@@ -50,7 +54,7 @@ export async function POST(request: Request, context: Context) {
     await prisma.autoloadFeed.update({ where: { id: feedId }, data: { linked: body.linked } });
 
     try {
-      const feeds = await prisma.autoloadFeed.findMany({ where: { userId: auth.user.id } });
+      const feeds = await prisma.autoloadFeed.findMany({ where: { userId: auth.user.id, ...feedScope(account) } });
       const profile = await applyProfile(account, feeds, base, {
         agreement: body.agreement === true ? true : undefined,
       });

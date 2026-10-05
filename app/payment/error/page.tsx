@@ -7,6 +7,7 @@ export default function PaymentErrorPage() {
   const [message, setMessage] = useState(
     "Платёж был отменён или не был успешно завершён."
   );
+  const [isClientsPayment, setIsClientsPayment] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -27,6 +28,9 @@ export default function PaymentErrorPage() {
         if (!res.ok || cancelled) return;
 
         const status = data.payment?.status;
+        const clientsPayment = String(data.payment?.planCode ?? "").startsWith("autoload_clients_x");
+        setIsClientsPayment(clientsPayment);
+        const unchanged = clientsPayment ? "Слоты клиентов не начислены." : "Уровень подписки не изменён.";
 
         if (status === "succeeded") {
           window.location.replace(`/payment/success?paymentId=${paymentId}`);
@@ -39,16 +43,16 @@ export default function PaymentErrorPage() {
         }
 
         if (status === "canceled") {
-          setMessage("Платёж был отменён. Уровень подписки не изменён.");
+          setMessage(`Платёж был отменён. ${unchanged}`);
           return;
         }
 
         if (status === "failed") {
-          setMessage("При обработке платежа произошла ошибка. Уровень подписки не изменён.");
+          setMessage(`При обработке платежа произошла ошибка. ${unchanged}`);
           return;
         }
 
-        setMessage("Не удалось завершить оплату. Уровень подписки не изменён.");
+        setMessage(`Не удалось завершить оплату. ${unchanged}`);
       } catch (error) {
         console.error(error);
       }
@@ -71,7 +75,7 @@ export default function PaymentErrorPage() {
             <p className="section-text mb-8">{message}</p>
 
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
-              <Link href="/pricing" className="btn-primary">
+              <Link href={isClientsPayment ? "/dashboard?section=autoload" : "/pricing"} className="btn-primary">
                 Повторить попытку
               </Link>
               <Link href="/support" className="btn-secondary">

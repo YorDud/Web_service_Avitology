@@ -4,6 +4,7 @@ import {
   fail,
   flattenCatalog,
   parseCatalogFields,
+  readClientKey,
   requireAccount,
   requireAutoloadUser,
   routeError,
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
   const auth = await requireAutoloadUser();
   if (!auth.ok) return auth.response;
 
-  const { account, response } = await requireAccount(auth.user.id);
+  const { account, response } = await requireAccount(auth.user.id, readClientKey(request));
   if (!account) return response;
 
   const slug = new URL(request.url).searchParams.get("slug");

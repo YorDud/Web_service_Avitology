@@ -62,6 +62,11 @@ model User {
   avitoAccountConnection AvitoAccountConnection?
   autoloadFeeds          AutoloadFeed[]
   bonusCodeRedemptions   BonusCodeRedemption[]
+
+  // Дополнительные клиенты автозагрузки (аккаунты Авито кроме основного).
+  // autoloadExtraClientSlots — сколько таких клиентов пользователь может завести (+3 за каждую оплату).
+  autoloadExtraClientSlots Int              @default(0)
+  autoloadClients          AutoloadClient[]
 }
 
 model ServiceSettings {
@@ -263,10 +268,39 @@ model AvitoAccountConnection {
   updatedAt DateTime @updatedAt
 }
 
+/// Дополнительный клиент автозагрузки: отдельный аккаунт Авито со своими ключами,
+/// профилем автозагрузки, таблицами и расписанием. Основной аккаунт хранится
+/// по-прежнему в AvitoAccountConnection (общий с Бид-менеджером).
+model AutoloadClient {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name                  String
+  clientId              String
+  encryptedClientSecret String
+  accessTokenEnc        String?
+
+  tokenExpiresAt DateTime?
+  lastCheckedAt  DateTime?
+  lastError      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  feeds AutoloadFeed[]
+
+  @@index([userId])
+}
+
 model AutoloadFeed {
   id     Int  @id @default(autoincrement())
   userId Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// null — таблица основного аккаунта Авито; иначе — таблица дополнительного клиента.
+  autoloadClientId Int?
+  autoloadClient   AutoloadClient? @relation(fields: [autoloadClientId], references: [id], onDelete: Cascade)
 
   name        String
   publicToken String  @unique
@@ -283,6 +317,7 @@ model AutoloadFeed {
   ads AutoloadAd[]
 
   @@index([userId])
+  @@index([autoloadClientId])
 }
 
 model AutoloadAd {
