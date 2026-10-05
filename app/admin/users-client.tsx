@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { formatForDateTimeLocal } from "@/lib/dates";
 import BonusCodesPanel from "./bonus-codes-panel";
 
@@ -58,6 +58,16 @@ type AdminSection =
   | "payments"
   | "bonus-codes"
   | null;
+
+type PaymentSortField =
+  | "id"
+  | "user"
+  | "amount"
+  | "status"
+  | "provider"
+  | "planCode"
+  | "createdAt"
+  | "paidAt";
 
 type Props = {
   users: UserItem[];
@@ -146,6 +156,51 @@ function PaymentInfoCard({
   );
 }
 
+function SortableHeader({
+  label,
+  active,
+  direction,
+  onClick,
+  align = "left",
+}: {
+  label: string;
+  active: boolean;
+  direction: "asc" | "desc";
+  onClick: () => void;
+  align?: "left" | "right";
+}) {
+  return (
+    <th
+      className={`whitespace-nowrap px-3 py-3 text-[11px] font-extrabold uppercase tracking-[0.06em] text-black/45 ${
+        align === "right" ? "text-right" : "text-left"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1.5 transition hover:text-black ${
+          active ? "text-[#028c36]" : ""
+        } ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        {label}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`h-3 w-3 shrink-0 transition-transform ${
+            active && direction === "asc" ? "rotate-180" : ""
+          } ${active ? "opacity-100" : "opacity-25"}`}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+    </th>
+  );
+}
+
 export default function AdminUsersClient({
   users: initialUsers,
   payments,
@@ -177,6 +232,19 @@ export default function AdminUsersClient({
 
   const [onlySuccessfulPayments, setOnlySuccessfulPayments] = useState(false);
 
+  const [paymentSortField, setPaymentSortField] = useState<PaymentSortField>(
+    "createdAt"
+  );
+  const [paymentSortDirection, setPaymentSortDirection] = useState<"asc" | "desc">(
+    "desc"
+  );
+
+  const PAYMENTS_PAGE_SIZE = 20;
+  const [paymentPage, setPaymentPage] = useState(1);
+  const [expandedPaymentIds, setExpandedPaymentIds] = useState<Set<number>>(
+    new Set()
+  );
+
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(
     initialUsers[0] || null
   );
@@ -184,6 +252,9 @@ export default function AdminUsersClient({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const [createName, setCreateName] = useState("");
   const [createEmail, setCreateEmail] = useState("");
@@ -364,14 +435,6 @@ export default function AdminUsersClient({
       const rawDate =
         paymentDateField === "paidAt" ? payment.paidAt : payment.createdAt;
 
-      /*
-        При фильтрации по факту оплаты исключаем платежи,
-        у которых дата оплаты ещё отсутствует.
-      */
-      if (paymentDateField === "paidAt" && !rawDate) {
-        return false;
-      }
-
       if (fromDate || toDate) {
         if (!rawDate) return false;
 
@@ -443,6 +506,107 @@ export default function AdminUsersClient({
       currency,
     };
   }, [filteredPayments]);
+
+  const sortedPayments = useMemo(() => {
+    const list = [...filteredPayments];
+    const direction = paymentSortDirection === "asc" ? 1 : -1;
+
+    list.sort((a, b) => {
+      switch (paymentSortField) {
+        case "id":
+          return (a.id - b.id) * direction;
+
+        case "amount":
+          return (a.amount - b.amount) * direction;
+
+        case "status":
+          return a.status.localeCompare(b.status) * direction;
+
+        case "provider":
+          return a.provider.localeCompare(b.provider) * direction;
+
+        case "planCode":
+          return (a.planCode || "").localeCompare(b.planCode || "") * direction;
+
+        case "user": {
+          const nameA = a.user?.name || "";
+          const nameB = b.user?.name || "";
+          return nameA.localeCompare(nameB) * direction;
+        }
+
+        case "paidAt": {
+          const timeA = a.paidAt ? new Date(a.paidAt).getTime() : 0;
+          const timeB = b.paidAt ? new Date(b.paidAt).getTime() : 0;
+          return (timeA - timeB) * direction;
+        }
+
+        case "createdAt":
+        default: {
+          const timeA = new Date(a.createdAt).getTime();
+          const timeB = new Date(b.createdAt).getTime();
+          return (timeA - timeB) * direction;
+        }
+      }
+    });
+
+    return list;
+  }, [filteredPayments, paymentSortField, paymentSortDirection]);
+
+  function togglePaymentSort(field: PaymentSortField) {
+    if (paymentSortField === field) {
+      setPaymentSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setPaymentSortField(field);
+    setPaymentSortDirection(
+      field === "amount" || field === "createdAt" || field === "paidAt"
+        ? "desc"
+        : "asc"
+    );
+  }
+
+  const paymentTotalPages = Math.max(
+    1,
+    Math.ceil(sortedPayments.length / PAYMENTS_PAGE_SIZE)
+  );
+  const paymentPageSafe = Math.min(paymentPage, paymentTotalPages);
+
+  const paginatedPayments = useMemo(() => {
+    const start = (paymentPageSafe - 1) * PAYMENTS_PAGE_SIZE;
+    return sortedPayments.slice(start, start + PAYMENTS_PAGE_SIZE);
+  }, [sortedPayments, paymentPageSafe]);
+
+  useEffect(() => {
+    setPaymentPage(1);
+  }, [
+    paymentSearch,
+    paymentStatusFilter,
+    paymentProviderFilter,
+    paymentPlanFilter,
+    paymentDateField,
+    paymentDateFrom,
+    paymentDateTo,
+    paymentAmountFrom,
+    paymentAmountTo,
+    onlySuccessfulPayments,
+    paymentSortField,
+    paymentSortDirection,
+  ]);
+
+  function togglePaymentExpanded(id: number) {
+    setExpandedPaymentIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  }
 
   const hasActivePaymentFilters =
     paymentStatusFilter !== "all" ||
@@ -544,6 +708,67 @@ export default function AdminUsersClient({
     } catch (err) {
       console.error(err);
       setError("Ошибка сети");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function generatePassword() {
+    const chars =
+      "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    const randomValues = new Uint32Array(14);
+
+    if (typeof window !== "undefined" && window.crypto) {
+      window.crypto.getRandomValues(randomValues);
+    } else {
+      for (let i = 0; i < randomValues.length; i += 1) {
+        randomValues[i] = Math.floor(Math.random() * chars.length);
+      }
+    }
+
+    let result = "";
+    for (let i = 0; i < randomValues.length; i += 1) {
+      result += chars[randomValues[i] % chars.length];
+    }
+
+    setNewPassword(result);
+    setShowNewPassword(true);
+  }
+
+  async function savePassword() {
+    if (!selectedUser) return;
+
+    if (newPassword.trim().length < 8) {
+      setError("Пароль должен быть не короче 8 символов.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const res = await fetch(`/api/admin/users/${selectedUser.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ newPassword }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setError(data?.error || "Не удалось обновить пароль.");
+        return;
+      }
+
+      setMessage(`Пароль пользователя «${selectedUser.name}» обновлён.`);
+      setNewPassword("");
+      setShowNewPassword(false);
+    } catch (err) {
+      console.error(err);
+      setError("Ошибка сети. Не удалось обновить пароль.");
     } finally {
       setLoading(false);
     }
@@ -907,6 +1132,8 @@ export default function AdminUsersClient({
                             setSelectedUser(user);
                             setError("");
                             setMessage("");
+                            setNewPassword("");
+                            setShowNewPassword(false);
                           }}
                           className={`w-full rounded-2xl border p-4 text-left transition ${
                             isSelected
@@ -1140,6 +1367,63 @@ export default function AdminUsersClient({
                           rows={4}
                           className="w-full resize-y rounded-2xl border border-black/10 px-4 py-4 outline-none transition focus:border-[#03bd48]"
                         />
+                      </div>
+
+                      <div className="md:col-span-2 rounded-2xl border border-black/10 bg-black/[0.02] p-5">
+                        <div className="text-sm font-extrabold text-black">
+                          Смена пароля
+                        </div>
+
+                        <p className="mt-1 max-w-xl text-xs leading-5 text-black/50">
+                          Текущий пароль хранится в виде хеша, поэтому показать его
+                          нельзя — это обычная практика безопасности для любого
+                          сервиса. Здесь можно задать пользователю новый пароль
+                          вместо старого.
+                        </p>
+
+                        <div className="mt-4">
+                          <FieldLabel>Новый пароль</FieldLabel>
+                          <div className="relative">
+                            <input
+                              type={showNewPassword ? "text" : "password"}
+                              value={newPassword}
+                              onChange={(event) =>
+                                setNewPassword(event.target.value)
+                              }
+                              placeholder="Минимум 6 символов"
+                              className="w-full rounded-2xl border border-black/10 px-4 py-4 pr-24 outline-none transition focus:border-[#03bd48]"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setShowNewPassword((current) => !current)
+                              }
+                              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-extrabold text-black/40 transition hover:text-black/70"
+                            >
+                              {showNewPassword ? "Скрыть" : "Показать"}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={generatePassword}
+                            className="w-full rounded-2xl border border-black/10 bg-white px-4 py-4 text-sm font-extrabold text-black/70 transition hover:border-[#03bd48]/35 hover:text-[#028c36] sm:w-auto"
+                          >
+                            Сгенерировать
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={savePassword}
+                            disabled={loading || newPassword.trim().length === 0}
+                            className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                          >
+                            Сохранить пароль
+                          </button>
+                        </div>
                       </div>
 
                       <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:flex-wrap md:col-span-2">
@@ -1739,150 +2023,273 @@ export default function AdminUsersClient({
                   </div>
                 )}
 
-                {filteredPayments.length === 0 ? (
+                {sortedPayments.length === 0 ? (
                   <div className="mt-6 rounded-3xl border border-dashed border-black/15 bg-black/[0.02] p-8 text-center text-black/50">
                     Платежи по этому запросу не найдены.
                   </div>
                 ) : (
-                  <div className="mt-6 space-y-4">
-                    {filteredPayments.map((payment) => (
-                      <article
-                        key={payment.id}
-                        className="overflow-hidden rounded-3xl border border-black/8 bg-white transition hover:border-[#03bd48]/30 hover:shadow-[0_14px_30px_rgba(16,24,40,0.08)]"
-                      >
-                        <div className="flex flex-col gap-4 border-b border-black/7 bg-black/[0.02] p-4 sm:flex-row sm:items-start sm:justify-between md:p-5">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-xl bg-black px-3 py-1.5 text-xs font-extrabold text-white">
-                                Платёж #{payment.id}
-                              </span>
+                  <>
+                    <div className="mt-6 overflow-x-auto rounded-3xl border border-black/8">
+                      <table className="w-full min-w-[920px] border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b border-black/8 bg-black/[0.025]">
+                            <SortableHeader
+                              label="ID"
+                              active={paymentSortField === "id"}
+                              direction={paymentSortDirection}
+                              onClick={() => togglePaymentSort("id")}
+                            />
+                            <SortableHeader
+                              label="Пользователь"
+                              active={paymentSortField === "user"}
+                              direction={paymentSortDirection}
+                              onClick={() => togglePaymentSort("user")}
+                            />
+                            <SortableHeader
+                              label="Сумма"
+                              active={paymentSortField === "amount"}
+                              direction={paymentSortDirection}
+                              onClick={() => togglePaymentSort("amount")}
+                              align="right"
+                            />
+                            <SortableHeader
+                              label="Статус"
+                              active={paymentSortField === "status"}
+                              direction={paymentSortDirection}
+                              onClick={() => togglePaymentSort("status")}
+                            />
+                            <SortableHeader
+                              label="Способ"
+                              active={paymentSortField === "provider"}
+                              direction={paymentSortDirection}
+                              onClick={() => togglePaymentSort("provider")}
+                            />
+                            <SortableHeader
+                              label="Тариф"
+                              active={paymentSortField === "planCode"}
+                              direction={paymentSortDirection}
+                              onClick={() => togglePaymentSort("planCode")}
+                            />
+                            <SortableHeader
+                              label="Создан"
+                              active={paymentSortField === "createdAt"}
+                              direction={paymentSortDirection}
+                              onClick={() => togglePaymentSort("createdAt")}
+                            />
+                            <SortableHeader
+                              label="Оплачен"
+                              active={paymentSortField === "paidAt"}
+                              direction={paymentSortDirection}
+                              onClick={() => togglePaymentSort("paidAt")}
+                            />
+                            <th className="px-3 py-3" aria-hidden="true" />
+                          </tr>
+                        </thead>
 
-                              <span
-                                className={`rounded-full border px-3 py-1.5 text-xs font-extrabold uppercase ${getPaymentStatusClass(
-                                  payment.status
-                                )}`}
-                              >
-                                {payment.status}
-                              </span>
+                        <tbody>
+                          {paginatedPayments.map((payment) => {
+                            const isExpanded = expandedPaymentIds.has(payment.id);
 
-                              <span className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-extrabold uppercase text-black/55">
-                                {payment.provider}
-                              </span>
-                            </div>
+                            return (
+                              <Fragment key={payment.id}>
+                                <tr
+                                  onClick={() => togglePaymentExpanded(payment.id)}
+                                  className={`cursor-pointer border-b border-black/6 transition hover:bg-[#03bd48]/[0.04] ${
+                                    isExpanded ? "bg-[#03bd48]/[0.05]" : "bg-white"
+                                  }`}
+                                >
+                                  <td className="whitespace-nowrap px-3 py-3 font-bold text-black/55">
+                                    #{payment.id}
+                                  </td>
 
-                            <div className="mt-4">
-                              <div className="truncate text-lg font-extrabold text-black">
-                                {payment.user?.name || "Пользователь удалён"}
-                              </div>
+                                  <td className="min-w-[180px] max-w-[240px] px-3 py-3">
+                                    <div className="truncate font-bold text-black">
+                                      {payment.user?.name || "Пользователь удалён"}
+                                    </div>
+                                    <div className="truncate text-xs text-black/45">
+                                      {payment.user?.email || "Почта недоступна"}
+                                    </div>
+                                  </td>
 
-                              <div className="mt-1 break-all text-sm text-black/48">
-                                {payment.user?.email || "Почта недоступна"}
-                              </div>
-                            </div>
-                          </div>
+                                  <td className="whitespace-nowrap px-3 py-3 text-right font-extrabold text-black">
+                                    {payment.amount} {payment.currency}
+                                  </td>
 
-                          <div className="shrink-0 rounded-2xl bg-[#03bd48] px-4 py-3 text-left text-white sm:text-right">
-                            <div className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-white/70">
-                              Сумма платежа
-                            </div>
+                                  <td className="whitespace-nowrap px-3 py-3">
+                                    <span
+                                      className={`rounded-full border px-2.5 py-1 text-[11px] font-extrabold uppercase ${getPaymentStatusClass(
+                                        payment.status
+                                      )}`}
+                                    >
+                                      {payment.status}
+                                    </span>
+                                  </td>
 
-                            <div className="mt-1 text-xl font-extrabold">
-                              {payment.amount} {payment.currency}
-                            </div>
-                          </div>
+                                  <td className="whitespace-nowrap px-3 py-3 text-black/65">
+                                    {payment.provider === "yookassa"
+                                      ? "ЮKassa"
+                                      : payment.provider === "test"
+                                        ? "Тестовая активация"
+                                        : payment.provider}
+                                  </td>
+
+                                  <td className="whitespace-nowrap px-3 py-3 text-black/65">
+                                    {payment.planCode || "—"}
+                                  </td>
+
+                                  <td className="whitespace-nowrap px-3 py-3 text-black/55">
+                                    {formatDateTime(payment.createdAt)}
+                                  </td>
+
+                                  <td className="whitespace-nowrap px-3 py-3 text-black/55">
+                                    {formatDateTime(payment.paidAt)}
+                                  </td>
+
+                                  <td className="whitespace-nowrap px-3 py-3 text-right">
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2.5"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className={`h-4 w-4 text-black/35 transition-transform ${
+                                        isExpanded ? "rotate-180" : ""
+                                      }`}
+                                      aria-hidden="true"
+                                    >
+                                      <path d="m6 9 6 6 6-6" />
+                                    </svg>
+                                  </td>
+                                </tr>
+
+                                {isExpanded && (
+                                  <tr className="border-b border-black/6 bg-black/[0.015]">
+                                    <td colSpan={9} className="px-4 py-4 sm:px-6">
+                                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                        <PaymentInfoCard title="Пользователь">
+                                          <div className="text-sm font-bold text-black">
+                                            Внутренний ID: {payment.userId}
+                                          </div>
+                                          <div className="mt-1 text-sm text-black/58">
+                                            Public ID:{" "}
+                                            <span className="font-extrabold text-[#028c36]">
+                                              {payment.user?.publicId ?? "—"}
+                                            </span>
+                                          </div>
+                                        </PaymentInfoCard>
+
+                                        <PaymentInfoCard title="Тариф и срок">
+                                          <div className="text-sm font-bold text-black">
+                                            {payment.durationMonths} мес.
+                                          </div>
+                                          <div className="mt-1 break-all text-sm text-black/55">
+                                            {payment.planCode || "Тариф не указан"}
+                                          </div>
+                                        </PaymentInfoCard>
+
+                                        <PaymentInfoCard title="Действует до">
+                                          <div className="text-sm font-bold leading-6 text-black">
+                                            {formatDateTime(payment.expiresAt)}
+                                          </div>
+                                        </PaymentInfoCard>
+
+                                        <PaymentInfoCard
+                                          title="Описание"
+                                          className="sm:col-span-2 lg:col-span-1"
+                                        >
+                                          <div className="break-words text-sm leading-6 text-black/70">
+                                            {payment.description || "Описание отсутствует"}
+                                          </div>
+                                        </PaymentInfoCard>
+
+                                        <div className="rounded-2xl border border-[#03bd48]/20 bg-[#03bd48]/[0.06] p-4 sm:col-span-2 lg:col-span-4">
+                                          <div className="grid gap-4 sm:grid-cols-2">
+                                            <div>
+                                              <div className="text-[10px] font-extrabold uppercase tracking-[0.09em] text-[#027a30]/65">
+                                                Public ID пользователя
+                                              </div>
+                                              <code className="mt-2 inline-block rounded-xl border border-[#03bd48]/20 bg-white px-3 py-2 text-sm font-extrabold text-[#027a30]">
+                                                {payment.user?.publicId ?? "—"}
+                                              </code>
+                                            </div>
+
+                                            <div>
+                                              <div className="text-[10px] font-extrabold uppercase tracking-[0.09em] text-[#027a30]/65">
+                                                Внешний ID платежа
+                                              </div>
+
+                                              {payment.externalPaymentId ? (
+                                                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
+                                                  <code className="min-w-0 flex-1 break-all rounded-xl border border-black/10 bg-white px-3 py-2 text-xs leading-5 text-black">
+                                                    {payment.externalPaymentId}
+                                                  </code>
+
+                                                  <button
+                                                    type="button"
+                                                    title="Скопировать внешний ID платежа"
+                                                    onClick={(event) => {
+                                                      event.stopPropagation();
+                                                      copyExternalPaymentId(payment.externalPaymentId);
+                                                    }}
+                                                    className="shrink-0 rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-bold text-black transition hover:border-[#03bd48] hover:text-[#028c36]"
+                                                  >
+                                                    Копировать
+                                                  </button>
+                                                </div>
+                                              ) : (
+                                                <div className="mt-2 text-sm font-semibold text-black/45">
+                                                  Внешний ID отсутствует
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
+                      <div className="text-xs font-semibold text-black/45">
+                        Показано {paginatedPayments.length === 0 ? 0 : (paymentPageSafe - 1) * PAYMENTS_PAGE_SIZE + 1}
+                        {"–"}
+                        {(paymentPageSafe - 1) * PAYMENTS_PAGE_SIZE + paginatedPayments.length} из {sortedPayments.length}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentPage((page) => Math.max(1, page - 1))}
+                          disabled={paymentPageSafe <= 1}
+                          className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-extrabold text-black/60 transition hover:border-[#03bd48]/35 hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Назад
+                        </button>
+
+                        <div className="text-xs font-bold text-black/50">
+                          Стр. {paymentPageSafe} из {paymentTotalPages}
                         </div>
 
-                        <div className="grid gap-3 p-4 sm:grid-cols-2 md:grid-cols-3 md:p-5 xl:grid-cols-4">
-                          <PaymentInfoCard title="Пользователь">
-                            <div className="text-sm font-bold text-black">
-                              Внутренний ID: {payment.userId}
-                            </div>
-
-                            <div className="mt-1 text-sm text-black/58">
-                              Public ID:{" "}
-                              <span className="font-extrabold text-[#028c36]">
-                                {payment.user?.publicId ?? "—"}
-                              </span>
-                            </div>
-                          </PaymentInfoCard>
-
-                          <PaymentInfoCard title="Тариф">
-                            <div className="text-sm font-bold text-black">
-                              {payment.durationMonths} мес.
-                            </div>
-
-                            <div className="mt-1 break-all text-sm text-black/55">
-                              {payment.planCode || "Тариф не указан"}
-                            </div>
-                          </PaymentInfoCard>
-
-                          <PaymentInfoCard title="Создан">
-                            <div className="text-sm font-bold leading-6 text-black">
-                              {formatDateTime(payment.createdAt)}
-                            </div>
-                          </PaymentInfoCard>
-
-                          <PaymentInfoCard title="Оплачен">
-                            <div className="text-sm font-bold leading-6 text-black">
-                              {formatDateTime(payment.paidAt)}
-                            </div>
-                          </PaymentInfoCard>
-
-                          <PaymentInfoCard
-                            title="Описание"
-                            className="sm:col-span-2"
-                          >
-                            <div className="break-words text-sm leading-6 text-black/70">
-                              {payment.description || "Описание отсутствует"}
-                            </div>
-                          </PaymentInfoCard>
-
-                          <div className="rounded-2xl border border-[#03bd48]/20 bg-[#03bd48]/[0.06] p-4 md:col-span-2">
-                            <div>
-                              <div className="text-[10px] font-extrabold uppercase tracking-[0.09em] text-[#027a30]/65">
-                                Public ID пользователя
-                              </div>
-
-                              <code className="mt-2 inline-block rounded-xl border border-[#03bd48]/20 bg-white px-3 py-2 text-sm font-extrabold text-[#027a30]">
-                                {payment.user?.publicId ?? "—"}
-                              </code>
-                            </div>
-
-                            <div className="mt-4 border-t border-[#03bd48]/15 pt-4">
-                              <div className="text-[10px] font-extrabold uppercase tracking-[0.09em] text-[#027a30]/65">
-                                Внешний ID платежа
-                              </div>
-
-                              {payment.externalPaymentId ? (
-                                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
-                                  <code className="min-w-0 flex-1 break-all rounded-xl border border-black/10 bg-white px-3 py-2 text-xs leading-5 text-black">
-                                    {payment.externalPaymentId}
-                                  </code>
-
-                                  <button
-                                    type="button"
-                                    title="Скопировать внешний ID платежа"
-                                    onClick={() =>
-                                      copyExternalPaymentId(
-                                        payment.externalPaymentId
-                                      )
-                                    }
-                                    className="shrink-0 rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-bold text-black transition hover:border-[#03bd48] hover:text-[#028c36]"
-                                  >
-                                    Копировать
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="mt-2 text-sm font-semibold text-black/45">
-                                  Внешний ID отсутствует
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPaymentPage((page) => Math.min(paymentTotalPages, page + 1))
+                          }
+                          disabled={paymentPageSafe >= paymentTotalPages}
+                          className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs font-extrabold text-black/60 transition hover:border-[#03bd48]/35 hover:text-[#028c36] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Вперёд
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </section>
             )}

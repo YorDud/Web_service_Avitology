@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { parseDateTimeLocal } from "@/lib/dates";
+import { hashPassword } from "@/lib/auth";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -26,6 +27,49 @@ export async function PATCH(req: Request, { params }: Params) {
     }
 
     const body = await req.json();
+
+    /*
+      Смена пароля: запрос содержит только newPassword.
+      Остальные данные пользователя при этом не трогаем.
+    */
+    if (typeof body.newPassword === "string") {
+      const newPassword = body.newPassword;
+
+      if (newPassword.trim().length < 6) {
+        return NextResponse.json(
+          { error: "Пароль должен быть не короче 6 символов" },
+          { status: 400 }
+        );
+      }
+
+      if (newPassword.length > 128) {
+        return NextResponse.json(
+          { error: "Пароль слишком длинный (максимум 128 символов)" },
+          { status: 400 }
+        );
+      }
+
+      const target = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+
+      if (!target) {
+        return NextResponse.json(
+          { error: "Пользователь не найден" },
+          { status: 404 }
+        );
+      }
+
+      const passwordHash = await hashPassword(newPassword);
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      });
+
+      return NextResponse.json({ success: true });
+    }
 
     const email = String(body.email || "").trim().toLowerCase();
     const name = String(body.name || "").trim();
