@@ -11,6 +11,8 @@ import {
 import { createPortal } from "react-dom";
 import ImageUniqualizerService from "./image-uniqualizer";
 import AutoloadService from "./autoload/autoload-service";
+import ServiceLevelService from "./service-level/service-level";
+import { hasTierAccess } from "@/lib/service-level/constants";
 
 type FinancialRecord = {
   id: number;
@@ -160,11 +162,15 @@ type DashboardPageProps = {
 
   // Раздел, который нужно открыть сразу (например, после оплаты слотов клиентов автозагрузки).
   initialSection?: DashboardSection;
+
+  // Минимальный тариф для услуги «Уровень сервиса» (задаётся в админ-панели): free | basic | pro.
+  serviceLevelMinTier?: string;
 };
 
 type DashboardSection =
   | "profile"
   | "avito"
+  | "service-level"
   | "financial"
   | "bid-manager"
   | "reviews-calculator"
@@ -902,6 +908,7 @@ export default function DashboardClientPage({
   trialOfferEnabled,
   canUseFreeTrial,
   initialSection,
+  serviceLevelMinTier = "free",
 }: DashboardPageProps) {
   const [activeSection, setActiveSection] =
     useState<DashboardSection>(initialSection ?? "profile");
@@ -1164,6 +1171,7 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
   const hasAccess = subscriptionLevel === "basic" || subscriptionLevel === "pro" || subscriptionLevel === "admin";
   const hasBidderAccess = subscriptionLevel === "pro" || subscriptionLevel === "admin";
   const isAdmin = subscriptionLevel === "admin";
+  const hasServiceLevelAccess = hasTierAccess(subscriptionLevel, serviceLevelMinTier);
 
   const toggleSection = (section: Exclude<DashboardSection, null>) =>
     setActiveSection((current) => (current === section ? null : section));
@@ -1176,6 +1184,7 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
     available: boolean;
     inDevelopment?: boolean;
     beta?: boolean;
+    promoted?: boolean;
   }[] = [
     {
       id: "profile",
@@ -1185,50 +1194,47 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
       available: true,
     },
     {
-      id: "avito",
+      id: "service-level",
       index: "02",
-      title: "Места в поиске Авито",
-      description: hasAccess
-        ? "Аналитика поисковых позиций"
-        : "Доступно с подпиской Basic",
-      available: hasAccess,
+      title: "Уровень сервиса",
+      description: hasServiceLevelAccess
+        ? "Актуальность, цена и ответы в чатах"
+        : `Доступно с подпиской ${serviceLevelMinTier === "pro" ? "Pro" : "Basic"}`,
+      available: hasServiceLevelAccess,
+      promoted: true,
+    },
+    {
+      id: "reviews-calculator",
+      index: "03",
+      title: "Калькулятор отзывов",
+      description: "Расчёт рейтинга профиля Авито",
+      available: true,
+    },
+    {
+      id: "image-uniqualizer",
+      index: "04",
+      title: "Уникализатор картинок",
+      description: "Уникальные копии фото для объявлений",
+      available: true,
     },
     {
       id: "financial",
-      index: "03",
+      index: "05",
       title: "Финансовый анализ",
       description: hasAccess
         ? "Доходы, расходы и прибыль"
         : "Доступно с подпиской Basic",
       available: hasAccess,
     },
-
     {
-      id: "reviews-calculator",
-      index: "04",
-      title: "Калькулятор отзывов",
-      description: "Расчёт рейтинга профиля Авито",
-      available: true,
-    },
-
-    {
-      id: "image-uniqualizer",
-      index: "05",
-      title: "Уникализатор картинок",
-      description: "Уникальные копии фото для объявлений",
-      available: true,
-    },
-
-
-    {
-      id: "bid-manager",
+      id: "avito",
       index: "06",
-      title: "Бид-менеджер Авито",
-      description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
-      available: hasBidderAccess,
-      beta: true,
+      title: "Места в поиске Авито",
+      description: hasAccess
+        ? "Аналитика поисковых позиций"
+        : "Доступно с подпиской Basic",
+      available: hasAccess,
     },
-    
     {
       id: "autoload",
       index: "07",
@@ -1239,10 +1245,17 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
       available: hasBidderAccess,
       beta: true,
     },
-
+    {
+      id: "bid-manager",
+      index: "08",
+      title: "Бид-менеджер Авито",
+      description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
+      available: hasBidderAccess,
+      beta: true,
+    },
     {
       id: "popular-queries",
-      index: "08",
+      index: "09",
       title: "Запросы по популярности Авито",
       description: hasAccess
         ? "Подбор популярных запросов"
@@ -2636,6 +2649,17 @@ setExpandedBidderId(savedBidder.id);
                           <span>{item.title}</span>
 
                           {item.beta && (<span className="rounded-full border border-blue-300/30 bg-blue-400/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-blue-200">BETA</span>)}
+                          {item.promoted && (
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] ${
+                                isActive
+                                  ? "border-white/50 bg-white text-[#027a30]"
+                                  : "border-[#03bd48]/35 bg-[#03bd48]/15 text-[#78f8a6]"
+                              }`}
+                            >
+                              ₽ Продвижение
+                            </span>
+                          )}
                           {item.inDevelopment && (
                             <span
                               className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] ${
@@ -2684,6 +2708,15 @@ setExpandedBidderId(savedBidder.id);
                         <span>{item.title}</span>
 
                         {item.beta && (<span className="rounded-full border border-blue-300/30 bg-blue-400/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-blue-200">BETA</span>)}
+                        {item.promoted && (
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] ${
+                              isActive ? "border-white/50 bg-white text-[#027a30]" : "border-[#03bd48]/35 bg-[#03bd48]/15 text-[#78f8a6]"
+                            }`}
+                          >
+                            ₽ Продвижение
+                          </span>
+                        )}
                         {item.inDevelopment && (
                           <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.06em] text-amber-200/70">
                             В разработке
@@ -5899,6 +5932,9 @@ onChange={(e) =>
                 </section>
               </div>
             )}
+
+            {/* ========== УСЛУГА «УРОВЕНЬ СЕРВИСА»: заказы живых действий на объявлениях ========== */}
+            {activeSection === "service-level" && hasServiceLevelAccess && <ServiceLevelService />}
 
             {/* ========== УСЛУГА «УНИКАЛИЗАТОР КАРТИНОК»: доступна на всех тарифах ========== */}
             {activeSection === "image-uniqualizer" && <ImageUniqualizerService />}

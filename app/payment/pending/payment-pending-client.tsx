@@ -16,6 +16,7 @@ export default function PaymentPendingClient({ paymentId }: Props) {
   const [status, setStatus] = useState<PaymentStatus | null>(null);
   const [error, setError] = useState("");
   const [isClientsPayment, setIsClientsPayment] = useState(false);
+  const [isServicePayment, setIsServicePayment] = useState(false);
 
   useEffect(() => {
     if (!paymentId || Number.isNaN(Number(paymentId))) {
@@ -46,6 +47,7 @@ export default function PaymentPendingClient({ paymentId }: Props) {
 
         setStatus(paymentStatus);
         setIsClientsPayment(String(data.payment?.planCode ?? "").startsWith("autoload_clients_x"));
+        setIsServicePayment(String(data.payment?.planCode ?? "").startsWith("service_level_order_"));
 
         if (paymentStatus === "succeeded") {
           router.replace(`/payment/success?paymentId=${paymentId}`);
@@ -98,8 +100,11 @@ export default function PaymentPendingClient({ paymentId }: Props) {
             )}
 
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
-              <Link href={isClientsPayment ? "/dashboard?section=autoload" : "/pricing"} className="btn-primary">
-                {isClientsPayment ? "Вернуться к автозагрузке" : "Вернуться к подписке"}
+              <Link
+                href={isServicePayment ? "/dashboard?section=service-level" : isClientsPayment ? "/dashboard?section=autoload" : "/pricing"}
+                className="btn-primary"
+              >
+                {isServicePayment ? "Вернуться к услуге" : isClientsPayment ? "Вернуться к автозагрузке" : "Вернуться к подписке"}
               </Link>
               <Link href="/dashboard" className="btn-secondary">
                 Перейти в личный кабинет

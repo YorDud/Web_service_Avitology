@@ -3,12 +3,14 @@ import DashboardClient from "./dashboard-client";
 import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getServiceSettings } from "@/lib/service-settings";
+import { getServiceLevelSettings } from "@/lib/service-level/settings";
 
 export const dynamic = "force-dynamic";
 
 const OPENABLE_SECTIONS = [
   "profile",
   "avito",
+  "service-level",
   "financial",
   "bid-manager",
   "reviews-calculator",
@@ -31,6 +33,10 @@ export default async function DashboardPage({
   const sessionUser = await getSessionUser();
 
   const serviceSettings = await getServiceSettings();
+  // Минимальный тариф услуги «Уровень сервиса» (если таблицы ещё нет в базе — считаем, что доступна всем).
+  const serviceLevelMinTier = await getServiceLevelSettings()
+    .then((settings) => settings.minTier)
+    .catch(() => "free");
 
   if (!sessionUser) {
     redirect("/auth");
@@ -199,6 +205,7 @@ lastPositionError: bidder.lastPositionError,
       trialOfferEnabled={serviceSettings.isFreeTrialEnabled}
       canUseFreeTrial={!user.usedFreeTrial}
       initialSection={initialSection}
+      serviceLevelMinTier={serviceLevelMinTier}
     />
   );
 }

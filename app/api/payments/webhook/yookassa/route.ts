@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { activateSubscription } from "@/lib/payments/activate-subscription";
 import { fulfilAutoloadClientsPayment } from "@/lib/payments/fulfil-autoload-clients";
 import { isAutoloadClientsPlanCode } from "@/lib/autoload/clients-plan";
+import { isServiceLevelPlanCode } from "@/lib/service-level/constants";
+import { fulfilServiceLevelPayment, scheduleDispatch } from "@/lib/service-level/orders";
 
 type YookassaWebhookBody = {
   event?: string;
@@ -61,6 +63,17 @@ export async function POST(req: Request) {
           webhookEvent: event,
           yookassaStatus: status,
         });
+        return NextResponse.json({ ok: true });
+      }
+
+      // Оплата заказа «Уровня сервиса»: заказ получает номер и уходит в работу (на SocPublic).
+      if (isServiceLevelPlanCode(payment.planCode)) {
+        const result = await fulfilServiceLevelPayment(payment.id, {
+          source: "yookassa-webhook",
+          webhookEvent: event,
+          yookassaStatus: status,
+        });
+        if (result.newlyPaid) scheduleDispatch(result.orderId);
         return NextResponse.json({ ok: true });
       }
 

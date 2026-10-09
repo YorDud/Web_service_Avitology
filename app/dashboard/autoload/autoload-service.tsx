@@ -1,14 +1,10 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { describeSchedule, nextSlots, sourceLabel } from "@/lib/autoload/schedule";
-import { MAX_CLIENT_NAME_LENGTH, clientsWord } from "@/lib/autoload/clients-plan";
 import type {
   AccountStatus,
-  AutoloadClientDto,
-  ClientSlots,
-  ClientsOverview,
   FeedSummary,
   ProfileDto,
   ReportSummary,
@@ -18,11 +14,8 @@ import FeedEditor from "./feed-editor";
 import IssuesModal from "./issues-modal";
 import {
   Accordion,
-  ApiError,
   AutoloadStyles,
-  ClientKeyContext,
   Icon,
-  Modal,
   Pill,
   Spinner,
   Toggle,
@@ -33,9 +26,7 @@ import {
   ghostButton,
   inputClass,
   timeAgo,
-  useClientKey,
   useToast,
-  withClient,
 } from "./ui";
 
 /* Ключи Авито общие с Бид-менеджером: используем тот же API /api/avito-connection,
@@ -108,8 +99,8 @@ const GUIDE_NOTES = [
   "Не меняйте ID объявления после публикации: по нему Авито узнаёт объявление и обновляет его, а не создаёт новое.",
   "Обязательные поля зависят от категории. Если Авито отклонил объявление, причина появится в отчёте, а после кнопки «Обновить статусы из отчёта» и в таблице.",
   "Файл отдаётся, пока у вас активна подписка Pro. После окончания подписки автозагрузка приостанавливается.",
-  "Лимиты: до 20 таблиц на один аккаунт Авито, до 5000 объявлений в каждой.",
-  "Несколько аккаунтов Авито: основной аккаунт входит в подписку Pro, а дополнительных клиентов можно добавить кнопкой «Добавить клиента» (+3 клиента за 299 ₽, оплата разовая). У каждого клиента свои ключи, таблицы, расписание и отчёты, переключаться между ними можно вверху страницы.",
+  "С 1 октября 2026 года для объявлений с «Авито Доставкой» Авито дополнительно проверяет сертификаты и маркировку товара: код ТН ВЭД или ОКПД 2, регистрацию в «Честном знаке», коды GTIN. Эти поля показываются отдельной группой «Для Авито Доставки» в окне выбора категории — добавляйте их только для товаров, которые отправляете через доставку; на обычную публикацию (самовывоз/встреча) они не влияют.",
+  "Лимиты: до 20 таблиц, до 5000 объявлений в каждой.",
   "Значения полей «Тип размещения» и «Платная услуга» зависят от категории (у части категорий это Package/Premium/VIP, у других — свои промо-коды вроде x2_7 или BBL). Загрузите поля вашей категории кнопкой «Каталог» — тогда в таблице появится точный список значений для выбора.",
   "Если в Google Таблицах или Excel номер телефона с «+» превращается в формулу или ошибку — отформатируйте столбец как «Текст» (правой кнопкой по столбцу → «Формат» → «Обычный текст»/«Открытый текст») до того, как ввести номер, либо поставьте перед ним апостроф: '+7 999 123-45-67.",
 ];
@@ -140,14 +131,7 @@ export default function AutoloadService() {
   const feedsRef = useRef<HTMLDivElement | null>(null);
   const guideRef = useRef<HTMLDivElement | null>(null);
 
-  // Основной аккаунт Авито (общий с Бид-менеджером) и дополнительные клиенты.
-  const [mainAccount, setMainAccount] = useState<AccountStatus | null>(null);
-  const [clientsInfo, setClientsInfo] = useState<ClientsOverview | null>(null);
-  const [clientsError, setClientsError] = useState("");
-  const [clientKey, setClientKey] = useState<string>(MAIN_KEY);
-  const [bootstrapped, setBootstrapped] = useState(false);
-  const [clientsModal, setClientsModal] = useState<null | "add" | "buy">(null);
-  const [connError, setConnError] = useState("");
+  const [account, setAccount] = useState<AccountStatus | null>(null);
   const [feeds, setFeeds] = useState<FeedSummary[] | null>(null);
   const [profile, setProfile] = useState<ProfileDto | null>(null);
   const [profileError, setProfileError] = useState("");
@@ -172,12 +156,6 @@ export default function AutoloadService() {
     setIsBetaTooltipOpen(true);
   };
 
-  const activeClient = clientKey === MAIN_KEY ? null : (clientsInfo?.clients.find((client) => String(client.id) === clientKey) ?? null);
-  // Текущий аккаунт: основной — из /api/avito-connection, клиент — из списка клиентов.
-  const account = useMemo<AccountStatus | null>(
-    () => (clientKey === MAIN_KEY ? mainAccount : activeClient ? clientToAccount(activeClient) : null),
-    [clientKey, mainAccount, activeClient],
-  );
   const connected = account?.connected === true;
   const linkedCount = (feeds ?? []).filter((feed) => feed.linked).length;
   const canRun = Boolean(profile?.exists) && (linkedCount > 0 || Boolean(profile?.feeds.some((feed) => !feed.ours)));
@@ -189,100 +167,28 @@ export default function AutoloadService() {
   };
 
   /* ---------- Загрузка данных ---------- */
-  const refreshClients = useCallback(async () => {
-    try {
-      const data = await api<ClientsOverview>("/api/autoload/clients");
-      setClientsInfo(data);
-      setClientsError("");
-      return data;
-    } catch (error) {
-      setClientsError(errorText(error));
-      return null;
-    }
-  }, []);
-
-  const selectClient = useCallback((key: string) => {
-    setOpenFeedId(null);
-    setFocusAdKey(null);
-    setIssuesOpen(false);
-    setClientKey(key);
-    try {
-      window.localStorage.setItem(CLIENT_STORAGE_KEY, key);
-    } catch {
-      /* хранилище недоступно — выбор просто не запомнится */
-    }
-  }, []);
-
-  // 1) Один раз: основной аккаунт и список клиентов (запросы только к базе HelpSell, Авито не дёргаем).
   useEffect(() => {
     let alive = true;
-    Promise.allSettled([api<{ connection: RawAvitoConnection }>("/api/avito-connection"), api<ClientsOverview>("/api/autoload/clients")]).then(
-      ([connectionResult, clientsResult]) => {
+    Promise.all([
+      api<{ connection: RawAvitoConnection }>("/api/avito-connection"),
+      api<{ feeds: FeedSummary[] }>("/api/autoload/feeds"),
+    ])
+      .then(([connectionData, feedsData]) => {
         if (!alive) return;
-        if (connectionResult.status === "fulfilled") setMainAccount(toAccountStatus(connectionResult.value.connection));
-        else setConnError(errorText(connectionResult.reason));
-
-        let overview: ClientsOverview | null = null;
-        if (clientsResult.status === "fulfilled") {
-          overview = clientsResult.value;
-          setClientsInfo(overview);
-        } else {
-          setClientsError(errorText(clientsResult.reason));
-        }
-
-        // Возвращаемся к последнему выбранному аккаунту, если он ещё существует.
-        let saved: string | null = null;
-        try {
-          saved = window.localStorage.getItem(CLIENT_STORAGE_KEY);
-        } catch {
-          /* ignore */
-        }
-        if (saved && saved !== MAIN_KEY && overview?.clients.some((client) => String(client.id) === saved)) setClientKey(saved);
-        setBootstrapped(true);
-      },
-    );
+        setAccount(toAccountStatus(connectionData.connection));
+        setFeeds(feedsData.feeds);
+      })
+      .catch((error) => alive && setLoadError(errorText(error)));
     return () => {
       alive = false;
     };
   }, []);
 
-  // 2) Таблицы выбранного аккаунта. При смене аккаунта сбрасываем всё, что относилось к предыдущему.
   useEffect(() => {
-    if (!bootstrapped) return;
-    let alive = true;
-    setFeeds(null);
-    setProfile(null);
-    setProfileError("");
-    setProfileRaw(null);
-    setReports(null);
-    setReportsError("");
-    setLoadError("");
-    autoOpened.current = { connection: false, profile: false };
-    setOpenSections({ connection: false, profile: false, history: false });
-
-    api<{ feeds: FeedSummary[] }>(withClient("/api/autoload/feeds", clientKey))
-      .then((data) => alive && setFeeds(data.feeds))
-      .catch((error) => {
-        if (!alive) return;
-        // Клиента удалили в другой вкладке — возвращаемся к основному аккаунту.
-        if (error instanceof ApiError && error.code === "NO_CLIENT") {
-          selectClient(MAIN_KEY);
-          void refreshClients();
-          return;
-        }
-        setLoadError(errorText(error));
-      });
-    return () => {
-      alive = false;
-    };
-  }, [bootstrapped, clientKey, selectClient, refreshClients]);
-
-  // 3) Профиль автозагрузки и отчёты Авито выбранного аккаунта.
-  useEffect(() => {
-    if (!bootstrapped || !connected) return;
+    if (!connected) return;
     let alive = true;
 
-    api<{ profile: ProfileDto; raw?: unknown }>(withClient("/api/autoload/profile", clientKey))
+    api<{ profile: ProfileDto; raw?: unknown }>("/api/autoload/profile")
       .then((data) => {
         if (!alive) return;
         setProfile(data.profile);
@@ -290,14 +196,14 @@ export default function AutoloadService() {
       })
       .catch((error) => alive && setProfileError(errorText(error)));
 
-    api<ReportsState>(withClient("/api/autoload/reports", clientKey))
+    api<ReportsState>("/api/autoload/reports")
       .then((data) => alive && setReports(data))
       .catch((error) => alive && setReportsError(errorText(error)));
 
     return () => {
       alive = false;
     };
-  }, [bootstrapped, connected, clientKey]);
+  }, [connected]);
 
   // Блоки, которые требуют внимания, раскрываем один раз сами: нет подключения / нет профиля.
   useEffect(() => {
@@ -336,7 +242,7 @@ export default function AutoloadService() {
         return;
       }
       try {
-        const data = await api<ReportsState>(withClient("/api/autoload/reports", clientKey));
+        const data = await api<ReportsState>("/api/autoload/reports");
         if (!alive) return;
         setReports(data);
         delay = 45_000; // получилось — возвращаем обычный темп
@@ -351,22 +257,22 @@ export default function AutoloadService() {
       alive = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [connected, clientKey, reports?.current?.id]);
+  }, [connected, reports?.current?.id]);
 
   const refreshFeeds = useCallback(async () => {
     try {
-      const data = await api<{ feeds: FeedSummary[] }>(withClient("/api/autoload/feeds", clientKey));
+      const data = await api<{ feeds: FeedSummary[] }>("/api/autoload/feeds");
       setFeeds(data.feeds);
     } catch (error) {
       toast.push(errorText(error), "error");
     }
-  }, [toast, clientKey]);
+  }, [toast]);
 
   const refreshReports = async () => {
     setReportsLoading(true);
     setReportsError("");
     try {
-      setReports(await api<ReportsState>(withClient("/api/autoload/reports", clientKey)));
+      setReports(await api<ReportsState>("/api/autoload/reports"));
     } catch (error) {
       setReportsError(errorText(error));
     } finally {
@@ -378,7 +284,7 @@ export default function AutoloadService() {
     if (running) return;
     setRunning(true);
     try {
-      await api(withClient("/api/autoload/upload", clientKey), { method: "POST" });
+      await api("/api/autoload/upload", { method: "POST" });
       toast.push("Выгрузка запущена. Отчёт появится в течение нескольких минут.");
       window.setTimeout(() => void refreshReports(), 15000);
     } catch (error) {
@@ -415,7 +321,6 @@ export default function AutoloadService() {
   /* ---------- Редактор таблицы ---------- */
   if (openFeedId !== null) {
     return (
-      <ClientKeyContext.Provider value={clientKey}>
       <div className="min-w-0">
         <AutoloadStyles />
         <FeedEditor
@@ -433,13 +338,11 @@ export default function AutoloadService() {
         />
         {toast.node}
       </div>
-      </ClientKeyContext.Provider>
     );
   }
 
   /* ---------- Главная страница услуги ---------- */
   return (
-    <ClientKeyContext.Provider value={clientKey}>
     <div className="flex min-w-0 flex-col">
       <AutoloadStyles />
 
@@ -531,19 +434,6 @@ export default function AutoloadService() {
           </div>
         </div>
       </section>
-
-      <ClientSwitcher
-        clientKey={clientKey}
-        mainAccount={mainAccount}
-        overview={clientsInfo}
-        error={clientsError}
-        onSelect={selectClient}
-        onAdd={() => {
-          const slots = clientsInfo?.slots;
-          setClientsModal(slots && !slots.unlimited && (slots.free ?? 0) <= 0 ? "buy" : "add");
-        }}
-        onBuy={() => setClientsModal("buy")}
-      />
 
       {isBetaTooltipOpen &&
         typeof document !== "undefined" &&
@@ -644,15 +534,14 @@ export default function AutoloadService() {
         </div>
       </div>
 
-      {(loadError || connError) && (
-        <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600">{loadError || connError}</div>
+      {loadError && (
+        <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-600">{loadError}</div>
       )}
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:items-start">
         {/* ОСНОВНОЕ: таблицы и последняя выгрузка */}
         <div ref={feedsRef} className="min-w-0 scroll-mt-6 space-y-5">
           <FeedsCard
-            heading={activeClient ? `Таблицы · ${activeClient.name}` : "Мои таблицы"}
             feeds={feeds}
             onOpen={setOpenFeedId}
             onCreated={(feed) => {
@@ -685,52 +574,29 @@ export default function AutoloadService() {
           <Accordion
             id="al-connection"
             icon="key"
-            title={activeClient ? `Аккаунт Авито · ${activeClient.name}` : "Подключение Avito API"}
-            summary={
-              connected
-                ? `${activeClient ? "Клиент подключён" : "Подключено"} · Client ID ${account?.clientIdMasked ?? ""}`
-                : account
-                  ? "Не подключено — нужны Client ID и Client Secret"
-                  : "Загрузка…"
-            }
-            badge={account ? <Pill tone={connected && !account.lastError ? "green" : "amber"}>{connected ? (account.lastError ? "Проблема" : "Готово") : "Нужно"}</Pill> : undefined}
+            title="Подключение Avito API"
+            summary={connected ? `Подключено · Client ID ${account?.clientIdMasked ?? ""}` : account ? "Не подключено — нужны Client ID и Client Secret" : "Загрузка…"}
+            badge={account ? <Pill tone={connected ? "green" : "amber"}>{connected ? "Готово" : "Нужно"}</Pill> : undefined}
             open={openSections.connection}
             onToggle={() => toggleSection("connection")}
           >
-            {activeClient ? (
-              <ClientConnectionPanel
-                client={activeClient}
-                feedsCount={feeds?.length ?? activeClient.feedsCount}
-                onUpdated={(next) =>
-                  setClientsInfo((current) =>
-                    current ? { ...current, clients: current.clients.map((item) => (item.id === next.id ? { ...next, feedsCount: item.feedsCount } : item)) } : current,
-                  )
-                }
-                onDeleted={() => {
-                  selectClient(MAIN_KEY);
-                  void refreshClients();
-                }}
-                toast={toast.push}
-              />
-            ) : (
-              <ConnectionPanel
-                account={account}
-                onConnected={(next) => {
-                  setMainAccount(next);
-                  setProfileError("");
-                  setReportsError("");
-                }}
-                onDisconnected={() => {
-                  // «Отключить автозагрузку» не трогает сами ключи Авито — аккаунт остаётся
-                  // подключённым (им пользуется и Бид-менеджер), меняются только профиль и таблицы.
-                  void refreshFeeds();
-                  api<{ profile: ProfileDto }>(withClient("/api/autoload/profile", clientKey))
-                    .then((d) => setProfile(d.profile))
-                    .catch(() => null);
-                }}
-                toast={toast.push}
-              />
-            )}
+            <ConnectionPanel
+              account={account}
+              onConnected={(next) => {
+                setAccount(next);
+                setProfileError("");
+                setReportsError("");
+              }}
+              onDisconnected={() => {
+                // «Отключить автозагрузку» не трогает сами ключи Авито — аккаунт остаётся
+                // подключённым (им пользуется и Бид-менеджер), меняются только профиль и таблицы.
+                void refreshFeeds();
+                api<{ profile: ProfileDto }>("/api/autoload/profile")
+                  .then((d) => setProfile(d.profile))
+                  .catch(() => null);
+              }}
+              toast={toast.push}
+            />
           </Accordion>
 
           {connected && (
@@ -818,45 +684,25 @@ export default function AutoloadService() {
         />
       )}
 
-      {clientsModal && clientsInfo && (
-        <ClientsModal
-          initialTab={clientsModal}
-          slots={clientsInfo.slots}
-          onClose={() => setClientsModal(null)}
-          onSlotsChanged={refreshClients}
-          onCreated={async (client) => {
-            await refreshClients();
-            selectClient(String(client.id));
-            setClientsModal(null);
-            toast.push(`Клиент «${client.name}» добавлен. Теперь создайте для него первую таблицу.`);
-          }}
-          toast={toast.push}
-        />
-      )}
-
       {toast.node}
     </div>
-    </ClientKeyContext.Provider>
   );
 }
 
 /* ---------- Таблицы ---------- */
 function FeedsCard({
-  heading,
   feeds,
   onOpen,
   onCreated,
   onDeleted,
   toast,
 }: {
-  heading: string;
   feeds: FeedSummary[] | null;
   onOpen: (id: number) => void;
   onCreated: (feed: FeedSummary) => void;
   onDeleted: (id: number) => void;
   toast: (text: string, kind?: "ok" | "error") => void;
 }) {
-  const clientKey = useClientKey();
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -865,7 +711,7 @@ function FeedsCard({
     if (creating) return;
     setCreating(true);
     try {
-      const data = await api<{ feed: FeedSummary }>(withClient("/api/autoload/feeds", clientKey), { json: { name } });
+      const data = await api<{ feed: FeedSummary }>("/api/autoload/feeds", { json: { name } });
       setName("");
       onCreated(data.feed);
     } catch (error) {
@@ -897,8 +743,7 @@ function FeedsCard({
     <section className="white-card min-w-0 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xl font-extrabold tracking-[-0.04em] text-black sm:text-2xl">
-          {heading}
-          {feeds ? <span className="ml-2 text-base font-bold text-black/30">{feeds.length}</span> : null}
+          Мои таблицы{feeds ? <span className="ml-2 text-base font-bold text-black/30">{feeds.length}</span> : null}
         </h3>
       </div>
 
@@ -1004,7 +849,6 @@ function ConnectionPanel({
   onDisconnected: () => void;
   toast: (text: string, kind?: "ok" | "error") => void;
 }) {
-  const clientKey = useClientKey();
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1043,7 +887,7 @@ function ConnectionPanel({
       return;
     setBusy(true);
     try {
-      await api(withClient("/api/autoload/unlink", clientKey), { method: "POST" });
+      await api("/api/autoload/unlink", { method: "POST" });
       onDisconnected();
       toast("Автозагрузка отключена от Авито.");
     } catch (err) {
@@ -1314,7 +1158,6 @@ function ProfileForm({
   onSaved: (profile: ProfileDto) => void;
   toast: (text: string, kind?: "ok" | "error") => void;
 }) {
-  const clientKey = useClientKey();
   const [email, setEmail] = useState(profile.reportEmail);
   const [enabled, setEnabled] = useState(profile.autoloadEnabled);
   const [schedule, setSchedule] = useState<ScheduleRule[]>(profile.schedule.length > 0 ? profile.schedule : [SCHEDULE_PRESETS[0].rule]);
@@ -1329,7 +1172,7 @@ function ProfileForm({
     setFormError("");
     setSaving(true);
     try {
-      const data = await api<{ profile: ProfileDto }>(withClient("/api/autoload/profile", clientKey), {
+      const data = await api<{ profile: ProfileDto }>("/api/autoload/profile", {
         json: {
           reportEmail: email.trim(),
           autoloadEnabled: enabled && canEnable,
@@ -1697,590 +1540,6 @@ function HistoryPanel({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-/* =========================================================================
-   Клиенты автозагрузки: несколько аккаунтов Авито в одном кабинете HelpSell.
-   Основной аккаунт — общий с Бид-менеджером и входит в подписку Pro.
-   Дополнительные клиенты занимают купленные слоты (+3 за 299 ₽).
-   ========================================================================= */
-
-const MAIN_KEY = "main";
-const CLIENT_STORAGE_KEY = "helpsell.autoload.client";
-
-function clientToAccount(client: AutoloadClientDto): AccountStatus {
-  return {
-    connected: true,
-    clientIdMasked: client.clientIdMasked,
-    tokenExpiresAt: client.tokenExpiresAt,
-    lastCheckedAt: client.lastCheckedAt,
-    lastError: client.lastError,
-  };
-}
-
-/** Панель выбора аккаунта Авито: основной + клиенты + «Добавить клиента». */
-function ClientSwitcher({
-  clientKey,
-  mainAccount,
-  overview,
-  error,
-  onSelect,
-  onAdd,
-  onBuy,
-}: {
-  clientKey: string;
-  mainAccount: AccountStatus | null;
-  overview: ClientsOverview | null;
-  error: string;
-  onSelect: (key: string) => void;
-  onAdd: () => void;
-  onBuy: () => void;
-}) {
-  const clients = overview?.clients ?? [];
-  const slots = overview?.slots ?? null;
-
-  const dotClass = (state: "ok" | "warn" | "off") =>
-    state === "ok" ? "bg-[#03bd48]" : state === "warn" ? "bg-amber-500" : "bg-black/25";
-
-  const mainState: "ok" | "warn" | "off" = !mainAccount?.connected ? "off" : mainAccount.lastError ? "warn" : "ok";
-
-  const pill = (key: string, label: string, state: "ok" | "warn" | "off", title: string) => {
-    const active = clientKey === key;
-    return (
-      <button
-        key={key}
-        type="button"
-        onClick={() => onSelect(key)}
-        aria-pressed={active}
-        title={title}
-        className={`inline-flex max-w-[220px] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-extrabold transition ${
-          active
-            ? "border-black bg-black text-white shadow-[0_8px_18px_rgba(16,24,40,0.18)]"
-            : "border-black/10 bg-white text-black/70 hover:border-[#03bd48]/50 hover:text-black"
-        }`}
-      >
-        <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass(state)}`} />
-        <span className="min-w-0 truncate">{label}</span>
-      </button>
-    );
-  };
-
-  const slotsText = !slots
-    ? ""
-    : slots.unlimited
-      ? `Клиентов: ${slots.used} · без ограничений`
-      : slots.purchased === 0
-        ? "Дополнительных клиентов пока нет"
-        : `Клиенты: ${slots.used} из ${slots.purchased}`;
-
-  return (
-    <section className="mt-5 min-w-0 rounded-3xl border border-black/[0.08] bg-white p-3.5 shadow-[0_10px_30px_rgba(16,24,40,0.05)] sm:p-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-black/40">
-          <Icon name="users" className="h-4 w-4" /> Аккаунты Авито
-        </div>
-        {slotsText && <div className="text-xs font-bold text-black/45">{slotsText}</div>}
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {pill(
-          MAIN_KEY,
-          "Основной аккаунт",
-          mainState,
-          mainState === "off" ? "Основной аккаунт: Авито не подключён" : mainState === "warn" ? "Основной аккаунт: есть ошибка подключения" : "Основной аккаунт Авито (общий с Бид-менеджером)",
-        )}
-        {clients.map((client) =>
-          pill(String(client.id), client.name, client.lastError ? "warn" : "ok", client.lastError ? `${client.name}: есть ошибка подключения` : client.name),
-        )}
-
-        <button
-          type="button"
-          onClick={onAdd}
-          disabled={!overview}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-[#03bd48]/60 bg-[#03bd48]/[0.06] px-3 py-2 text-sm font-extrabold text-[#028c36] transition hover:bg-[#03bd48] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Icon name="plus" className="h-4 w-4" /> Добавить клиента
-        </button>
-        {slots && !slots.unlimited && (
-          <button type="button" onClick={onBuy} className="text-xs font-extrabold text-black/45 underline-offset-2 transition hover:text-[#028c36] hover:underline">
-            Докупить слоты
-          </button>
-        )}
-      </div>
-
-      {clients.length === 0 && !error && (
-        <p className="mt-3 text-xs leading-5 text-black/45">
-          Ведёте несколько аккаунтов Авито? Добавьте их как клиентов — у каждого будут свои таблицы, расписание и отчёты, а переключаться между ними можно здесь.
-        </p>
-      )}
-      {error && <p className="mt-3 text-xs font-bold leading-5 text-amber-700">Не удалось загрузить список клиентов: {error}</p>}
-    </section>
-  );
-}
-
-/** Окно «Клиенты автозагрузки»: добавить клиента / докупить слоты. */
-function ClientsModal({
-  initialTab,
-  slots,
-  onClose,
-  onCreated,
-  onSlotsChanged,
-  toast,
-}: {
-  initialTab: "add" | "buy";
-  slots: ClientSlots;
-  onClose: () => void;
-  onCreated: (client: AutoloadClientDto) => void | Promise<void>;
-  onSlotsChanged: () => void | Promise<unknown>;
-  toast: (text: string, kind?: "ok" | "error") => void;
-}) {
-  const [tab, setTab] = useState<"add" | "buy">(initialTab);
-  const [name, setName] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [addError, setAddError] = useState("");
-
-  const [packs, setPacks] = useState(1);
-  const [paying, setPaying] = useState(false);
-  const [payError, setPayError] = useState("");
-
-  const noFreeSlots = !slots.unlimited && (slots.free ?? 0) <= 0;
-  const addedSlots = packs * slots.packSize;
-  const total = packs * slots.packPrice;
-
-  async function submitClient() {
-    if (adding || noFreeSlots) return;
-    setAdding(true);
-    setAddError("");
-    try {
-      const data = await api<{ client: AutoloadClientDto }>("/api/autoload/clients", {
-        json: { name: name.trim(), clientId: clientId.trim(), clientSecret: clientSecret.trim() },
-      });
-      await onCreated(data.client);
-    } catch (error) {
-      if (error instanceof ApiError && error.code === "NO_SLOTS") setTab("buy");
-      setAddError(errorText(error));
-    } finally {
-      setAdding(false);
-    }
-  }
-
-  async function pay() {
-    if (paying) return;
-    setPaying(true);
-    setPayError("");
-    try {
-      const data = await api<{ redirectUrl: string | null; slots: number }>("/api/autoload/clients/purchase", { json: { packs } });
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-        // Если пользователь вернётся кнопкой «Назад», не оставляем кнопку заблокированной навсегда.
-        window.setTimeout(() => setPaying(false), 8000);
-        return;
-      }
-      await onSlotsChanged();
-      toast(`Слоты добавлены: +${data.slots}. Теперь можно подключить ещё ${data.slots} ${clientsWord(data.slots)}.`);
-      setTab("add");
-      setPaying(false);
-    } catch (error) {
-      setPayError(errorText(error));
-      setPaying(false);
-    }
-  }
-
-  const tabs: { id: "add" | "buy"; label: string }[] = [
-    { id: "add", label: "Добавить клиента" },
-    { id: "buy", label: "Докупить слоты" },
-  ];
-
-  return (
-    <Modal
-      title="Клиенты автозагрузки"
-      subtitle="Несколько аккаунтов Авито в одном кабинете HelpSell: у каждого свои таблицы, расписание и отчёты."
-      onClose={onClose}
-      footer={
-        <button type="button" onClick={onClose} className={ghostButton}>
-          Закрыть
-        </button>
-      }
-    >
-      <div role="tablist" className="flex gap-1 rounded-2xl bg-black/[0.05] p-1">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === item.id}
-            onClick={() => setTab(item.id)}
-            className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-extrabold transition-all duration-300 ${
-              tab === item.id ? "bg-black text-white shadow-[0_8px_18px_rgba(16,24,40,0.18)]" : "text-black/55 hover:bg-white hover:text-black"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "add" && (
-        <form
-          className="al-pop mt-5 space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitClient();
-          }}
-        >
-          {noFreeSlots ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <div className="text-sm font-extrabold text-amber-900">Свободных слотов нет</div>
-              <p className="mt-1 text-sm leading-6 text-amber-900/80">
-                {slots.purchased === 0
-                  ? "Дополнительные клиенты подключаются по слотам: каждые 3 клиента — "
-                  : `Все ${slots.purchased} слота заняты. Докупите ещё 3 клиента — `}
-                {slots.packPrice} ₽.
-              </p>
-              <button type="button" onClick={() => setTab("buy")} className="btn-primary mt-3 inline-flex items-center gap-2 !px-5 !py-2.5 text-sm">
-                <Icon name="card" /> Докупить слоты
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/[0.06] px-4 py-3 text-sm font-bold text-[#027a30]">
-              <Icon name="check" className="h-4 w-4 shrink-0" />
-              {slots.unlimited ? "Без ограничений по числу клиентов." : `Свободных слотов: ${slots.free} из ${slots.purchased}.`}
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="client-name" className="mb-1.5 block text-sm font-extrabold text-black">
-              Название клиента
-            </label>
-            <input
-              id="client-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              maxLength={MAX_CLIENT_NAME_LENGTH}
-              placeholder="Например: Магазин на Ленина"
-              disabled={noFreeSlots}
-              className={inputClass}
-            />
-            <p className="mt-1 text-xs text-black/40">По этому названию вы будете узнавать клиента в списке. Можно изменить позже.</p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="client-id" className="mb-1.5 block text-sm font-extrabold text-black">
-                Client ID
-              </label>
-              <input
-                id="client-id"
-                value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="Client ID приложения Авито"
-                disabled={noFreeSlots}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="client-secret" className="mb-1.5 block text-sm font-extrabold text-black">
-                Client Secret
-              </label>
-              <input
-                id="client-secret"
-                type="password"
-                value={clientSecret}
-                onChange={(event) => setClientSecret(event.target.value)}
-                autoComplete="new-password"
-                spellCheck={false}
-                placeholder="Client Secret"
-                disabled={noFreeSlots}
-                className={inputClass}
-              />
-            </div>
-          </div>
-
-          <p className="text-xs leading-5 text-black/45">
-            Ключи берутся в личном кабинете <b>этого</b> аккаунта Авито: «Интеграции» → «Авито API». Мы проверим их у Авито и сохраним в зашифрованном виде.{" "}
-            <a href="https://www.avito.ru/developers/api-catalog" target="_blank" rel="noopener noreferrer" className="font-bold text-[#028c36] hover:underline">
-              Документация API
-            </a>
-          </p>
-
-          {addError && <div className="al-pop rounded-2xl border border-red-200 bg-red-50 p-3.5 text-sm font-bold leading-6 text-red-600">{addError}</div>}
-
-          <button
-            type="submit"
-            disabled={adding || noFreeSlots || clientId.trim().length < 6 || clientSecret.trim().length < 6}
-            className="btn-primary inline-flex items-center gap-2 !px-6 !py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {adding ? <Spinner /> : <Icon name="plus" />} Проверить и добавить клиента
-          </button>
-        </form>
-      )}
-
-      {tab === "buy" && (
-        <div className="al-pop mt-5 space-y-4">
-          {slots.unlimited ? (
-            <div className="rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/[0.06] p-4 text-sm font-bold leading-6 text-[#027a30]">
-              У вас полный доступ — число клиентов не ограничено, докупать слоты не нужно.
-            </div>
-          ) : (
-            <>
-              <div className="overflow-hidden rounded-3xl bg-black p-5 text-white shadow-[0_18px_45px_rgba(16,24,40,0.2)]">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">Дополнительные клиенты</div>
-                <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
-                  <span className="text-4xl font-extrabold tracking-[-0.05em] text-[#03bd48]">+{slots.packSize}</span>
-                  <span className="pb-1 text-lg font-extrabold">{clientsWord(slots.packSize)}</span>
-                  <span className="pb-1 text-sm font-bold text-white/55">за {slots.packPrice} ₽</span>
-                </div>
-                <p className="mt-2 text-sm leading-6 text-white/60">Разовая оплата — слоты не сгорают. Платить можно сколько угодно раз.</p>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] bg-white p-4">
-                <div className="min-w-0">
-                  <div className="text-sm font-extrabold text-black">Сколько пакетов купить</div>
-                  <div className="mt-0.5 text-xs text-black/45">
-                    {packs} × {slots.packSize} = +{addedSlots} {clientsWord(addedSlots)}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setPacks((value) => Math.max(1, value - 1))}
-                    disabled={packs <= 1 || paying}
-                    aria-label="Меньше пакетов"
-                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white text-black/60 transition hover:border-[#03bd48]/50 disabled:opacity-40"
-                  >
-                    <Icon name="minus" />
-                  </button>
-                  <span className="w-10 text-center text-lg font-extrabold tabular-nums text-black">{packs}</span>
-                  <button
-                    type="button"
-                    onClick={() => setPacks((value) => Math.min(slots.maxPacksPerPayment, value + 1))}
-                    disabled={packs >= slots.maxPacksPerPayment || paying}
-                    aria-label="Больше пакетов"
-                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white text-black/60 transition hover:border-[#03bd48]/50 disabled:opacity-40"
-                  >
-                    <Icon name="plus" />
-                  </button>
-                </div>
-              </div>
-
-              <ul className="space-y-2 rounded-2xl bg-black/[0.03] p-4 text-sm leading-6 text-black/60">
-                <li className="flex gap-2.5">
-                  <Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-[#03bd48]" />
-                  <span className="min-w-0">Каждый клиент — отдельный аккаунт Авито со своими ключами, таблицами, профилем и расписанием.</span>
-                </li>
-                <li className="flex gap-2.5">
-                  <Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-[#03bd48]" />
-                  <span className="min-w-0">Основной аккаунт входит в подписку Pro и слот не занимает.</span>
-                </li>
-                <li className="flex gap-2.5">
-                  <Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-[#03bd48]" />
-                  <span className="min-w-0">Удалили клиента — слот освободился, его можно отдать другому аккаунту.</span>
-                </li>
-                <li className="flex gap-2.5">
-                  <Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-[#03bd48]" />
-                  <span className="min-w-0">Сейчас: занято {slots.used} из {slots.purchased}. После оплаты станет {slots.purchased + addedSlots}.</span>
-                </li>
-              </ul>
-
-              {payError && <div className="al-pop rounded-2xl border border-red-200 bg-red-50 p-3.5 text-sm font-bold leading-6 text-red-600">{payError}</div>}
-
-              <button
-                type="button"
-                onClick={() => void pay()}
-                disabled={paying}
-                className="btn-primary inline-flex w-full items-center justify-center gap-2 !px-6 !py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-              >
-                {paying ? <Spinner /> : <Icon name="card" />} Оплатить {total} ₽
-              </button>
-              <p className="text-xs leading-5 text-black/40">Оплата проходит через ЮKassa. После неё вы вернётесь в автозагрузку, а слоты появятся сразу.</p>
-            </>
-          )}
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-/** Подключение дополнительного клиента: название, ключи, удаление. */
-function ClientConnectionPanel({
-  client,
-  feedsCount,
-  onUpdated,
-  onDeleted,
-  toast,
-}: {
-  client: AutoloadClientDto;
-  feedsCount: number;
-  onUpdated: (client: AutoloadClientDto) => void;
-  onDeleted: () => void;
-  toast: (text: string, kind?: "ok" | "error") => void;
-}) {
-  const [name, setName] = useState(client.name);
-  const [savingName, setSavingName] = useState(false);
-  const [keysOpen, setKeysOpen] = useState(false);
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [savingKeys, setSavingKeys] = useState(false);
-  const [keysError, setKeysError] = useState("");
-  const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    setName(client.name);
-  }, [client.id, client.name]);
-
-  async function saveName() {
-    const next = name.trim();
-    if (!next || next === client.name || savingName) return;
-    setSavingName(true);
-    try {
-      const data = await api<{ client: AutoloadClientDto }>(`/api/autoload/clients/${client.id}`, { method: "PATCH", json: { name: next } });
-      onUpdated(data.client);
-      toast("Название клиента сохранено.");
-    } catch (error) {
-      toast(errorText(error), "error");
-    } finally {
-      setSavingName(false);
-    }
-  }
-
-  async function saveKeys() {
-    if (savingKeys) return;
-    setSavingKeys(true);
-    setKeysError("");
-    try {
-      const data = await api<{ client: AutoloadClientDto }>(`/api/autoload/clients/${client.id}`, {
-        method: "PATCH",
-        json: { clientId: clientId.trim(), clientSecret: clientSecret.trim() },
-      });
-      onUpdated(data.client);
-      setClientId("");
-      setClientSecret("");
-      setKeysOpen(false);
-      toast("Ключи Авито заменены и проверены.");
-    } catch (error) {
-      setKeysError(errorText(error));
-    } finally {
-      setSavingKeys(false);
-    }
-  }
-
-  async function remove() {
-    const tables = feedsCount > 0 ? `Будут удалены таблицы клиента (${feedsCount}) вместе с объявлениями, а ссылки на файлы HelpSell уберём из профиля автозагрузки Авито.` : "Таблиц у клиента нет.";
-    if (!window.confirm(`Удалить клиента «${client.name}»?\n\n${tables}\nСлот освободится — его можно будет отдать другому аккаунту. Это действие нельзя отменить.`)) return;
-    setDeleting(true);
-    try {
-      const data = await api<{ ok: boolean; detached: boolean }>(`/api/autoload/clients/${client.id}`, { method: "DELETE" });
-      toast(
-        data.detached
-          ? `Клиент «${client.name}» удалён.`
-          : `Клиент «${client.name}» удалён, но убрать файлы из профиля Авито не получилось — отключите их вручную в кабинете Авито.`,
-        data.detached ? "ok" : "error",
-      );
-      onDeleted();
-    } catch (error) {
-      toast(errorText(error), "error");
-      setDeleting(false);
-    }
-  }
-
-  return (
-    <div className="min-w-0 space-y-4">
-      <div
-        className={`rounded-2xl border p-3.5 ${
-          client.lastError ? "border-red-200 bg-red-50" : "border-[#03bd48]/25 bg-[#03bd48]/[0.06]"
-        }`}
-      >
-        <div className={`flex items-center gap-2 text-sm font-extrabold ${client.lastError ? "text-red-700" : "text-[#027a30]"}`}>
-          <Icon name={client.lastError ? "warning" : "check"} className="h-4 w-4 shrink-0" />
-          {client.lastError ? "Есть проблема с ключами" : "Ключи Авито подключены"}
-        </div>
-        <div className="mt-1.5 text-sm font-bold text-black">
-          Client ID: <span className="break-all">{client.clientIdMasked}</span>
-        </div>
-        <p className="mt-1 text-xs leading-5 text-black/55">Проверено {formatDateTime(client.lastCheckedAt)}. Ключи этого клиента не связаны с Бид-менеджером.</p>
-        {client.lastError && <p className="mt-2 text-xs font-bold leading-5 text-red-700">{client.lastError}</p>}
-      </div>
-
-      <form
-        className="flex flex-col gap-2.5 sm:flex-row"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void saveName();
-        }}
-      >
-        <input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          maxLength={MAX_CLIENT_NAME_LENGTH}
-          aria-label="Название клиента"
-          placeholder="Название клиента"
-          className={inputClass}
-        />
-        <button
-          type="submit"
-          disabled={savingName || !name.trim() || name.trim() === client.name}
-          className={`${ghostButton} shrink-0 justify-center disabled:cursor-not-allowed disabled:opacity-50`}
-        >
-          {savingName ? <Spinner /> : <Icon name="check" />} Переименовать
-        </button>
-      </form>
-
-      <div className="rounded-2xl border border-black/[0.08] bg-white">
-        <button
-          type="button"
-          onClick={() => setKeysOpen((value) => !value)}
-          aria-expanded={keysOpen}
-          className="flex w-full items-center justify-between gap-2 px-3.5 py-3 text-left text-sm font-extrabold text-black"
-        >
-          <span className="flex items-center gap-2">
-            <Icon name="key" className="h-4 w-4 text-black/45" /> Заменить ключи Авито
-          </span>
-          <Icon name="chevron" className={`h-4 w-4 shrink-0 text-black/40 transition-transform ${keysOpen ? "rotate-180" : ""}`} />
-        </button>
-        {keysOpen && (
-          <form
-            className="al-pop space-y-3 border-t border-black/[0.06] p-3.5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void saveKeys();
-            }}
-          >
-            <input value={clientId} onChange={(event) => setClientId(event.target.value)} autoComplete="off" spellCheck={false} placeholder="Новый Client ID" aria-label="Client ID" className={inputClass} />
-            <input
-              value={clientSecret}
-              onChange={(event) => setClientSecret(event.target.value)}
-              type="password"
-              autoComplete="new-password"
-              spellCheck={false}
-              placeholder="Новый Client Secret"
-              aria-label="Client Secret"
-              className={inputClass}
-            />
-            {keysError && <div className="al-pop rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-bold leading-6 text-red-600">{keysError}</div>}
-            <button
-              type="submit"
-              disabled={savingKeys || clientId.trim().length < 6 || clientSecret.trim().length < 6}
-              className="btn-primary inline-flex items-center gap-2 !px-5 !py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {savingKeys ? <Spinner /> : <Icon name="key" />} Проверить и заменить
-            </button>
-          </form>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => void remove()}
-        disabled={deleting}
-        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-extrabold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-      >
-        {deleting ? <Spinner /> : <Icon name="trash" />} Удалить клиента
-      </button>
     </div>
   );
 }

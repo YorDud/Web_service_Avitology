@@ -8,6 +8,7 @@ export default function PaymentErrorPage() {
     "Платёж был отменён или не был успешно завершён."
   );
   const [isClientsPayment, setIsClientsPayment] = useState(false);
+  const [isServicePayment, setIsServicePayment] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -30,7 +31,13 @@ export default function PaymentErrorPage() {
         const status = data.payment?.status;
         const clientsPayment = String(data.payment?.planCode ?? "").startsWith("autoload_clients_x");
         setIsClientsPayment(clientsPayment);
-        const unchanged = clientsPayment ? "Слоты клиентов не начислены." : "Уровень подписки не изменён.";
+        const servicePayment = String(data.payment?.planCode ?? "").startsWith("service_level_order_");
+        setIsServicePayment(servicePayment);
+        const unchanged = servicePayment
+          ? "Заказ не создан, деньги не списаны."
+          : clientsPayment
+            ? "Слоты клиентов не начислены."
+            : "Уровень подписки не изменён.";
 
         if (status === "succeeded") {
           window.location.replace(`/payment/success?paymentId=${paymentId}`);
@@ -75,7 +82,10 @@ export default function PaymentErrorPage() {
             <p className="section-text mb-8">{message}</p>
 
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
-              <Link href={isClientsPayment ? "/dashboard?section=autoload" : "/pricing"} className="btn-primary">
+              <Link
+                href={isServicePayment ? "/dashboard?section=service-level" : isClientsPayment ? "/dashboard?section=autoload" : "/pricing"}
+                className="btn-primary"
+              >
                 Повторить попытку
               </Link>
               <Link href="/support" className="btn-secondary">

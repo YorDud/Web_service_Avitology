@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { formatForDateTimeLocal } from "@/lib/dates";
 import BonusCodesPanel from "./bonus-codes-panel";
+import ServiceLevelAdminPanel from "./service-level-panel";
 
 type UserItem = {
   id: number;
@@ -57,6 +58,7 @@ type AdminSection =
   | "create-user"
   | "payments"
   | "bonus-codes"
+  | "service-level"
   | null;
 
 type PaymentSortField =
@@ -923,6 +925,12 @@ export default function AdminUsersClient({
       description: "Промокоды на подписки Basic и Pro",
       index: "05",
     },
+    {
+      id: "service-level",
+      title: "Настройки уровня сервиса",
+      description: "Услуги, цены, заказы и SocPublic",
+      index: "06",
+    },
   ];
 
   return (
@@ -1650,6 +1658,8 @@ export default function AdminUsersClient({
             )}
 
             {activeSection === "bonus-codes" && <BonusCodesPanel />}
+
+            {activeSection === "service-level" && <ServiceLevelAdminPanel />}
 
             {activeSection === "payments" && (
               <section className="white-card min-w-0 p-5 md:p-8">

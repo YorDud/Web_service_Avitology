@@ -16,7 +16,7 @@ import {
   type FieldOption,
   type KnownField,
 } from "@/lib/autoload/fields";
-import { USER_TAGS, buildCategoryTemplateColumns, resolveCategoryFields } from "@/lib/autoload/category";
+import { USER_TAGS, buildCategoryTemplateColumns, isDeliveryTag, resolveCategoryFields } from "@/lib/autoload/category";
 import { buildImport, buildTemplateCsv, parseDelimited, toCsv, type ImportResult } from "@/lib/autoload/import";
 import { MESSAGE_KIND, fixHint, kindOf } from "@/lib/autoload/hints";
 import { buildFeedXml, splitImages, validateAds, type AdIssue } from "@/lib/autoload/xml";
@@ -48,9 +48,7 @@ import {
   ghostButton,
   inputClass,
   timeAgo,
-  useClientKey,
   useOutsideClose,
-  withClient,
 } from "./ui";
 
 /* =========================================================================
@@ -125,8 +123,6 @@ type Props = {
 };
 
 export default function FeedEditor({ feedId, focusAdKey, account, profile, onBack, onChanged, onProfile, toast }: Props) {
-  // Каталог категорий запрашивается от имени выбранного аккаунта Авито (основного или клиента).
-  const clientKey = useClientKey();
   const [feed, setFeed] = useState<FeedDetail | null>(null);
   const [loadError, setLoadError] = useState("");
   const [ads, setAds] = useState<AdRow[]>([]);
@@ -253,7 +249,7 @@ export default function FeedEditor({ feedId, focusAdKey, account, profile, onBac
       let fields: CatalogField[] = [];
       if (node.slug) {
         try {
-          fields = (await api<{ fields: CatalogField[] }>(withClient(`/api/autoload/catalog?slug=${encodeURIComponent(node.slug)}`, clientKey))).fields;
+          fields = (await api<{ fields: CatalogField[] }>(`/api/autoload/catalog?slug=${encodeURIComponent(node.slug)}`)).fields;
         } catch (error) {
           toast(`Не удалось загрузить поля раздела: ${errorText(error)}`, "error");
         }
@@ -2223,7 +2219,6 @@ let catalogCache: CatalogNode[] | null = null;
 
 /** Общий загрузчик каталога категорий: используют и инлайн-поиск у поля «Категория», и модалка «Каталог». */
 function useCatalogNodes() {
-  const clientKey = useClientKey();
   const [nodes, setNodes] = useState<CatalogNode[]>(catalogCache ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -2234,7 +2229,7 @@ function useCatalogNodes() {
     requested.current = true;
     setLoading(true);
     setError("");
-    api<{ nodes: CatalogNode[] }>(withClient("/api/autoload/catalog", clientKey))
+    api<{ nodes: CatalogNode[] }>("/api/autoload/catalog")
       .then((data) => {
         catalogCache = data.nodes;
         setNodes(data.nodes);
@@ -2244,7 +2239,7 @@ function useCatalogNodes() {
         setError(errorText(err));
       })
       .finally(() => setLoading(false));
-  }, [clientKey]);
+  }, []);
 
   return { nodes, loading, error, ensureLoaded, loaded: nodes.length > 0 };
 }
@@ -2406,12 +2401,12 @@ function FieldSection({
             const text = known?.hint || field.description;
             return (
               <li key={field.tag} className="min-w-0 rounded-xl border border-black/[0.08] bg-white p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-extrabold text-black">{field.label}</div>
+                <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1.5">
+                  <div className="min-w-0 flex-1" style={{ flexBasis: 160 }}>
+                    <div className="text-sm font-extrabold leading-5 text-black">{field.label}</div>
                     <div className="truncate text-[11px] font-semibold text-black/35">{field.tag}</div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                     {field.required ? <Pill tone="red">обязательное</Pill> : field.conditional ? <Pill tone="amber">иногда обязательное</Pill> : null}
                     {!standard && onAddColumn && (
                       <button
@@ -2456,7 +2451,6 @@ function CategoryModal({
   onAddColumn?: (tag: string, values?: string[]) => void;
   onClose: () => void;
 }) {
-  const clientKey = useClientKey();
   const { nodes, loading, error, ensureLoaded } = useCatalogNodes();
   const [search, setSearch] = useState("");
   const [current, setCurrent] = useState<CatalogNode | null>(null);
@@ -2480,14 +2474,21 @@ function CategoryModal({
     const own: CatalogField[] = [];
     const standard: CatalogField[] = [];
     const optional: CatalogField[] = [];
+    const delivery: CatalogField[] = [];
     for (const field of fields ?? []) {
       if (preview && field.tag in preview.values) continue; // уже подставили
+      // Поля «Авито Доставки» (ТН ВЭД, ОКПД 2, «Честный знак» и т.п.) — отдельная группа вне
+      // зависимости от того, обязательное поле или нет: нужны, только если включена доставка.
+      if (isDeliveryTag(field.tag)) {
+        delivery.push(field);
+        continue;
+      }
       const isStandard = USER_TAGS.has(field.tag) || Boolean(FIELD_BY_TAG[field.tag]);
       if (isStandard) standard.push(field);
       else if (field.required || field.conditional) own.push(field);
       else optional.push(field);
     }
-    return { own, standard, optional };
+    return { own, standard, optional, delivery };
   }, [fields, preview]);
 
   async function open(node: CatalogNode) {
@@ -2497,7 +2498,7 @@ function CategoryModal({
     if (!node.slug) return;
     setFieldsLoading(true);
     try {
-      const data = await api<{ fields: CatalogField[] }>(withClient(`/api/autoload/catalog?slug=${encodeURIComponent(node.slug)}`, clientKey));
+      const data = await api<{ fields: CatalogField[] }>(`/api/autoload/catalog?slug=${encodeURIComponent(node.slug)}`);
       setFields(data.fields);
     } catch (err) {
       setFieldsError(errorText(err));
@@ -2616,6 +2617,23 @@ function CategoryModal({
                   fields={sections.own}
                   onAddColumn={mode === "template" ? undefined : onAddColumn}
                 />
+              )}
+              {sections.delivery.length > 0 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                  <p className="text-xs leading-5 text-amber-900">
+                    <span className="font-extrabold">Нужны только для «Авито Доставки».</span> С 1 октября 2026 года Авито проверяет по этим данным (код ТН ВЭД или ОКПД 2, регистрацию в «Честном
+                    знаке», код GTIN) сертификаты и маркировку товара — без них объявление с доставкой не пройдёт проверку. Если вы размещаете товар <b>без</b> «Авито Доставки» — эти поля можно не
+                    добавлять, на обычную публикацию они не влияют.
+                  </p>
+                  <div className="mt-3">
+                    <FieldSection
+                      title="Поля для «Авито Доставки»"
+                      note="Добавляйте только то, что относится к вашему товару — обычно достаточно одного-двух полей из списка."
+                      fields={sections.delivery}
+                      onAddColumn={mode === "template" ? undefined : onAddColumn}
+                    />
+                  </div>
+                </div>
               )}
               {sections.standard.length > 0 && (
                 <FieldSection

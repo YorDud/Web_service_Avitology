@@ -4,6 +4,8 @@ import { getYookassaPayment } from "@/lib/payments/yookassa";
 import { getSubscriptionPlan } from "@/lib/subscription-plans";
 import { fulfilAutoloadClientsPayment } from "@/lib/payments/fulfil-autoload-clients";
 import { isAutoloadClientsPlanCode } from "@/lib/autoload/clients-plan";
+import { isServiceLevelPlanCode } from "@/lib/service-level/constants";
+import { fulfilServiceLevelPayment, scheduleDispatch } from "@/lib/service-level/orders";
 
 export async function syncYookassaPaymentByInternalId(internalPaymentId: number) {
   const payment = await prisma.payment.findUnique({
@@ -31,6 +33,13 @@ export async function syncYookassaPaymentByInternalId(internalPaymentId: number)
     // Оплата слотов для клиентов автозагрузки — это не подписка: зачисляем слоты.
     if (isAutoloadClientsPlanCode(payment.planCode)) {
       await fulfilAutoloadClientsPayment(payment.id, { source: "sync-yookassa-payment", yookassaStatus: status, paid });
+      return await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
+    }
+
+    // Оплата заказа «Уровня сервиса»: заказ получает номер и уходит в работу (на SocPublic).
+    if (isServiceLevelPlanCode(payment.planCode)) {
+      const result = await fulfilServiceLevelPayment(payment.id, { source: "sync-yookassa-payment", yookassaStatus: status, paid });
+      if (result.newlyPaid) scheduleDispatch(result.orderId);
       return await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
     }
 

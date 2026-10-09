@@ -29,6 +29,20 @@ export const USER_TAGS = new Set([
 /** Даже если Авито не пометил поле обязательным, единственное допустимое значение для них ставим сами. */
 const ALWAYS_FIXED = new Set(["GoodsType", "AdType"]);
 
+/**
+ * Поля «Авито Доставки», появившиеся в полях категорий с 1 октября 2026 года (ТН ВЭД, ОКПД 2,
+ * «Честный знак», коды GTIN, «Документы не нужны» — закон № 289-ФЗ о платформенной экономике).
+ * Нужны, только если для товара используется «Авито Доставка»: без них объявление с доставкой
+ * не пройдёт проверку, но без доставки можно размещать объявление и без этих полей. Показываем
+ * их отдельной группой, чтобы пользователь сам решил, нужна ли ему доставка для этого товара —
+ * в обычные «обязательные» и «необязательные» их не смешиваем, какой бы флаг ни прислал Авито.
+ */
+export const DELIVERY_TAGS = new Set(["TNVED", "OKPD2", "SquareSymbol", "NoDocuments", "CodeGTIN"]);
+
+export function isDeliveryTag(tag: string) {
+  return DELIVERY_TAGS.has(tag);
+}
+
 export type CategoryResolution = {
   /** Значения, которые надо записать (Category и фиксированные поля раздела). */
   values: Record<string, string>;
@@ -128,6 +142,18 @@ export function buildCategoryTemplateColumns(
   for (const [tag, values] of Object.entries(resolution.options)) {
     const existing = columns.get(tag);
     if (existing && !existing.example) existing.example = values[0] ?? "";
+  }
+
+  // Поля «Авито Доставки» помечаем пояснением в заголовке независимо от того, добавились ли они
+  // уже выше как обязательные (бывает и так — тогда оставляем их настоящий пример) или добавляются
+  // только сейчас (тогда пример оставляем пустым: например, у «Документы не нужны» первое допустимое
+  // значение — «Подтверждаю», автоматически проставлять такое юридически значимое значение не стоит).
+  const DELIVERY_SUFFIX = " — только для Авито Доставки";
+  for (const field of fields) {
+    if (!isDeliveryTag(field.tag)) continue;
+    const existing = columns.get(field.tag);
+    const label = existing ? (existing.label.endsWith(DELIVERY_SUFFIX) ? existing.label : `${existing.label}${DELIVERY_SUFFIX}`) : `${field.label}${DELIVERY_SUFFIX}`;
+    columns.set(field.tag, { tag: field.tag, label, example: existing ? existing.example : "" });
   }
 
   return [...columns.values()];

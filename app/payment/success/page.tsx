@@ -9,6 +9,8 @@ export default function PaymentSuccessPage() {
   );
   // true — оплачены слоты для клиентов автозагрузки (а не подписка)
   const [isClientsPayment, setIsClientsPayment] = useState(false);
+  // true — оплачен заказ услуги «Уровень сервиса»
+  const [isServicePayment, setIsServicePayment] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -44,10 +46,14 @@ export default function PaymentSuccessPage() {
         const status = data.payment?.status;
         const clientsPayment = String(data.payment?.planCode ?? "").startsWith("autoload_clients_x");
         setIsClientsPayment(clientsPayment);
+        const servicePayment = String(data.payment?.planCode ?? "").startsWith("service_level_order_");
+        setIsServicePayment(servicePayment);
 
         if (status === "succeeded") {
           setMessage(
-            clientsPayment
+            servicePayment
+              ? "Оплата подтверждена. Заказ создан и передан в работу — следить за ходом выполнения можно в разделе «Уровень сервиса» → «Мои заказы»."
+              : clientsPayment
               ? "Оплата подтверждена. Новые слоты для клиентов автозагрузки добавлены — вернитесь в «Автозагрузку» и добавьте клиента."
               : "Оплата подтверждена. Подписка Basic активирована."
           );
@@ -95,10 +101,10 @@ export default function PaymentSuccessPage() {
 
             <div className="flex flex-col justify-center gap-4 sm:flex-row">
               <Link
-                href={isClientsPayment ? "/dashboard?section=autoload" : "/dashboard"}
+                href={isServicePayment ? "/dashboard?section=service-level&tab=orders" : isClientsPayment ? "/dashboard?section=autoload" : "/dashboard"}
                 className="btn-primary"
               >
-                {isClientsPayment ? "Вернуться к автозагрузке" : "Открыть личный кабинет"}
+                {isServicePayment ? "Перейти к моим заказам" : isClientsPayment ? "Вернуться к автозагрузке" : "Открыть личный кабинет"}
               </Link>
               <Link href="/" className="btn-secondary">
                 На главную

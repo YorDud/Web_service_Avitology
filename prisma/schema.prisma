@@ -67,6 +67,9 @@ model User {
   // autoloadExtraClientSlots — сколько таких клиентов пользователь может завести (+3 за каждую оплату).
   autoloadExtraClientSlots Int              @default(0)
   autoloadClients          AutoloadClient[]
+
+  // Заказы услуги «Уровень сервиса»
+  serviceLevelOrders ServiceLevelOrder[]
 }
 
 model ServiceSettings {
@@ -367,4 +370,147 @@ model BonusCodeRedemption {
 
   @@unique([codeId, userId])
   @@index([userId])
+}
+
+/// Услуга «Уровня сервиса» (актуальность, цена, ответы в чатах и любые новые).
+/// Всё редактируется в админ-панели: тексты, цены, шаблон задания для SocPublic.
+model ServiceLevelService {
+  id        Int     @id @default(autoincrement())
+  slug      String  @unique
+  title     String
+  summary   String  @default("")
+  /// Подробное описание для инструкции пользователя (если пусто — в инструкции не показывается)
+  guide     String  @default("")
+  emoji     String  @default("⭐")
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  /// Цена на нашем сайте: целых рублей за 1 выполнение на 1 объявление
+  pricePerUnit Int @default(25)
+  /// Минимум и максимум выполнений на одну ссылку
+  minQuantity Int @default(15)
+  maxQuantity Int @default(500)
+
+  /// Шаблон названия задания на SocPublic: letter — буква имени, n — номер ссылки в заказе (в фигурных скобках)
+  taskTitle        String
+  numberSingleLink Boolean @default(true)
+  /// Описание задания для исполнителей (HTML)
+  taskDescription String
+  /// «Информация для подтверждения» (HTML)
+  confirmInfo String
+  /// Оплата исполнителю за 1 выполнение, ₽
+  reward Float @default(5)
+  /// «Время на выполнение» в минутах — список значений строго такой же, как в форме SocPublic
+  /// (5 мин … 1 месяц). По умолчанию 7200 = 120 ч. (5 дней).
+  executionMinutes Int @default(7200)
+  /// JSON-шаблон тела запроса task_create (плейсхолдеры name, links, description, confirm, reward и др. в двойных фигурных скобках)
+  payloadTemplate String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders ServiceLevelOrder[]
+}
+
+/// Общие настройки «Уровня сервиса» (одна строка, id = 1)
+model ServiceLevelSettings {
+  id Int @id @default(1)
+
+  /// Приём заказов включён (по умолчанию выключен, пока админ не проверил связь с SocPublic)
+  isEnabled Boolean @default(false)
+  /// Минимальный тариф для заказа: free | basic | pro
+  minTier String @default("free")
+  /// Комиссия SocPublic сверх выплаты исполнителю, %
+  commissionPercent Float @default(30)
+  maxLinksPerOrder  Int   @default(20)
+  /// Коды успешного ответа API SocPublic через запятую (у SocPublic успех — status 0)
+  successCodes String @default("0")
+  /// JSON-шаблон тела запроса task_pay (плейсхолдеры taskId, amount, count в двойных фигурных скобках)
+  payTemplate String
+  /// Ключи (через запятую), по которым ищем числа в ответе task_info
+  keyRemaining String @default("left,remain,remaining,rest,ostalos,count_left")
+  keyReady     String @default("ready,bids_ready,wait,waiting,pending")
+  keyStarted   String @default("started,begin,in_work,bids_started")
+  keyRework    String @default("rework,revision,bids_rework")
+  keyTotal     String @default("total,all,bids_total")
+  keyPaid      String @default("paid,done,completed,success,bids_paid")
+  /// Тексты для пользователей
+  etaText    String @default("от нескольких часов до 2–3 дней")
+  guideIntro String @default("")
+
+  updatedAt DateTime @updatedAt
+}
+
+/// Заказ пользователя. Пока не оплачен — статус awaiting_payment и номера нет.
+model ServiceLevelOrder {
+  id        Int                 @id @default(autoincrement())
+  userId    Int
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceId Int
+  service   ServiceLevelService @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  /// Порядковый номер заказа пользователя (1, 2, 3…), присваивается после оплаты
+  orderNumber Int?
+  /// awaiting_payment | in_progress | completed | cancelled
+  status      String @default("awaiting_payment")
+
+  titleSnapshot   String
+  quantityPerLink Int
+  linksCount      Int
+  totalQuantity   Int
+  unitPrice       Int
+  /// Сумма заказа, ₽ (то, что платит пользователь)
+  amountPaid Int
+  /// Расход на SocPublic, ₽
+  socCost            Float
+  rewardSnapshot     Float
+  commissionSnapshot Float
+
+  paymentId Int? @unique
+
+  attention     Boolean @default(false)
+  attentionNote String?
+  adminNote     String?
+
+  dispatchLockedUntil DateTime?
+  paidAt              DateTime?
+  completedAt         DateTime?
+  lastSyncAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  items ServiceLevelOrderItem[]
+
+  @@unique([userId, orderNumber])
+  @@index([userId])
+  @@index([status])
+}
+
+/// Одна ссылка заказа = одно задание на SocPublic
+model ServiceLevelOrderItem {
+  id       Int               @id @default(autoincrement())
+  orderId  Int
+  order    ServiceLevelOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  position Int
+  url      String
+  quantity Int
+  taskName String
+
+  /// pending | creating | created | funding | funded | enabling | active | done | error
+  stage      String  @default("pending")
+  /// На каком шаге произошла ошибка: create | fund | enable
+  errorStage String?
+  /// SocPublic просит подождать (лимит на создание заданий) — до этого момента не пробуем сами,
+  /// это не ошибка, а обычное ожидание, поэтому заказ не помечается «требует внимания».
+  retryAfter DateTime?
+  socTaskId  String?
+  fundedAmount Float?
+  doneCount  Int?
+  error      String?
+  rawLast    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
 }
