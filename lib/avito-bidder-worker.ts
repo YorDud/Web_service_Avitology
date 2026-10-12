@@ -3,14 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { runDueBidders } from "@/lib/avito-bidder-runner";
 
 const LOCK_ID = "avito-bidder-worker-global-lock";
-const DEFAULT_LOCK_MINUTES = 12;
+// Сколько минут держится блокировка, если запуск оборвался (перезапуск сервера, превышен лимит времени запроса).
+// Раньше было 12 — из-за этого после обрыва worker молчал 2–3 запуска подряд.
+function getLockMinutes() { const v = Number(process.env.BIDDER_WORKER_LOCK_MINUTES ?? "6"); return Number.isInteger(v) ? Math.min(Math.max(v, 2), 30) : 6; }
 const WORKER_RUN_RETENTION_DAYS = 3;
 type WorkerSource = "cron" | "manual" | "internal" | "local";
 export type BidderWorkerExecutionResult =
   | { ok: true; skippedBecauseLocked: false; runId: number; token: string; source: WorkerSource; startedAt: string; finishedAt: string; total: number; processed: number; skipped: number; failed: number; dryRunProcessed: number; liveProcessed: number; message: string }
   | { ok: true; skippedBecauseLocked: true; source: WorkerSource; message: string; lockedUntil: string | null }
   | { ok: false; skippedBecauseLocked: false; runId: number | null; token: string; source: WorkerSource; message: string };
-function getLockUntil() { return new Date(Date.now() + DEFAULT_LOCK_MINUTES * 60_000); }
+function getLockUntil() { return new Date(Date.now() + getLockMinutes() * 60_000); }
 function getWorkerRunCleanupBefore() { return new Date(Date.now() - WORKER_RUN_RETENTION_DAYS * 24 * 60 * 60_000); }
 /** Global cleanup: each worker launch removes monitoring entries older than 3 days for every user. */
 async function cleanupOldWorkerRuns() { await prisma.bidderWorkerRun.deleteMany({ where: { startedAt: { lt: getWorkerRunCleanupBefore() } } }); }
@@ -21,7 +23,13 @@ export async function runProductionBidderWorker(params?: { source?: WorkerSource
   // Cleanup is intentionally done before lock acquisition: retention does not depend on a successful run.
   await cleanupOldWorkerRuns().catch(() => undefined);
   const lock = await acquireWorkerLock(token);
+  if (!lock.acquired) {
+    // Запись в журнал, чтобы мониторинг не «молчал»: видно, что cron приходил, но предыдущий запуск ещё выполнялся.
+    await prisma.bidderWorkerRun.create({ data: { token, source, status: "skipped", startedAt: new Date(), finishedAt: new Date(), message: lock.lockedUntil ? `Пропущен: предыдущий запуск ещё выполняется (блокировка до ${lock.lockedUntil.toISOString()}).` : "Пропущен: предыдущий запуск ещё выполняется." } }).catch(() => undefined);
+  }
   if (!lock.acquired) return { ok: true, skippedBecauseLocked: true, source, lockedUntil: lock.lockedUntil?.toISOString() ?? null, message: lock.lockedUntil ? `Worker уже выполняется. Lock активен до ${lock.lockedUntil.toISOString()}.` : "Worker уже выполняется другим процессом." };
+  // Блокировку получили — значит, другого живого запуска нет. Все записи «running» — оборванные запуски: закрываем их как «failed».
+  await prisma.bidderWorkerRun.updateMany({ where: { status: "running" }, data: { status: "failed", finishedAt: new Date(), error: "Запуск оборван", message: "Запуск не завершился: сервер перезапускался или превышено допустимое время выполнения запроса." } }).catch(() => undefined);
   let workerRunId: number | null = null; const startedAt = new Date();
   try { const workerRun = await prisma.bidderWorkerRun.create({ data: { token, source, status: "running", startedAt } }); workerRunId = workerRun.id; const result = await runDueBidders({ userId: params?.userId, limit: params?.limit ?? 100 }); const finishedAt = new Date(); const message = ["Bidder worker выполнен.", `Всего: ${result.total}.`, `Обработано: ${result.processed}.`, `Пропущено: ${result.skipped}.`, `Ошибок: ${result.failed}.`, `Dry-run: ${result.dryRunProcessed}.`, `Live: ${result.liveProcessed}.`].join(" "); await prisma.bidderWorkerRun.update({ where: { id: workerRun.id }, data: { status: "completed", finishedAt, total: result.total, processed: result.processed, skipped: result.skipped, failed: result.failed, message } }); return { ok: true, skippedBecauseLocked: false, runId: workerRun.id, token, source, startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), total: result.total, processed: result.processed, skipped: result.skipped, failed: result.failed, dryRunProcessed: result.dryRunProcessed, liveProcessed: result.liveProcessed, message }; } catch (error) { const message = error instanceof Error ? error.message : "Неизвестная ошибка production bidder worker."; if (workerRunId !== null) await prisma.bidderWorkerRun.update({ where: { id: workerRunId }, data: { status: "failed", finishedAt: new Date(), error: message, message: "Worker завершился с ошибкой." } }); return { ok: false, skippedBecauseLocked: false, runId: workerRunId, token, source, message }; } finally { await releaseWorkerLock(token); }
 }

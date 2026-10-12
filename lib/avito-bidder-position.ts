@@ -319,7 +319,7 @@ async function launchBrowser(proxy?: BidderProxy): Promise<Browser> {
   return chromium.launch(launchOptions as any);
 }
 
-async function createContext(browser: Browser): Promise<BrowserContext> {
+async function createContext(browser: Browser, lightweight = false): Promise<BrowserContext> {
   const userAgent = pickUserAgent();
   const viewport = pickViewport();
   const locale = LOCALES[randomInt(0, LOCALES.length - 1)];
@@ -353,6 +353,8 @@ async function createContext(browser: Browser): Promise<BrowserContext> {
     if (
       resourceType === "media" ||
       resourceType === "websocket" ||
+      // Через прокси канал медленный (≈1,6 Мбит/с): картинки и шрифты для чтения карточек не нужны
+      (lightweight && (resourceType === "image" || resourceType === "font")) ||
       url.includes("googletagmanager") ||
       url.includes("google-analytics") ||
       url.includes("googlesyndication") ||
@@ -426,7 +428,7 @@ function isCaptchaPage(text: string): boolean {
 
 const MAX_RETRIES = 3;
 // Когда прокси несколько, внутри одного прокси повторяем меньше — быстрее переходим к следующему.
-const MAX_RETRIES_WITH_POOL = 2;
+const MAX_RETRIES_WITH_POOL = 1; // у прокси IP тот же — повтор через пару секунд не поможет, быстрее берём следующий прокси
 
 async function fetchWithRetry(
   context: BrowserContext,
@@ -447,7 +449,7 @@ async function fetchWithRetry(
       if (attempt === 1) {
         await page.goto("https://www.avito.ru", {
           waitUntil: "domcontentloaded",
-          timeout: timeoutMs,
+          timeout: Math.min(timeoutMs, 15_000),
         }).catch(() => {});
         await humanDelay(800, 2000);
         await humanMouseMove(page);
@@ -635,12 +637,12 @@ async function checkWithProxy(
 
   try {
     browser = await launchBrowser(proxy ?? undefined);
-    const context = await createContext(browser);
+    const context = await createContext(browser, Boolean(proxy));
 
     for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
       const pageUrl = getSearchUrlForPage(normalizedSearchUrl, pageNumber);
 
-      const { cards: validCards, captcha } = await fetchWithRetry(
+      const { cards: validCards, captcha, pageText } = await fetchWithRetry(
         context,
         pageUrl,
         pageNumber,
@@ -670,7 +672,7 @@ async function checkWithProxy(
             source: "avito_serp_error",
             page: 1,
             searchUrl: pageUrl,
-            details: "Карточки объявлений не найдены в HTML выдачи.",
+            details: `Карточки объявлений не найдены в HTML выдачи.${pageText.trim() ? ` Что показал Авито: «${pageText.replace(/\s+/g, " ").trim().slice(0, 160)}».` : " Страница пришла пустой или не загрузилась."}`,
             error: "Не удалось прочитать карточки поиска Авито. CPX-ставка не изменялась.",
           },
         };
