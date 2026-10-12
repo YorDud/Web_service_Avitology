@@ -63,6 +63,7 @@ type AdminItem = {
   position: number;
   url: string;
   quantity: number;
+  socQuantity: number;
   taskName: string;
   stage: string;
   errorStage: string | null;
@@ -171,7 +172,7 @@ export default function ServiceLevelAdminPanel() {
   ];
 
   return (
-    <section className="min-w-0 space-y-5">
+    <section className="min-w-0 space-y-5" style={{ overflowWrap: "break-word", wordBreak: "normal", hyphens: "manual" }}>
       {/* Шапка */}
       <div className="white-card min-w-0 p-5 md:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -744,6 +745,7 @@ function OrderCard({
 
         <div className="flex flex-wrap gap-2">
           <MiniStat label="Количество" value={`${order.linksCount} × ${order.quantityPerLink} = ${order.totalQuantity}`} />
+          <MiniStat label="На SocPublic (+2 на ссылку)" value={String(order.itemsAdmin.reduce((sum, item) => sum + item.socQuantity, 0))} />
           <MiniStat label="Оплатил" value={formatRub(order.paid)} />
           <MiniStat label="Расход SocPublic" value={formatRub(order.socCost)} />
           <MiniStat label="Чистая прибыль" value={formatRub(order.profit)} tone={order.profit >= 0 ? "green" : "red"} />
@@ -813,7 +815,7 @@ function OrderCard({
                       <a href={item.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 basis-56 truncate text-sm font-bold text-[#028c36] hover:underline" title={item.url}>
                         {item.url}
                       </a>
-                      <span className="text-xs font-bold tabular-nums text-black/45">{item.quantity} шт.</span>
+                      <span className="text-xs font-bold tabular-nums text-black/45">{item.quantity} шт. <span className="text-black/30">(на SocPublic {item.socQuantity})</span></span>
                       {(() => {
                         const waiting = order.status === "in_progress" && Boolean(item.retryAfter && new Date(item.retryAfter).getTime() > Date.now());
                         return (

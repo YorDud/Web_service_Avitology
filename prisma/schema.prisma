@@ -494,6 +494,8 @@ model ServiceLevelOrderItem {
   position Int
   url      String
   quantity Int
+  /// Сколько выполнений заказано на SocPublic: количество пользователя + 2 (запас). null у старых заказов = quantity.
+  socQuantity Int?
   taskName String
 
   /// pending | creating | created | funding | funded | enabling | active | done | error

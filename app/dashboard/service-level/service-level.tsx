@@ -86,6 +86,13 @@ function shortUrl(url: string) {
   }
 }
 
+/**
+ * Слова переносятся целиком: строка переносится по пробелам, а разрывать слово по буквам можно
+ * только если оно вообще не помещается в строку (очень длинная ссылка). Свойства наследуются
+ * всеми вложенными блоками.
+ */
+const WRAP_WHOLE_WORDS = { overflowWrap: "break-word", wordBreak: "normal", hyphens: "manual" } as const;
+
 export default function ServiceLevelService() {
   const toast = useToast();
   const [data, setData] = useState<Overview | null>(null);
@@ -210,7 +217,7 @@ export default function ServiceLevelService() {
 
   /* ---------- Рендер ---------- */
   return (
-    <div className="flex min-w-0 flex-col">
+    <div className="flex min-w-0 flex-col" style={WRAP_WHOLE_WORDS}>
       <AutoloadStyles />
 
       {/* HERO */}
@@ -387,7 +394,7 @@ function OrderTab({
         {/* Шаг 1 */}
         <section className="min-w-0 rounded-3xl border border-black/[0.08] bg-white p-4 shadow-[0_10px_30px_rgba(16,24,40,0.05)] sm:p-5">
           <StepTitle number="1" title="Что нужно" hint="Выберите услугу" />
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+          <div className="mt-4 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))" }}>
             {data.services.map((service) => {
               const active = selected?.id === service.id;
               return (
@@ -401,12 +408,12 @@ function OrderTab({
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-2xl leading-none">{service.emoji}</span>
-                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${active ? "border-[#03bd48] bg-[#03bd48] text-white" : "border-black/20"}`}>
+                    <span className="text-2xl leading-none" style={{ flex: "0 0 auto" }}>{service.emoji}</span>
+                    <span style={{ flex: "0 0 auto", width: 20, height: 20 }} className={`flex shrink-0 items-center justify-center rounded-full border-2 ${active ? "border-[#03bd48] bg-[#03bd48] text-white" : "border-black/20"}`}>
                       {active && <Icon name="check" className="h-3 w-3" />}
                     </span>
                   </div>
-                  <div className="mt-2.5 text-sm font-extrabold leading-5 text-black">{service.title}</div>
+                  <div className="mt-2.5 text-sm font-extrabold leading-5 text-black" style={{ minWidth: 0, ...WRAP_WHOLE_WORDS }}>{service.title}</div>
                   {service.summary && <p className="mt-1 text-xs leading-5 text-black/50">{service.summary}</p>}
                   <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-extrabold">
                     <span className="text-[#028c36]">{formatRub(service.pricePerUnit)} за 1 действие</span>

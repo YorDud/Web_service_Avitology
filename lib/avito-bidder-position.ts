@@ -33,15 +33,124 @@ function getTimeoutMs() {
   return Math.min(Math.max(value, 10_000), 60_000);
 }
 
-function getProxyConfig() {
-  const server = process.env.BIDDER_PROXY_SERVER?.trim();
-  if (!server) return undefined;
-  const proxy: { server: string; username?: string; password?: string } = { server };
-  const username = process.env.BIDDER_PROXY_USERNAME?.trim();
-  const password = process.env.BIDDER_PROXY_PASSWORD?.trim();
-  if (username) proxy.username = username;
-  if (password) proxy.password = password;
-  return proxy;
+// ---------------------------------------------------------------------------
+// Пул прокси: перебор по очереди, пока не получим позицию
+// ---------------------------------------------------------------------------
+//
+// ГДЕ ДОБАВЛЯТЬ ПРОКСИ: в файле .env (и в переменных окружения на хостинге) в строке
+//
+//   BIDDER_PROXIES="91.221.70.204:24015:логин:пароль;ещё_адрес:порт:логин:пароль;ещё_один:порт:логин:пароль"
+//
+// Прокси разделяются точкой с запятой «;» (или переносом строки). Формат каждого — как выдаёт
+// продавец: адрес:порт:логин:пароль. Допустимы и другие записи: адрес:порт (без логина),
+// логин:пароль@адрес:порт, а также с префиксом http:// или socks5://.
+// Чтобы добавить ещё прокси — просто допишите его в конец строки через «;» и перезапустите сайт.
+// Код менять не нужно, количество прокси не ограничено.
+//
+// Если BIDDER_PROXIES пустая, а задан старый вариант (BIDDER_PROXY_SERVER / _USERNAME / _PASSWORD),
+// используется он, как раньше. Если не задано ничего — проверка идёт без прокси, как раньше.
+//
+// Как работает перебор: проверка пробует прокси по очереди. Если на одном получили капчу,
+// блокировку или ошибку соединения — сразу берём следующий и так до первой успешной проверки.
+// Прокси, на котором была капча, «отдыхает» несколько минут и пропускается (если не отдыхают
+// все — пробуем всё равно). Стартовый прокси каждый раз сдвигается, чтобы нагрузка шла поровну.
+
+type BidderProxy = {
+  /** Для логов и ошибок — только адрес:порт, без логина и пароля */
+  label: string;
+  server: string;
+  username?: string;
+  password?: string;
+};
+
+/** Сколько минут прокси «отдыхает» после капчи/блокировки/ошибки */
+const PROXY_COOLDOWN_MS = 10 * 60 * 1000;
+
+const proxyCooldownUntil = new Map<string, number>();
+let proxyRotationCounter = 0;
+
+function parseProxyEntry(raw: string): BidderProxy | null {
+  let text = raw.trim();
+  if (!text) return null;
+
+  let scheme = "http";
+  const schemeMatch = text.match(/^(https?|socks5h?|socks4):\/\//i);
+  if (schemeMatch) {
+    scheme = schemeMatch[1].toLowerCase().replace("socks5h", "socks5");
+    text = text.slice(schemeMatch[0].length);
+  }
+
+  let host = "";
+  let port = "";
+  let username: string | undefined;
+  let password: string | undefined;
+
+  if (text.includes("@")) {
+    // логин:пароль@адрес:порт
+    const at = text.lastIndexOf("@");
+    const cred = text.slice(0, at);
+    const addr = text.slice(at + 1).split(":");
+    host = addr[0] ?? "";
+    port = addr[1] ?? "";
+    const colon = cred.indexOf(":");
+    username = colon >= 0 ? cred.slice(0, colon) : cred;
+    password = colon >= 0 ? cred.slice(colon + 1) : undefined;
+  } else {
+    // адрес:порт[:логин:пароль]  (пароль может содержать двоеточия — берём всё после логина)
+    const parts = text.split(":");
+    host = parts[0] ?? "";
+    port = parts[1] ?? "";
+    if (parts.length >= 3) username = parts[2];
+    if (parts.length >= 4) password = parts.slice(3).join(":");
+  }
+
+  if (!host || !/^\d{2,5}$/.test(port)) return null;
+  return {
+    label: `${host}:${port}`,
+    server: `${scheme}://${host}:${port}`,
+    username: username || undefined,
+    password: password || undefined,
+  };
+}
+
+function getProxyPool(): BidderProxy[] {
+  const pool: BidderProxy[] = [];
+  const list = process.env.BIDDER_PROXIES ?? "";
+  for (const entry of list.split(/[;\n\r]+/)) {
+    const proxy = parseProxyEntry(entry);
+    if (proxy && !pool.some((item) => item.server === proxy.server)) pool.push(proxy);
+  }
+
+  // Старый вариант с одним прокси — остаётся рабочим
+  const legacyServer = process.env.BIDDER_PROXY_SERVER?.trim();
+  if (legacyServer && !pool.some((item) => item.server === legacyServer)) {
+    pool.push({
+      label: legacyServer.replace(/^[a-z0-9]+:\/\//i, ""),
+      server: legacyServer,
+      username: process.env.BIDDER_PROXY_USERNAME?.trim() || undefined,
+      password: process.env.BIDDER_PROXY_PASSWORD?.trim() || undefined,
+    });
+  }
+  return pool;
+}
+
+/** Порядок перебора: сначала «отдохнувшие», начиная с каждый раз нового (по кругу). */
+function orderProxies(pool: BidderProxy[]): BidderProxy[] {
+  const start = proxyRotationCounter % pool.length;
+  proxyRotationCounter += 1;
+  const rotated = [...pool.slice(start), ...pool.slice(0, start)];
+  const now = Date.now();
+  const ready = rotated.filter((proxy) => (proxyCooldownUntil.get(proxy.server) ?? 0) <= now);
+  const resting = rotated.filter((proxy) => (proxyCooldownUntil.get(proxy.server) ?? 0) > now);
+  return [...ready, ...resting];
+}
+
+function markProxyFailed(proxy: BidderProxy) {
+  proxyCooldownUntil.set(proxy.server, Date.now() + PROXY_COOLDOWN_MS);
+}
+
+function markProxyOk(proxy: BidderProxy) {
+  proxyCooldownUntil.delete(proxy.server);
 }
 
 function sleep(ms: number) {
@@ -186,9 +295,8 @@ async function applyStealth(page: Page) {
 // Запуск браузера
 // ---------------------------------------------------------------------------
 
-async function launchBrowser(): Promise<Browser> {
+async function launchBrowser(proxy?: BidderProxy): Promise<Browser> {
   const executablePath = process.env.BIDDER_CHROME_EXECUTABLE_PATH?.trim();
-  const proxy = getProxyConfig();
 
   const launchOptions: Record<string, unknown> = {
     headless: true,
@@ -201,7 +309,11 @@ async function launchBrowser(): Promise<Browser> {
   }
 
   if (proxy) {
-    launchOptions.proxy = proxy;
+    launchOptions.proxy = {
+      server: proxy.server,
+      ...(proxy.username ? { username: proxy.username } : {}),
+      ...(proxy.password ? { password: proxy.password } : {}),
+    };
   }
 
   return chromium.launch(launchOptions as any);
@@ -313,14 +425,17 @@ function isCaptchaPage(text: string): boolean {
 // ---------------------------------------------------------------------------
 
 const MAX_RETRIES = 3;
+// Когда прокси несколько, внутри одного прокси повторяем меньше — быстрее переходим к следующему.
+const MAX_RETRIES_WITH_POOL = 2;
 
 async function fetchWithRetry(
   context: BrowserContext,
   pageUrl: string,
   pageNumber: number,
   timeoutMs: number,
+  maxRetries: number = MAX_RETRIES,
 ): Promise<{ cards: SerpCard[]; captcha: boolean; pageText: string }> {
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const page = await context.newPage();
     page.setDefaultTimeout(timeoutMs);
     page.setDefaultNavigationTimeout(timeoutMs);
@@ -357,7 +472,7 @@ async function fetchWithRetry(
 
       if (isCaptchaPage(pageText)) {
         await page.close().catch(() => {});
-        if (attempt < MAX_RETRIES) {
+        if (attempt < maxRetries) {
           await sleep(randomInt(3000, 6000) * attempt);
           continue;
         }
@@ -393,7 +508,7 @@ async function fetchWithRetry(
 
       await page.close().catch(() => {});
 
-      if (validCards.length === 0 && attempt < MAX_RETRIES) {
+      if (validCards.length === 0 && attempt < maxRetries) {
         await sleep(randomInt(2000, 4000) * attempt);
         continue;
       }
@@ -401,7 +516,7 @@ async function fetchWithRetry(
       return { cards: validCards, captcha: false, pageText };
     } catch {
       await page.close().catch(() => {});
-      if (attempt < MAX_RETRIES) {
+      if (attempt < maxRetries) {
         await sleep(randomInt(2000, 5000) * attempt);
         continue;
       }
@@ -465,85 +580,148 @@ export async function getBidderPosition(params: {
 
   const maxPages = getMaxPages();
   const timeoutMs = getTimeoutMs();
+  const pool = getProxyPool();
+
+  // Нет прокси — одна попытка напрямую, как раньше
+  if (pool.length === 0) {
+    const outcome = await checkWithProxy(null, normalizedSearchUrl, targetItemId, maxPages, timeoutMs, MAX_RETRIES);
+    return outcome.result;
+  }
+
+  // Есть пул — пробуем прокси по очереди, пока не получим позицию
+  const failures: string[] = [];
+  let lastFailure: BidderPositionResult | null = null;
+
+  for (const proxy of orderProxies(pool)) {
+    const outcome = await checkWithProxy(proxy, normalizedSearchUrl, targetItemId, maxPages, timeoutMs, MAX_RETRIES_WITH_POOL);
+    if (outcome.done) {
+      markProxyOk(proxy);
+      return outcome.result;
+    }
+    markProxyFailed(proxy);
+    failures.push(proxy.label);
+    lastFailure = outcome.result;
+  }
+
+  const base = lastFailure ?? {
+    position: null,
+    source: "avito_serp_error" as const,
+    page: null,
+    searchUrl: normalizedSearchUrl,
+    details: "Проверка позиции завершилась с ошибкой.",
+    error: "Не удалось проверить выдачу Авито.",
+  };
+  return {
+    ...base,
+    details: `${base.details} Перебрано прокси: ${failures.length} (${failures.join(", ")}).`,
+    error: `${base.error ?? "Не удалось проверить выдачу Авито."} Ни один из ${failures.length} прокси не получил выдачу.`,
+  };
+}
+
+/**
+ * Одна проверка через один прокси (или напрямую, если proxy = null).
+ * done = true — результат окончательный (позиция найдена, либо честно «не в первых 50»);
+ * done = false — капча, блокировка или ошибка соединения: нужно пробовать следующий прокси.
+ */
+async function checkWithProxy(
+  proxy: BidderProxy | null,
+  normalizedSearchUrl: string,
+  targetItemId: string,
+  maxPages: number,
+  timeoutMs: number,
+  maxRetries: number,
+): Promise<{ done: boolean; result: BidderPositionResult }> {
   let browser: Browser | null = null;
 
   try {
-    browser = await launchBrowser();
+    browser = await launchBrowser(proxy ?? undefined);
     const context = await createContext(browser);
 
     for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
       const pageUrl = getSearchUrlForPage(normalizedSearchUrl, pageNumber);
 
-      const { cards: validCards, captcha, pageText } = await fetchWithRetry(
+      const { cards: validCards, captcha } = await fetchWithRetry(
         context,
         pageUrl,
         pageNumber,
         timeoutMs,
+        maxRetries,
       );
 
       if (captcha) {
         return {
-          position: null,
-          source: "avito_serp_error",
-          page: pageNumber,
-          searchUrl: pageUrl,
-          details: "Авито не предоставил поисковую выдачу.",
-          error:
-            "Авито запросил CAPTCHA или ограничил доступ к выдаче. CPX-ставка не изменялась.",
+          done: false,
+          result: {
+            position: null,
+            source: "avito_serp_error",
+            page: pageNumber,
+            searchUrl: pageUrl,
+            details: "Авито не предоставил поисковую выдачу.",
+            error: "Авито запросил CAPTCHA или ограничил доступ к выдаче. CPX-ставка не изменялась.",
+          },
         };
       }
 
       if (pageNumber === 1 && validCards.length === 0) {
         return {
-          position: null,
-          source: "avito_serp_error",
-          page: 1,
-          searchUrl: pageUrl,
-          details: "Карточки объявлений не найдены в HTML выдачи.",
-          error:
-            "Не удалось прочитать карточки поиска Авито. CPX-ставка не изменялась.",
+          done: false,
+          result: {
+            position: null,
+            source: "avito_serp_error",
+            page: 1,
+            searchUrl: pageUrl,
+            details: "Карточки объявлений не найдены в HTML выдачи.",
+            error: "Не удалось прочитать карточки поиска Авито. CPX-ставка не изменялась.",
+          },
         };
       }
 
-      const itemIndex = validCards.findIndex(
-        (card) => card.itemId === targetItemId,
-      );
+      const itemIndex = validCards.findIndex((card) => card.itemId === targetItemId);
 
       if (itemIndex >= 0) {
         const position = (pageNumber - 1) * validCards.length + itemIndex + 1;
-
         return {
-          position,
-          source: "avito_serp_playwright",
-          page: pageNumber,
-          searchUrl: pageUrl,
-          details: `Объявление найдено в поисковой выдаче Авито: позиция ${position}, страница ${pageNumber}.`,
-          error: null,
+          done: true,
+          result: {
+            position,
+            source: "avito_serp_playwright",
+            page: pageNumber,
+            searchUrl: pageUrl,
+            details: `Объявление найдено в поисковой выдаче Авито: позиция ${position}, страница ${pageNumber}.`,
+            error: null,
+          },
         };
       }
     }
 
     return {
-      position: 51,
-      source: "avito_serp_first_page_not_found",
-      page: 1,
-      searchUrl: normalizedSearchUrl,
-      details:
-        "Объявление не найдено среди первых 50 карточек первой страницы выдачи Авито. " +
-        "Для алгоритма bidder-а используется позиция 51 (ниже первой страницы).",
-      error: null,
+      done: true,
+      result: {
+        position: 51,
+        source: "avito_serp_first_page_not_found",
+        page: 1,
+        searchUrl: normalizedSearchUrl,
+        details:
+          "Объявление не найдено среди первых 50 карточек первой страницы выдачи Авито. " +
+          "Для алгоритма bidder-а используется позиция 51 (ниже первой страницы).",
+        error: null,
+      },
     };
   } catch (error) {
+    // В сообщение об ошибке пароль прокси попасть не должен: берём только текст ошибки браузера
+    const reason = error instanceof Error ? error.message.split("\n")[0] : "";
     return {
-      position: null,
-      source: "avito_serp_error",
-      page: null,
-      searchUrl: normalizedSearchUrl,
-      details: "Проверка позиции завершилась с ошибкой.",
-      error:
-        error instanceof Error
-          ? `Не удалось проверить выдачу Авито: ${error.message}`
+      done: false,
+      result: {
+        position: null,
+        source: "avito_serp_error",
+        page: null,
+        searchUrl: normalizedSearchUrl,
+        details: "Проверка позиции завершилась с ошибкой.",
+        error: reason
+          ? `Не удалось проверить выдачу Авито: ${reason}`
           : "Не удалось проверить выдачу Авито. CPX-ставка не изменялась.",
+      },
     };
   } finally {
     await browser?.close().catch(() => undefined);

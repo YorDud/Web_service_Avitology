@@ -8,6 +8,7 @@ import {
   parseLinks,
   parseServiceLevelPlanCode,
   round2,
+  socQuantityFor,
   hasTierAccess,
   type OrderTotals,
 } from "./constants";
@@ -111,6 +112,7 @@ export async function createDraftOrder(user: { id: number; name: string }, prepa
           position: index + 1,
           url: link.url,
           quantity: prepared.quantityPerLink,
+          socQuantity: socQuantityFor(prepared.quantityPerLink),
           taskName: buildTaskName(prepared.service.taskTitle, {
             letter,
             n: index + 1,
@@ -324,7 +326,8 @@ async function processItem(order: OrderWithRelations, startItem: OrderWithRelati
   let stage = startItem.stage;
   let taskId = startItem.socTaskId;
   // Расчётная стоимость (по комиссии из настроек) — запасной вариант, если SocPublic не вернул цену.
-  const estimatedCost = round2(startItem.quantity * order.rewardSnapshot * (1 + order.commissionSnapshot / 100));
+  const socQty = startItem.socQuantity ?? startItem.quantity; // реальное количество на SocPublic (N + 2)
+  const estimatedCost = round2(socQty * order.rewardSnapshot * (1 + order.commissionSnapshot / 100));
 
   if (stage === "pending" && startItem.retryAfter && startItem.retryAfter.getTime() > Date.now()) {
     return; // SocPublic попросил подождать между созданиями заданий — ждём, это не ошибка
@@ -339,8 +342,8 @@ async function processItem(order: OrderWithRelations, startItem: OrderWithRelati
       description: order.service.taskDescription,
       confirm: order.service.confirmInfo,
       reward: order.rewardSnapshot,
-      count: startItem.quantity,
-      quantity: startItem.quantity,
+      count: socQty,
+      quantity: socQty,
       executionMinutes: order.service.executionMinutes,
       // «Время на выполнение» в API — поле work_time в секундах (минуты × 60 дают ровно допустимые значения SocPublic).
       executionSeconds: order.service.executionMinutes * 60,
@@ -384,14 +387,14 @@ async function processItem(order: OrderWithRelations, startItem: OrderWithRelati
     // SocPublic принимает пополнение только ЦЕЛЫМИ рублями, поэтому округляем вверх — остаток
     // (до 0.99 ₽) вернём на рекламный баланс методом task_charge, когда задание будет выполнено.
     const unitCost = unitCostFromCreate(startItem.rawLast);
-    const amount = unitCost !== null ? round2(startItem.quantity * unitCost) : estimatedCost;
+    const amount = unitCost !== null ? round2(socQty * unitCost) : estimatedCost;
     const amountRounded = Math.ceil(amount);
     const rendered = renderTemplate(payTemplate, {
       taskId,
       amount,
       amountRounded,
       amountKopecks: Math.round(amount * 100),
-      count: startItem.quantity,
+      count: socQty,
     });
     if (!rendered.ok) return failItem(startItem.id, "fund", `Шаблон пополнения: ${rendered.error}`);
 
@@ -463,10 +466,11 @@ export async function syncOrder(orderId: number, options: { force?: boolean } = 
     }
 
     const progress = extractProgress(info.raw, keys);
-    const complete = isTaskComplete(progress, item.quantity);
+    const socQty = item.socQuantity ?? item.quantity;
+    const complete = isTaskComplete(progress, socQty);
     await setItem(item.id, {
       rawLast: stringifyRaw(info.raw),
-      doneCount: progress.paid !== null ? Math.min(Math.max(0, Math.round(progress.paid)), item.quantity) : item.doneCount,
+      doneCount: progress.paid !== null ? Math.min(Math.max(0, Math.round(progress.paid)), socQty) : item.doneCount,
       ...(complete === true ? { stage: "done" } : {}),
     });
 
@@ -559,7 +563,7 @@ export function toUserOrderView(order: OrderRow): UserOrderView {
     order.status === "completed"
       ? order.totalQuantity
       : hasProgressData
-        ? order.items.reduce((sum, item) => sum + (item.stage === "done" ? item.quantity : (item.doneCount ?? 0)), 0)
+        ? order.items.reduce((sum, item) => sum + (item.stage === "done" ? item.quantity : Math.min(item.doneCount ?? 0, item.quantity)), 0)
         : null;
   return {
     id: order.id,
@@ -581,7 +585,7 @@ export function toUserOrderView(order: OrderRow): UserOrderView {
       stage: item.stage,
       // Выполненная ссылка — это всегда «целиком», даже если сохранённое число отчётов меньше
       // (например, заказ отметили выполненным вручную до того, как досчитались все отчёты).
-      doneCount: item.stage === "done" ? item.quantity : item.doneCount,
+      doneCount: item.stage === "done" ? item.quantity : item.doneCount === null ? null : Math.min(item.doneCount, item.quantity), // пользователь не видит запас +2
     })),
   };
 }
@@ -604,6 +608,8 @@ export type AdminOrderView = UserOrderView & {
     position: number;
     url: string;
     quantity: number;
+    /** Сколько реально заказано на SocPublic (N + 2) */
+    socQuantity: number;
     taskName: string;
     stage: string;
     errorStage: string | null;
@@ -637,6 +643,7 @@ export function toAdminOrderView(order: OrderRow & { user: { id: number; name: s
       position: item.position,
       url: item.url,
       quantity: item.quantity,
+      socQuantity: item.socQuantity ?? item.quantity,
       taskName: item.taskName,
       stage: item.stage,
       errorStage: item.errorStage,

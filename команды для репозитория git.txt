@@ -163,7 +163,7 @@ git add .
 git commit -m "V8"
 git push origin main
 
-
+nano .env
 
 # из репозитория на сервер
 cd /opt/avitology

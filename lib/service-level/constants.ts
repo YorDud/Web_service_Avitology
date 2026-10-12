@@ -79,6 +79,18 @@ export function formatRub(value: number) {
   }).format(rounded)} ₽`;
 }
 
+/**
+ * Запас выполнений на каждую ссылку: на SocPublic уходит на 2 больше, чем заказал пользователь
+ * (заказал 15 → на SocPublic 17). Пользователь видит и оплачивает только своё количество.
+ * Чтобы изменить запас — поменяйте это число (0 = без запаса). Действует на новые заказы.
+ */
+export const EXTRA_QUANTITY_PER_LINK = 2;
+
+/** Количество, которое уходит на SocPublic для одной ссылки. */
+export function socQuantityFor(quantityPerLink: number): number {
+  return quantityPerLink + EXTRA_QUANTITY_PER_LINK;
+}
+
 export type OrderTotals = {
   totalQuantity: number;
   /** Сколько платит пользователь, целых ₽ */
@@ -100,13 +112,14 @@ export function computeOrderTotals(input: {
   linksCount: number;
   quantityPerLink: number;
 }): OrderTotals {
-  const totalQuantity = input.linksCount * input.quantityPerLink;
+  const totalQuantity = input.linksCount * input.quantityPerLink; // то, что видит и оплачивает пользователь
+  const socPerLink = socQuantityFor(input.quantityPerLink); // то, что реально уходит на SocPublic
   const unitCost = input.reward * (1 + input.commissionPercent / 100);
   return {
     totalQuantity,
     price: Math.round(input.pricePerUnit * totalQuantity),
-    socCost: round2(unitCost * totalQuantity),
-    socCostPerLink: round2(unitCost * input.quantityPerLink),
+    socCost: round2(unitCost * socPerLink * input.linksCount),
+    socCostPerLink: round2(unitCost * socPerLink),
   };
 }
 
