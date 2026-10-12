@@ -745,7 +745,7 @@ function OrderCard({
 
         <div className="flex flex-wrap gap-2">
           <MiniStat label="Количество" value={`${order.linksCount} × ${order.quantityPerLink} = ${order.totalQuantity}`} />
-          <MiniStat label="На SocPublic (+2 на ссылку)" value={String(order.itemsAdmin.reduce((sum, item) => sum + item.socQuantity, 0))} />
+          <MiniStat label="На SocPublic (с запасом)" value={String(order.itemsAdmin.reduce((sum, item) => sum + item.socQuantity, 0))} />
           <MiniStat label="Оплатил" value={formatRub(order.paid)} />
           <MiniStat label="Расход SocPublic" value={formatRub(order.socCost)} />
           <MiniStat label="Чистая прибыль" value={formatRub(order.profit)} tone={order.profit >= 0 ? "green" : "red"} />

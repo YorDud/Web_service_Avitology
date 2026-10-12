@@ -80,15 +80,24 @@ export function formatRub(value: number) {
 }
 
 /**
- * Запас выполнений на каждую ссылку: на SocPublic уходит на 2 больше, чем заказал пользователь
- * (заказал 15 → на SocPublic 17). Пользователь видит и оплачивает только своё количество.
- * Чтобы изменить запас — поменяйте это число (0 = без запаса). Действует на новые заказы.
+ * Запас выполнений на каждую ссылку: на SocPublic уходит больше, чем заказал пользователь.
+ *  - от 1 до 15 на ссылку  → +1 (заказал 15 → на SocPublic 16);
+ *  - от 16 и больше        → +2 (заказал 16 → 18, 30 → 32).
+ * Пользователь видит и оплачивает только своё количество.
+ * Чтобы изменить правило — поменяйте числа ниже. Действует на новые заказы.
  */
-export const EXTRA_QUANTITY_PER_LINK = 2;
+export const EXTRA_QUANTITY_UP_TO_THRESHOLD = 1; // запас, если на ссылку заказано не больше порога
+export const EXTRA_QUANTITY_ABOVE_THRESHOLD = 2; // запас, если заказано больше порога
+export const EXTRA_QUANTITY_THRESHOLD = 15; // порог: до 15 включительно — первый запас, от 16 — второй
+
+/** Запас для одной ссылки. */
+export function extraQuantityFor(quantityPerLink: number): number {
+  return quantityPerLink <= EXTRA_QUANTITY_THRESHOLD ? EXTRA_QUANTITY_UP_TO_THRESHOLD : EXTRA_QUANTITY_ABOVE_THRESHOLD;
+}
 
 /** Количество, которое уходит на SocPublic для одной ссылки. */
 export function socQuantityFor(quantityPerLink: number): number {
-  return quantityPerLink + EXTRA_QUANTITY_PER_LINK;
+  return quantityPerLink + extraQuantityFor(quantityPerLink);
 }
 
 export type OrderTotals = {

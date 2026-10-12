@@ -326,7 +326,7 @@ async function processItem(order: OrderWithRelations, startItem: OrderWithRelati
   let stage = startItem.stage;
   let taskId = startItem.socTaskId;
   // Расчётная стоимость (по комиссии из настроек) — запасной вариант, если SocPublic не вернул цену.
-  const socQty = startItem.socQuantity ?? startItem.quantity; // реальное количество на SocPublic (N + 2)
+  const socQty = startItem.socQuantity ?? startItem.quantity; // реальное количество на SocPublic (N + запас)
   const estimatedCost = round2(socQty * order.rewardSnapshot * (1 + order.commissionSnapshot / 100));
 
   if (stage === "pending" && startItem.retryAfter && startItem.retryAfter.getTime() > Date.now()) {
@@ -608,7 +608,7 @@ export type AdminOrderView = UserOrderView & {
     position: number;
     url: string;
     quantity: number;
-    /** Сколько реально заказано на SocPublic (N + 2) */
+    /** Сколько реально заказано на SocPublic (N + запас) */
     socQuantity: number;
     taskName: string;
     stage: string;
