@@ -625,7 +625,8 @@ export async function getBidderPosition(params: {
  * done = true — результат окончательный (позиция найдена, либо честно «не в первых 50»);
  * done = false — капча, блокировка или ошибка соединения: нужно пробовать следующий прокси.
  */
-async function checkWithProxy(
+async function checkWithProxyInner(
+  holder: { browser: Browser | null },
   proxy: BidderProxy | null,
   normalizedSearchUrl: string,
   targetItemId: string,
@@ -637,6 +638,7 @@ async function checkWithProxy(
 
   try {
     browser = await launchBrowser(proxy ?? undefined);
+    holder.browser = browser;
     const context = await createContext(browser, Boolean(proxy));
 
     for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
@@ -728,4 +730,62 @@ async function checkWithProxy(
   } finally {
     await browser?.close().catch(() => undefined);
   }
+}
+
+/** Жёсткий предел времени на одну попытку через один прокси (мс). Зависший браузер принудительно закрывается. */
+function getAttemptDeadlineMs() {
+  const value = Number(process.env.BIDDER_POSITION_ATTEMPT_DEADLINE_MS ?? "75000");
+  return Number.isInteger(value) ? Math.min(Math.max(value, 30_000), 180_000) : 75_000;
+}
+
+/**
+ * Одна проверка через один прокси с жёстким ограничением по времени.
+ * Если страница «зависла» (медленный канал, прокси не отвечает) — попытка прерывается,
+ * браузер закрывается, и проверка переходит к следующему прокси. Так worker не может «повиснуть».
+ */
+async function checkWithProxy(
+  proxy: BidderProxy | null,
+  normalizedSearchUrl: string,
+  targetItemId: string,
+  maxPages: number,
+  timeoutMs: number,
+  maxRetries: number,
+): Promise<{ done: boolean; result: BidderPositionResult }> {
+  const holder: { browser: Browser | null } = { browser: null };
+  const deadlineMs = getAttemptDeadlineMs();
+  const startedAt = Date.now();
+  const label = proxy ? proxy.label : "без прокси";
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+
+  const timeoutPromise = new Promise<{ done: boolean; result: BidderPositionResult }>((resolve) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      resolve({
+        done: false,
+        result: {
+          position: null,
+          source: "avito_serp_error",
+          page: null,
+          searchUrl: normalizedSearchUrl,
+          details: "Проверка позиции прервана по времени.",
+          error: `Прокси ${label} не успел получить выдачу за ${Math.round(deadlineMs / 1000)} с.`,
+        },
+      });
+    }, deadlineMs);
+  });
+
+  const outcome = await Promise.race([
+    checkWithProxyInner(holder, proxy, normalizedSearchUrl, targetItemId, maxPages, timeoutMs, maxRetries),
+    timeoutPromise,
+  ]);
+  if (timer) clearTimeout(timer);
+
+  if (timedOut) {
+    // Принудительно закрываем зависший браузер (но не ждём его дольше 5 секунд)
+    await Promise.race([holder.browser?.close().catch(() => undefined), sleep(5000)]);
+  }
+  // Пароль прокси в лог не попадает — только адрес:порт
+  console.log(`[bidder-position] ${label}: ${outcome.done ? "готово" : "неудача"} за ${Math.round((Date.now() - startedAt) / 1000)} с${timedOut ? " (прервано по времени)" : ""}`);
+  return outcome;
 }
