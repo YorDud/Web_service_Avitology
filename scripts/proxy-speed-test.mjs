@@ -47,8 +47,8 @@ function parseProxy(raw) {
   return { label: `${host}:${port}`, server: `${scheme}://${host}:${port}`, username, password };
 }
 
-const proxies = (process.env.BIDDER_PROXIES ?? "").split(/[;\n\r]+/).map(parseProxy).filter(Boolean);
-if (proxies.length === 0) { console.log("В .env не найдена строка BIDDER_PROXIES."); process.exit(1); }
+const proxies = ((process.env.BIDDER_PROXIES ?? "") + ";" + (process.env.BIDDER_ROTATING_PROXIES ?? "")).split(/[;\n\r]+/).map(parseProxy).filter(Boolean);
+if (proxies.length === 0) { console.log("В .env не найдена строка BIDDER_PROXIES или BIDDER_ROTATING_PROXIES."); process.exit(1); }
 
 const sec = (ms) => (ms / 1000).toFixed(1) + " с";
 const CAPTCHA = /captcha|проверка\s+безопасности|доступ\s+ограничен|не\s+робот|access\s+denied|проблема с ip/i;
