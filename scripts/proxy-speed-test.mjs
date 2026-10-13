@@ -27,6 +27,7 @@ if (!searchUrl || !/avito\.ru/i.test(searchUrl)) {
 }
 
 function parseProxy(raw) {
+  raw = String(raw).split("|")[0]; // часть после «|» — ссылка смены IP, для замера скорости не нужна
   let text = raw.trim();
   if (!text) return null;
   let scheme = "http";

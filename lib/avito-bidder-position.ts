@@ -28,9 +28,9 @@ function getMaxPages() {
 }
 
 function getTimeoutMs() {
-  const value = Number(process.env.BIDDER_POSITION_TIMEOUT_MS ?? "30000");
-  if (!Number.isInteger(value)) return 30_000;
-  return Math.min(Math.max(value, 10_000), 60_000);
+  const value = Number(process.env.BIDDER_POSITION_TIMEOUT_MS ?? "45000");
+  if (!Number.isInteger(value)) return 45_000;
+  return Math.min(Math.max(value, 10_000), 90_000);
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,10 @@ type BidderProxy = {
   server: string;
   username?: string;
   password?: string;
+  /** Ротационный шлюз: каждый новый запрос идёт с нового IP, поэтому его можно пробовать несколько раз подряд */
+  rotating?: boolean;
+  /** Ссылка смены IP у продавца прокси. СЕКРЕТ: никогда не пишем в логи и ошибки. */
+  reconnectUrl?: string;
 };
 
 /** Сколько минут прокси «отдыхает» после капчи/блокировки/ошибки */
@@ -72,6 +76,15 @@ let proxyRotationCounter = 0;
 function parseProxyEntry(raw: string): BidderProxy | null {
   let text = raw.trim();
   if (!text) return null;
+
+  // Необязательная ссылка смены IP после символа «|»:  адрес:порт:логин:пароль|https://…/reconnect-link/…
+  let reconnectUrl: string | undefined;
+  const bar = text.indexOf("|");
+  if (bar >= 0) {
+    const link = text.slice(bar + 1).trim();
+    if (/^https?:\/\//i.test(link)) reconnectUrl = link;
+    text = text.slice(0, bar).trim();
+  }
 
   let scheme = "http";
   const schemeMatch = text.match(/^(https?|socks5h?|socks4):\/\//i);
@@ -110,11 +123,28 @@ function parseProxyEntry(raw: string): BidderProxy | null {
     server: `${scheme}://${host}:${port}`,
     username: username || undefined,
     password: password || undefined,
+    reconnectUrl,
   };
+}
+
+/** Сколько раз подряд пробовать один ротационный шлюз (каждая попытка — новый IP). */
+function getRotatingAttempts() {
+  const value = Number(process.env.BIDDER_ROTATING_ATTEMPTS ?? "4");
+  return Number.isInteger(value) ? Math.min(Math.max(value, 1), 10) : 4;
 }
 
 function getProxyPool(): BidderProxy[] {
   const pool: BidderProxy[] = [];
+
+  // РОТАЦИОННЫЕ ШЛЮЗЫ (домашние/мобильные прокси с оплатой за трафик, где IP меняется на каждый запрос).
+  // Вносятся в отдельной переменной .env в том же формате адрес:порт:логин:пароль, через «;»:
+  //   BIDDER_ROTATING_PROXIES="gate.example.com:8000:логин:пароль"
+  // Каждый такой шлюз пробуется до BIDDER_ROTATING_ATTEMPTS раз подряд (по умолчанию 4) — на каждой попытке новый IP.
+  for (const entry of (process.env.BIDDER_ROTATING_PROXIES ?? "").split(/[;\n\r]+/)) {
+    const proxy = parseProxyEntry(entry);
+    if (proxy && !pool.some((item) => item.server === proxy.server)) pool.push({ ...proxy, rotating: true });
+  }
+
   const list = process.env.BIDDER_PROXIES ?? "";
   for (const entry of list.split(/[;\n\r]+/)) {
     const proxy = parseProxyEntry(entry);
@@ -129,7 +159,16 @@ function getProxyPool(): BidderProxy[] {
       server: legacyServer,
       username: process.env.BIDDER_PROXY_USERNAME?.trim() || undefined,
       password: process.env.BIDDER_PROXY_PASSWORD?.trim() || undefined,
+      reconnectUrl: process.env.BIDDER_PROXY_RECONNECT_URL?.trim() || undefined,
     });
+  }
+
+  // Ссылка смены IP отдельной переменной: подходит к ПЕРВОМУ прокси без своей ссылки
+  // (удобно, когда прокси один):  BIDDER_PROXY_RECONNECT_URL="https://…/reconnect-link/…"
+  const sharedLink = process.env.BIDDER_PROXY_RECONNECT_URL?.trim();
+  if (sharedLink && /^https?:\/\//i.test(sharedLink)) {
+    const first = pool.find((item) => !item.reconnectUrl && !item.rotating);
+    if (first) first.reconnectUrl = sharedLink;
   }
   return pool;
 }
@@ -145,8 +184,64 @@ function orderProxies(pool: BidderProxy[]): BidderProxy[] {
   return [...ready, ...resting];
 }
 
+// ---------------------------------------------------------------------------
+// Смена IP по ссылке продавца прокси (reconnect-link)
+// ---------------------------------------------------------------------------
+//
+// ГДЕ УКАЗЫВАТЬ ССЫЛКУ: в .env, сразу после данных прокси через символ «|»:
+//
+//   BIDDER_PROXIES="213.21.50.171:20417:логин:пароль|https://lk.lte-center.ru/api/proxies/…/reconnect-link/…;второй:порт:логин:пароль|https://ссылка_второго"
+//
+// Либо, если прокси один, отдельной строкой (как логин и пароль):
+//   BIDDER_PROXY_RECONNECT_URL="https://lk.lte-center.ru/api/proxies/…/reconnect-link/…"
+//
+// Как работает: если проверка через прокси не получила выдачу (капча, блокировка, нет карточек,
+// ошибка соединения, таймаут) — открываем эту ссылку, ждём пока модем переподключится и получит
+// новый IP, и повторяем проверку. Всего попыток на один прокси: 1 + BIDDER_RECONNECT_RETRIES (по умолчанию 2).
+// Для прокси без ссылки поведение прежнее (сразу следующий прокси).
+// Сама ссылка нигде не печатается — в логах только адрес:порт.
+
+function getReconnectRetries() {
+  const value = Number(process.env.BIDDER_RECONNECT_RETRIES ?? "2");
+  return Number.isInteger(value) ? Math.min(Math.max(value, 0), 5) : 2;
+}
+
+/** Сколько ждать после смены IP (мс), пока модем переподключится. */
+function getReconnectWaitMs() {
+  const value = Number(process.env.BIDDER_RECONNECT_WAIT_MS ?? "12000");
+  return Number.isInteger(value) ? Math.min(Math.max(value, 3_000), 60_000) : 12_000;
+}
+
+/** Не чаще одного вызова ссылки на прокси за это время (провайдеры ограничивают частоту). */
+const RECONNECT_MIN_GAP_MS = 20_000;
+const lastReconnectAt = new Map<string, number>();
+
+/** Вызывает ссылку смены IP. Возвращает true, если сервер ответил успехом. Ссылку и ответ не логируем. */
+async function reconnectProxy(proxy: BidderProxy): Promise<boolean> {
+  if (!proxy.reconnectUrl) return false;
+  const last = lastReconnectAt.get(proxy.server) ?? 0;
+  const gap = Date.now() - last;
+  if (gap < RECONNECT_MIN_GAP_MS) await sleep(RECONNECT_MIN_GAP_MS - gap);
+  lastReconnectAt.set(proxy.server, Date.now());
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(proxy.reconnectUrl, { method: "GET", signal: controller.signal, cache: "no-store" });
+    console.log(`[bidder-position] ${proxy.label}: смена IP, ответ ${response.status}`);
+    return response.ok;
+  } catch (error) {
+    // Текст ошибки может содержать адрес со ссылкой — пишем только тип
+    console.log(`[bidder-position] ${proxy.label}: смена IP не удалась (${error instanceof Error ? error.name : "ошибка"})`);
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function markProxyFailed(proxy: BidderProxy) {
-  proxyCooldownUntil.set(proxy.server, Date.now() + PROXY_COOLDOWN_MS);
+  // Ротационный шлюз «отдыхает» недолго (2 мин): следующий запрос всё равно пойдёт с нового IP
+  proxyCooldownUntil.set(proxy.server, Date.now() + (proxy.rotating ? 2 * 60 * 1000 : PROXY_COOLDOWN_MS));
 }
 
 function markProxyOk(proxy: BidderProxy) {
@@ -595,14 +690,32 @@ export async function getBidderPosition(params: {
   let lastFailure: BidderPositionResult | null = null;
 
   for (const proxy of orderProxies(pool)) {
-    const outcome = await checkWithProxy(proxy, normalizedSearchUrl, targetItemId, maxPages, timeoutMs, MAX_RETRIES_WITH_POOL);
-    if (outcome.done) {
-      markProxyOk(proxy);
-      return outcome.result;
+    // Ротационный шлюз — несколько попыток (каждая с новым IP).
+    // Прокси со ссылкой смены IP — 1 + BIDDER_RECONNECT_RETRIES попыток, между ними меняем IP по ссылке.
+    const reconnectRetries = proxy.reconnectUrl ? getReconnectRetries() : 0;
+    const attempts = proxy.rotating ? getRotatingAttempts() : 1 + reconnectRetries;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const outcome = await checkWithProxy(proxy, normalizedSearchUrl, targetItemId, maxPages, timeoutMs, MAX_RETRIES_WITH_POOL);
+      if (outcome.done) {
+        markProxyOk(proxy);
+        return outcome.result;
+      }
+      lastFailure = outcome.result;
+
+      if (proxy.reconnectUrl) {
+        // Меняем IP (и после последней неудачи тоже — чтобы следующая проверка шла уже с новым адресом)
+        const changed = await reconnectProxy(proxy);
+        if (attempt < attempts) await sleep(changed ? getReconnectWaitMs() : randomInt(3000, 6000));
+        else if (changed) await sleep(Math.min(getReconnectWaitMs(), 8000));
+      } else if (attempt < attempts) {
+        await sleep(randomInt(1500, 3500)); // небольшая пауза перед следующим IP
+      }
+
+      if (attempt >= attempts) {
+        markProxyFailed(proxy);
+        failures.push(proxy.rotating || attempts > 1 ? `${proxy.label} ×${attempts}` : proxy.label);
+      }
     }
-    markProxyFailed(proxy);
-    failures.push(proxy.label);
-    lastFailure = outcome.result;
   }
 
   const base = lastFailure ?? {
@@ -734,8 +847,8 @@ async function checkWithProxyInner(
 
 /** Жёсткий предел времени на одну попытку через один прокси (мс). Зависший браузер принудительно закрывается. */
 function getAttemptDeadlineMs() {
-  const value = Number(process.env.BIDDER_POSITION_ATTEMPT_DEADLINE_MS ?? "75000");
-  return Number.isInteger(value) ? Math.min(Math.max(value, 30_000), 180_000) : 75_000;
+  const value = Number(process.env.BIDDER_POSITION_ATTEMPT_DEADLINE_MS ?? "110000");
+  return Number.isInteger(value) ? Math.min(Math.max(value, 30_000), 240_000) : 110_000;
 }
 
 /**

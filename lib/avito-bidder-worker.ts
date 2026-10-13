@@ -5,7 +5,7 @@ import { runDueBidders } from "@/lib/avito-bidder-runner";
 const LOCK_ID = "avito-bidder-worker-global-lock";
 // Сколько минут держится блокировка, если запуск оборвался (перезапуск сервера, превышен лимит времени запроса).
 // Раньше было 12 — из-за этого после обрыва worker молчал 2–3 запуска подряд.
-function getLockMinutes() { const v = Number(process.env.BIDDER_WORKER_LOCK_MINUTES ?? "6"); return Number.isInteger(v) ? Math.min(Math.max(v, 2), 30) : 6; }
+function getLockMinutes() { const v = Number(process.env.BIDDER_WORKER_LOCK_MINUTES ?? "12"); return Number.isInteger(v) ? Math.min(Math.max(v, 2), 30) : 12; }
 const WORKER_RUN_RETENTION_DAYS = 3;
 type WorkerSource = "cron" | "manual" | "internal" | "local";
 export type BidderWorkerExecutionResult =

@@ -73,7 +73,7 @@ export async function runSingleBidder(params: { bidderId: number; userId?: numbe
 }
 export async function runDueBidders(params?: { userId?: number; limit?: number }) { await cleanupOldBidderEvents(); const bidders = await prisma.avitoBidder.findMany({ where: { status: "active", ...(params?.userId ? { userId: params.userId } : {}) }, orderBy: [{ nextCheckAt: "asc" }, { updatedAt: "asc" }], take: params?.limit ?? 100 }); const results = []; // Защита от зависания: общий бюджет времени запуска и жёсткий предел на один бидер.
   // Бидеры, до которых не дошла очередь, остаются «к проверке» и будут обработаны следующим запуском cron.
-  const budgetMs = Number(process.env.BIDDER_WORKER_BUDGET_MS ?? "240000"); const perBidderMs = 200_000; const runStartedAt = Date.now();
+  const budgetMs = Number(process.env.BIDDER_WORKER_BUDGET_MS ?? "600000"); const perBidderMs = Math.max(60_000, Number(process.env.BIDDER_PER_BIDDER_MS ?? "420000") || 420_000); const runStartedAt = Date.now();
   for (const bidder of bidders) {
     if (Date.now() - runStartedAt > (Number.isFinite(budgetMs) ? budgetMs : 240000)) break;
     let timer: ReturnType<typeof setTimeout> | undefined;
