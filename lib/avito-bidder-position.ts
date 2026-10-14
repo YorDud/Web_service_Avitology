@@ -718,6 +718,17 @@ export async function getBidderPosition(params: {
     }
   }
 
+  // ЗАПАСНОЙ ВАРИАНТ: все прокси перебраны и выдачу получить не удалось (капча, блок, сбой прокси) —
+  // последняя попытка напрямую, с IP самого VPS-сервера, как это было раньше без прокси.
+  // Отключить можно строкой BIDDER_DIRECT_FALLBACK=false в .env.
+  if ((process.env.BIDDER_DIRECT_FALLBACK ?? "true").trim().toLowerCase() !== "false") {
+    console.log("[bidder-position] все прокси не дали выдачу — пробуем напрямую с IP сервера");
+    const direct = await checkWithProxy(null, normalizedSearchUrl, targetItemId, maxPages, timeoutMs, MAX_RETRIES);
+    if (direct.done) return direct.result;
+    lastFailure = direct.result;
+    failures.push("напрямую с сервера");
+  }
+
   const base = lastFailure ?? {
     position: null,
     source: "avito_serp_error" as const,
@@ -729,7 +740,7 @@ export async function getBidderPosition(params: {
   return {
     ...base,
     details: `${base.details} Перебрано прокси: ${failures.length} (${failures.join(", ")}).`,
-    error: `${base.error ?? "Не удалось проверить выдачу Авито."} Ни один из ${failures.length} прокси не получил выдачу.`,
+    error: `${base.error ?? "Не удалось проверить выдачу Авито."} Ни один из способов (${failures.length}) не получил выдачу.`,
   };
 }
 
