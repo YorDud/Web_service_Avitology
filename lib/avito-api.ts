@@ -165,61 +165,80 @@ function extractItemsFromPayload(payload: Record<string, unknown> | null) {
     .filter((item): item is AvitoAccountItem => Boolean(item?.id));
 }
 
-export async function getAvitoItemsForUser(userId: number) {
+// Кэш списка объявлений по пользователю. Раньше список скачивался заново перед КАЖДОЙ проверкой каждого бидера,
+// из-за чего Авито отвечал HTTP 429 (лимит запросов). Теперь все бидеры одного аккаунта берут один и тот же список.
+const ITEMS_CACHE_TTL_MS = 10 * 60 * 1000; // свежий кэш — не ходим в Авито
+const ITEMS_CACHE_STALE_MS = 6 * 60 * 60 * 1000; // при 429 или сбое можно отдать устаревший список не старше 6 часов
+const itemsCache = new Map<number, { items: AvitoAccountItem[]; at: number }>();
+const itemsInFlight = new Map<number, Promise<AvitoAccountItem[]>>();
+
+async function fetchAvitoItemsForUser(userId: number): Promise<AvitoAccountItem[]> {
   const accessToken = await getAvitoAccessTokenForUser(userId);
+  const url = "https://api.avito.ru/core/v1/items";
 
-  const possibleUrls = [
-    "https://api.avito.ru/core/v1/items",
-    "https://api.avito.ru/autoload/v2/items",
-    "https://api.avito.ru/core/v1/accounts/self/items",
-  ];
-
-  const errors: string[] = [];
-
-  for (const url of possibleUrls) {
-    try {
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        cache: "no-store",
-        signal: AbortSignal.timeout(15_000),
-      });
-
-      const payload = (await response.json().catch(() => null)) as
-        | Record<string, unknown>
-        | null;
-
-      if (!response.ok) {
-        errors.push(`${url} → HTTP ${response.status}`);
-        continue;
-      }
-
-      const items = extractItemsFromPayload(payload);
-
-      if (items.length === 0) {
-        errors.push(`${url} → список объявлений не найден в ответе`);
-        continue;
-      }
-
-      return items;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "неизвестная ошибка";
-      errors.push(`${url} → ${message}`);
-    }
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "неизвестная ошибка";
+    throw new Error(`Не удалось получить список объявлений Авито: ${message}`);
   }
 
-  throw new Error(
-    `Не удалось получить список объявлений Авито. Проверенные endpoints: ${errors.join("; ")}`,
-  );
+  if (response.status === 429) {
+    throw new Error("Не удалось получить список объявлений Авито: лимит запросов Avito API (HTTP 429). Повтор позже.");
+  }
+  if (!response.ok) {
+    throw new Error(`Не удалось получить список объявлений Авито: HTTP ${response.status}.`);
+  }
+
+  const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  const items = extractItemsFromPayload(payload);
+  if (items.length === 0) {
+    throw new Error("Не удалось получить список объявлений Авито: список объявлений не найден в ответе.");
+  }
+  return items;
+}
+
+export async function getAvitoItemsForUser(userId: number, options: { forceRefresh?: boolean } = {}) {
+  const cached = itemsCache.get(userId);
+  const now = Date.now();
+  if (cached && !options.forceRefresh && now - cached.at < ITEMS_CACHE_TTL_MS) return cached.items;
+
+  // Параллельные запросы одного пользователя ждут один общий запрос
+  let pending = itemsInFlight.get(userId);
+  if (!pending) {
+    pending = fetchAvitoItemsForUser(userId).finally(() => itemsInFlight.delete(userId));
+    itemsInFlight.set(userId, pending);
+  }
+
+  try {
+    const items = await pending;
+    itemsCache.set(userId, { items, at: Date.now() });
+    return items;
+  } catch (error) {
+    // Лимит или сбой Авито: если есть не слишком старый список — используем его, чтобы бидер не вставал
+    if (cached && Date.now() - cached.at < ITEMS_CACHE_STALE_MS) return cached.items;
+    throw error;
+  }
 }
 
 export async function getAvitoItemByIdForUser(userId: number, itemId: string) {
-  const items = await getAvitoItemsForUser(userId);
-  const item = items.find((candidate) => candidate.id === itemId);
+  let items = await getAvitoItemsForUser(userId);
+  let item = items.find((candidate) => candidate.id === itemId);
+
+  // Объявления нет в кэше — возможно, оно новое: один раз обновляем список (не чаще раза в минуту)
+  if (!item) {
+    const cachedAt = itemsCache.get(userId)?.at ?? 0;
+    if (Date.now() - cachedAt > 60_000) {
+      items = await getAvitoItemsForUser(userId, { forceRefresh: true });
+      item = items.find((candidate) => candidate.id === itemId);
+    }
+  }
 
   if (!item) {
     throw new Error("Объявление не найдено в подключённом аккаунте Авито.");

@@ -67,8 +67,12 @@ export async function runSingleBidder(params: { bidderId: number; userId?: numbe
     await createBidderEvent({ bidderId: bidder.id, type: eventTypes[applyResult.status] ?? "runner_cpx_result", message: applyResult.message }); await createBidderEvent({ bidderId: bidder.id, type: "runner_check_success", message: `Worker обработал «${updated.title}» в режиме ${updated.mode}.` });
     return { ...resultBase, title: updated.title, status: "processed", message: applyResult.message, nextCheckAt: updated.nextCheckAt?.toISOString() ?? null };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Не удалось выполнить проверку bidder-а."; const nextCheckAt = getNextCheckAt(bidder.checkInterval);
-    await prisma.avitoBidder.update({ where: { id: bidder.id }, data: { spentToday: effectiveSpentToday, spentTodayDate: todayKey, lastCheckedAt: now, lastError: message, nextCheckAt, status: "attention", lastPromotionStatus: "runner_exception" } }); await createBidderEvent({ bidderId: bidder.id, type: "runner_check_error", message: `Worker не смог обработать bidder: ${message}` }); return { ...resultBase, status: "failed", message, nextCheckAt: nextCheckAt.toISOString() };
+    const rawMessage = error instanceof Error ? error.message : "Не удалось выполнить проверку bidder-а.";
+    // Лимит запросов Avito API (HTTP 429) — временная ошибка: бидер остаётся активным и повторит попытку через 10 минут
+    const apiLimit = /HTTP 429|лимит запросов/i.test(rawMessage);
+    const message = apiLimit ? `${rawMessage} Повторная попытка через 10 мин.` : rawMessage;
+    const nextCheckAt = apiLimit ? getNextCheckAt(10) : getNextCheckAt(bidder.checkInterval);
+    await prisma.avitoBidder.update({ where: { id: bidder.id }, data: { spentToday: effectiveSpentToday, spentTodayDate: todayKey, lastCheckedAt: now, lastError: message, nextCheckAt, status: apiLimit ? "active" : "attention", lastPromotionStatus: apiLimit ? "api_rate_limit_retry_scheduled" : "runner_exception" } }); await createBidderEvent({ bidderId: bidder.id, type: "runner_check_error", message: `Worker не смог обработать bidder: ${message}` }); return { ...resultBase, status: "failed", message, nextCheckAt: nextCheckAt.toISOString() };
   }
 }
 export async function runDueBidders(params?: { userId?: number; limit?: number }) { await cleanupOldBidderEvents(); const bidders = await prisma.avitoBidder.findMany({ where: { status: "active", ...(params?.userId ? { userId: params.userId } : {}) }, orderBy: [{ nextCheckAt: "asc" }, { updatedAt: "asc" }], take: params?.limit ?? 100 }); const results = []; // Защита от зависания: общий бюджет времени запуска и жёсткий предел на один бидер.
