@@ -6,7 +6,10 @@ export async function activateSubscription(userId: number, tier: SubscriptionTie
   if (!user) throw new Error("Пользователь не найден");
   // Admin is never downgraded by a test or payment flow.
   if (user.subscriptionLevel === "admin") return user;
-  const base = user.subscriptionEndsAt && user.subscriptionEndsAt > paidAt ? user.subscriptionEndsAt : paidAt;
+  // Повышение тарифа Basic -> Pro: остаток Basic НЕ переносится, подписка Pro считается заново от дня оплаты
+  // (купил месяц — будет месяц, купил три — три). Продление того же тарифа по-прежнему добавляет время к текущему сроку.
+  const isUpgradeFromBasic = tier === "pro" && user.subscriptionLevel === "basic";
+  const base = !isUpgradeFromBasic && user.subscriptionEndsAt && user.subscriptionEndsAt > paidAt ? user.subscriptionEndsAt : paidAt;
   const subscriptionEndsAt = new Date(base); subscriptionEndsAt.setMonth(subscriptionEndsAt.getMonth() + months);
   return prisma.user.update({ where: { id: userId }, data: { subscriptionLevel: tier, subscriptionPrice: price, subscriptionPaidAt: paidAt, subscriptionEndsAt } });
 }

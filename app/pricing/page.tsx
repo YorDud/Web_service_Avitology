@@ -92,7 +92,7 @@ export default async function PricingPage() {
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm leading-7 text-black/50">
-              Basic открывает аналитику и расширение. Pro включает всё из Basic, а также бид-менеджер Авито.
+              Basic открывает аналитику и расширение. Pro включает всё из Basic, а также бид-менеджер и автозагрузка на Авито.
             </p>
           </section>
 

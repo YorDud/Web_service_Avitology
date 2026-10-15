@@ -453,7 +453,7 @@ function PlatformSection() {
             </p>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Link href="/about" className="btn-primary">
+              <Link href="/services" className="btn-primary">
                 Узнать больше
               </Link>
               <Link href="/extension" className="btn-secondary">
