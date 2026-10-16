@@ -5,6 +5,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { formatForDateTimeLocal } from "@/lib/dates";
 import BonusCodesPanel from "./bonus-codes-panel";
 import ServiceLevelAdminPanel from "./service-level-panel";
+import BiddersAdminPanel from "./bidders-panel";
 
 type UserItem = {
   id: number;
@@ -59,6 +60,7 @@ type AdminSection =
   | "payments"
   | "bonus-codes"
   | "service-level"
+  | "bidders"
   | null;
 
 type PaymentSortField =
@@ -931,6 +933,12 @@ export default function AdminUsersClient({
       description: "Услуги, цены, заказы и SocPublic",
       index: "06",
     },
+    {
+      id: "bidders",
+      title: "Бид-менеджеры пользователей",
+      description: "Все бидеры: статус, управление и история",
+      index: "07",
+    },
   ];
 
   return (
@@ -1660,6 +1668,8 @@ export default function AdminUsersClient({
             {activeSection === "bonus-codes" && <BonusCodesPanel />}
 
             {activeSection === "service-level" && <ServiceLevelAdminPanel />}
+
+            {activeSection === "bidders" && <BiddersAdminPanel />}
 
             {activeSection === "payments" && (
               <section className="white-card min-w-0 p-5 md:p-8">

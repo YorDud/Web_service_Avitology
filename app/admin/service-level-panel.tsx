@@ -96,6 +96,9 @@ type AdminOrder = {
   attention: boolean;
   attentionNote: string | null;
   adminNote: string | null;
+  /** Время запуска отложенного заказа (если ещё не наступило) */
+  scheduledStartAt: string | null;
+  startDelayMinutes: number;
   itemsAdmin: AdminItem[];
 };
 
@@ -737,6 +740,7 @@ function OrderCard({
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
             <Pill tone={STATUS_TONE[order.status] ?? "gray"}>{ORDER_STATUS_LABEL[status] ?? order.status}</Pill>
             {attention && <Pill tone="red">Внимание</Pill>}
+            {order.scheduledStartAt && <Pill tone="gray">Отложен до {formatDateTime(order.scheduledStartAt)}</Pill>}
             {!attention && waitingItem && <Pill tone="amber">Ждём SocPublic</Pill>}
             {reportsToCheck > 0 && <Pill tone="amber">Проверить отчёты: {reportsToCheck}</Pill>}
             <Icon name="chevron" className={`h-4 w-4 shrink-0 text-black/40 transition-transform ${open ? "rotate-180" : ""}`} />
@@ -767,6 +771,15 @@ function OrderCard({
                 )}
               </div>
 
+              {order.scheduledStartAt && (
+                <div className="flex items-start gap-2 rounded-xl border border-[#03bd48]/30 bg-[#03bd48]/[0.07] px-3.5 py-2.5 text-xs font-bold leading-5 text-black/70" style={{ display: "flex", gap: 8 }}>
+                  <Icon name="clock" className="mt-0.5 h-4 w-4 shrink-0 text-[#028c36]" />
+                  <span className="min-w-0" style={{ overflowWrap: "break-word" }}>
+                    Пользователь выбрал отсрочку {Math.round(order.startDelayMinutes / 60)} ч. На SocPublic ничего не отправлено — задания уйдут <b>{formatDateTime(order.scheduledStartAt)}</b> (проверка по cron раз в 5–15 минут).
+                  </span>
+                </div>
+              )}
+
               {attention && order.attentionNote && <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-bold leading-5 text-red-700">{order.attentionNote}</div>}
               {!attention && waitingItem && (
                 <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-bold leading-5 text-amber-800">
@@ -779,6 +792,11 @@ function OrderCard({
               )}
 
               <div className="flex flex-wrap gap-2">
+                {order.scheduledStartAt && (
+                  <button type="button" disabled={busy !== ""} onClick={() => window.confirm("Запустить заказ прямо сейчас, не дожидаясь выбранного времени?") && void act("startNow")} className={`${ghostButton} !px-3 !py-2 !text-xs`}>
+                    {busy === "startNow" ? <Spinner /> : <Icon name="play" />} Запустить сейчас
+                  </button>
+                )}
                 <button type="button" disabled={busy !== "" || order.status !== "in_progress"} onClick={() => void act("retry")} className={`${ghostButton} !px-3 !py-2 !text-xs`}>
                   {busy === "retry" ? <Spinner /> : <Icon name="play" />} Повторить отправку
                 </button>

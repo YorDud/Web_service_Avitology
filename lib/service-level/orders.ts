@@ -10,6 +10,7 @@ import {
   round2,
   socQuantityFor,
   hasTierAccess,
+  MAX_START_DELAY_HOURS,
   type OrderTotals,
 } from "./constants";
 import { extractProgress, isTaskComplete } from "./progress";
@@ -47,11 +48,13 @@ export type PreparedOrder = {
   links: { url: string; key: string }[];
   quantityPerLink: number;
   totals: OrderTotals;
+  /** Отсрочка старта в минутах: 0 — выполнить сразу, иначе кратно 60 (1–24 часа). */
+  startDelayMinutes: number;
 };
 
 export async function prepareOrder(
   user: { subscriptionLevel: string },
-  body: { serviceId?: unknown; links?: unknown; quantity?: unknown } | null,
+  body: { serviceId?: unknown; links?: unknown; quantity?: unknown; startDelayHours?: unknown } | null,
 ): Promise<PreparedOrder | Failure> {
   const settings = await getServiceLevelSettings();
   if (!settings.isEnabled) return fail("Приём заказов временно закрыт. Попробуйте позже.", 403);
@@ -86,7 +89,14 @@ export async function prepareOrder(
   });
   if (totals.price < 1) return fail("Сумма заказа должна быть больше нуля.");
 
-  return { ok: true, service, settings, links: parsed.valid, quantityPerLink, totals };
+  // Отсрочка старта: целое число часов от 0 (сразу) до 24. Пустое значение = выполнить сразу.
+  const delayRaw = body?.startDelayHours;
+  const startDelayHours = delayRaw === undefined || delayRaw === null || delayRaw === "" ? 0 : Number(delayRaw);
+  if (!Number.isInteger(startDelayHours) || startDelayHours < 0 || startDelayHours > MAX_START_DELAY_HOURS) {
+    return fail(`Отсрочку можно выбрать от 1 до ${MAX_START_DELAY_HOURS} часов.`);
+  }
+
+  return { ok: true, service, settings, links: parsed.valid, quantityPerLink, totals, startDelayMinutes: startDelayHours * 60 };
 }
 
 /** Черновик заказа (ждёт оплаты). Номер ему присваивается только после оплаты. */
@@ -107,6 +117,7 @@ export async function createDraftOrder(user: { id: number; name: string }, prepa
       socCost: prepared.totals.socCost,
       rewardSnapshot: prepared.service.reward,
       commissionSnapshot: prepared.settings.commissionPercent,
+      startDelayMinutes: prepared.startDelayMinutes,
       items: {
         create: prepared.links.map((link, index) => ({
           position: index + 1,
@@ -162,6 +173,7 @@ export async function fulfilServiceLevelPayment(paymentId: number, metadata: Rec
           return { orderId, newlyPaid: false };
         }
 
+        const paidNow = new Date();
         const last = await tx.serviceLevelOrder.findFirst({
           where: { userId: order.userId, orderNumber: { not: null } },
           orderBy: { orderNumber: "desc" },
@@ -174,7 +186,9 @@ export async function fulfilServiceLevelPayment(paymentId: number, metadata: Rec
             orderNumber: (last?.orderNumber ?? 0) + 1,
             paymentId,
             amountPaid: payment.amount,
-            paidAt: new Date(),
+            paidAt: paidNow,
+            // Отложенный старт: время запуска = момент оплаты + выбранная отсрочка. Без отсрочки поле остаётся пустым.
+            scheduledStartAt: order.startDelayMinutes > 0 ? new Date(paidNow.getTime() + order.startDelayMinutes * 60_000) : null,
           },
         });
         return { orderId, newlyPaid: true };
@@ -189,15 +203,44 @@ export async function fulfilServiceLevelPayment(paymentId: number, metadata: Rec
   throw new Error("Не удалось зачислить оплату заказа");
 }
 
-/** Запуск отправки на SocPublic уже после ответа клиенту (с запасным вариантом без `after`). */
+/** Таймеры точного запуска отложенных заказов (по одному на заказ). Если процесс перезапустится, заказ запустит cron. */
+const startTimers = new Map<number, ReturnType<typeof setTimeout>>();
+const MAX_TIMER_MS = 25 * 60 * 60 * 1000;
+
+/** Запуск отправки на SocPublic уже после ответа клиенту (с запасным вариантом без `after`).
+ *  Если у заказа отложенный старт и время ещё не пришло — на SocPublic ничего не уходит, а на нужное время ставится таймер
+ *  (запасной вариант — cron: он дозапускает все заказы, у которых время старта наступило). */
 export function scheduleDispatch(orderId: number) {
-  const run = () =>
-    dispatchOrder(orderId).catch((error) => console.error("SERVICE LEVEL DISPATCH ERROR:", error instanceof Error ? error.message : error));
+  const run = async () => {
+    try {
+      const order = await prisma.serviceLevelOrder.findUnique({ where: { id: orderId }, select: { status: true, scheduledStartAt: true } });
+      const waitMs = order?.scheduledStartAt ? order.scheduledStartAt.getTime() - Date.now() : 0;
+      if (order?.status === "in_progress" && waitMs > 0) {
+        if (waitMs <= MAX_TIMER_MS && !startTimers.has(orderId)) {
+          const timer = setTimeout(() => {
+            startTimers.delete(orderId);
+            dispatchOrder(orderId).catch((error) => console.error("SERVICE LEVEL SCHEDULED DISPATCH ERROR:", error instanceof Error ? error.message : error));
+          }, waitMs + 1000);
+          timer.unref?.();
+          startTimers.set(orderId, timer);
+        }
+        return;
+      }
+      await dispatchOrder(orderId);
+    } catch (error) {
+      console.error("SERVICE LEVEL DISPATCH ERROR:", error instanceof Error ? error.message : error);
+    }
+  };
   try {
     after(run);
   } catch {
     void run();
   }
+}
+
+/** Заказ с отложенным стартом, время которого ещё не пришло. */
+export function isStartPostponed(order: { scheduledStartAt: Date | null }, now = Date.now()) {
+  return Boolean(order.scheduledStartAt && order.scheduledStartAt.getTime() > now);
 }
 
 export function scheduleSync(orderIds: number[]) {
@@ -242,8 +285,13 @@ function resumeStageFor(errorStage: string | null, hasTaskId: boolean) {
   return hasTaskId ? "created" : "pending";
 }
 
-export async function dispatchOrder(orderId: number, options: { retryErrors?: boolean } = {}) {
+export async function dispatchOrder(orderId: number, options: { retryErrors?: boolean; ignoreSchedule?: boolean } = {}) {
   const now = new Date();
+  // Отложенный старт: пока время не пришло, на SocPublic ничего не создаём и не пополняем.
+  if (!options.ignoreSchedule) {
+    const pre = await prisma.serviceLevelOrder.findUnique({ where: { id: orderId }, select: { scheduledStartAt: true } });
+    if (pre && isStartPostponed(pre, now.getTime())) return;
+  }
   const locked = await prisma.serviceLevelOrder.updateMany({
     where: { id: orderId, status: "in_progress", OR: [{ dispatchLockedUntil: null }, { dispatchLockedUntil: { lt: now } }] },
     data: { dispatchLockedUntil: new Date(Date.now() + DISPATCH_LOCK_MS) },
@@ -553,6 +601,9 @@ export type UserOrderView = {
   totalQuantity: number;
   amount: number;
   doneTotal: number | null;
+  /** Когда заказ уйдёт в работу (если выбрана отсрочка и время ещё не пришло), иначе null */
+  scheduledStartAt: string | null;
+  startDelayMinutes: number;
   items: { position: number; url: string; quantity: number; stage: string; doneCount: number | null }[];
 };
 
@@ -578,6 +629,8 @@ export function toUserOrderView(order: OrderRow): UserOrderView {
     totalQuantity: order.totalQuantity,
     amount: order.amountPaid,
     doneTotal,
+    scheduledStartAt: order.status === "in_progress" && isStartPostponed(order) ? order.scheduledStartAt!.toISOString() : null,
+    startDelayMinutes: order.startDelayMinutes,
     items: order.items.map((item) => ({
       position: item.position,
       url: item.url,

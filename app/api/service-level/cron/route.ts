@@ -27,7 +27,10 @@ async function run(request: Request) {
   });
 
   let dispatched = 0;
+  const nowMs = Date.now();
   for (const order of active) {
+    // Отложенный старт: время ещё не пришло — пропускаем (на SocPublic ничего не отправляем).
+    if (order.scheduledStartAt && order.scheduledStartAt.getTime() > nowMs) continue;
     if (order.items.some((item) => ["pending", "created", "funded", "creating", "funding", "enabling"].includes(item.stage))) {
       await dispatchOrder(order.id);
       dispatched += 1;

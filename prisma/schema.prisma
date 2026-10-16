@@ -473,6 +473,11 @@ model ServiceLevelOrder {
   adminNote     String?
 
   dispatchLockedUntil DateTime?
+  /// Отсрочка старта, выбранная пользователем перед оплатой, в минутах (0 = выполнить сразу, максимум 1440 = 24 ч).
+  /// Отсчитывается от момента ПОДТВЕРЖДЕНИЯ оплаты.
+  startDelayMinutes Int       @default(0)
+  /// Когда задания должны уйти на SocPublic. До этого момента на SocPublic ничего не создаётся и не пополняется.
+  scheduledStartAt  DateTime?
   paidAt              DateTime?
   completedAt         DateTime?
   lastSyncAt          DateTime?

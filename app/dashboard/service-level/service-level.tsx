@@ -54,6 +54,9 @@ type OrderDto = {
   totalQuantity: number;
   amount: number;
   doneTotal: number | null;
+  /** Время запуска отложенного заказа (если ещё не наступило) */
+  scheduledStartAt: string | null;
+  startDelayMinutes: number;
   items: { position: number; url: string; quantity: number; stage: string; doneCount: number | null }[];
 };
 
@@ -103,6 +106,8 @@ export default function ServiceLevelService() {
   const [serviceId, setServiceId] = useState<number | null>(null);
   const [linksText, setLinksText] = useState("");
   const [quantity, setQuantity] = useState<number>(15);
+  // Когда начать выполнение: 0 — сразу, 1–24 — отсрочка в часах (отсчёт от подтверждения оплаты)
+  const [delayHours, setDelayHours] = useState<number>(0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [openOrder, setOpenOrder] = useState<number | null>(null);
@@ -191,15 +196,16 @@ export default function ServiceLevelService() {
     setFormError("");
     try {
       const result = await api<{ redirectUrl: string | null }>("/api/service-level/checkout", {
-        json: { serviceId: selected.id, links: linksText, quantity },
+        json: { serviceId: selected.id, links: linksText, quantity, startDelayHours: delayHours },
       });
       if (result.redirectUrl) {
         window.location.href = result.redirectUrl;
         window.setTimeout(() => setSubmitting(false), 8000);
         return;
       }
-      toast.push("Заказ оформлен и передан в работу.");
+      toast.push(delayHours > 0 ? `Заказ оформлен. Выполнение начнётся через ${delayHours} ч.` : "Заказ оформлен и передан в работу.");
       setLinksText("");
+      setDelayHours(0);
       await load();
       setTab("orders");
       setSubmitting(false);
@@ -328,6 +334,8 @@ export default function ServiceLevelService() {
           quantity={quantity}
           onQuantity={setQuantity}
           quantityValid={quantityValid}
+          delayHours={delayHours}
+          onDelayHours={setDelayHours}
           totals={totals}
           canSubmit={canSubmit}
           submitting={submitting}
@@ -359,6 +367,8 @@ function OrderTab({
   quantity,
   onQuantity,
   quantityValid,
+  delayHours,
+  onDelayHours,
   totals,
   canSubmit,
   submitting,
@@ -375,6 +385,8 @@ function OrderTab({
   quantity: number;
   onQuantity: (value: number) => void;
   quantityValid: boolean;
+  delayHours: number;
+  onDelayHours: (value: number) => void;
   totals: ReturnType<typeof computeOrderTotals> | null;
   canSubmit: boolean;
   submitting: boolean;
@@ -559,6 +571,8 @@ function OrderTab({
             </div>
           </dl>
 
+          <StartTimingBlock delayHours={delayHours} onChange={onDelayHours} disabled={disabled} />
+
           <div className="mt-4 flex items-end justify-between gap-3 border-t border-white/10 pt-4">
             <span className="text-sm font-bold text-white/55">К оплате</span>
             <span className="text-3xl font-extrabold tracking-[-0.04em] text-[#03bd48] tabular-nums">{formatRub(totals && parsed.valid.length > 0 ? totals.price : 0)}</span>
@@ -579,6 +593,139 @@ function OrderTab({
           </p>
         </div>
       </aside>
+    </div>
+  );
+}
+
+/** «через 2 ч 15 мин» / «меньше минуты» до указанного момента. */
+function timeLeftText(iso: string) {
+  const diff = new Date(iso).getTime() - Date.now();
+  if (!Number.isFinite(diff) || diff <= 60_000) return "меньше чем через минуту";
+  const totalMinutes = Math.ceil(diff / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `через ${minutes} мин`;
+  return minutes === 0 ? `через ${hours} ч` : `через ${hours} ч ${minutes} мин`;
+}
+
+const DELAY_PRESETS = [1, 2, 3, 6, 12, 24];
+
+/** Примерное время старта при отсрочке: сейчас + N часов (точный отсчёт начнётся с момента оплаты). */
+function approxStartText(hours: number) {
+  const at = new Date(Date.now() + hours * 3_600_000);
+  const sameDay = at.toDateString() === new Date().toDateString();
+  const time = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(at);
+  if (sameDay) return `сегодня около ${time}`;
+  const date = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(at);
+  return `${date} около ${time}`;
+}
+
+/**
+ * Блок «Когда начать выполнение» перед оплатой.
+ * По умолчанию стоит «Выполнить сразу». Галочка «Отсрочить выполнение» снимает первую и открывает выбор
+ * срока от 1 до 24 часов. Отсчёт идёт от момента подтверждения оплаты; до этого времени на SocPublic
+ * ничего не отправляется.
+ */
+function StartTimingBlock({ delayHours, onChange, disabled }: { delayHours: number; onChange: (value: number) => void; disabled: boolean }) {
+  const postponed = delayHours > 0;
+  const row = (checked: boolean, label: string, hint: string, onClick: () => void) => (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={onClick}
+      className="w-full rounded-2xl border text-left transition disabled:cursor-not-allowed disabled:opacity-60"
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 10,
+        padding: "10px 12px",
+        borderColor: checked ? "rgba(3,189,72,0.6)" : "rgba(255,255,255,0.12)",
+        background: checked ? "rgba(3,189,72,0.12)" : "rgba(255,255,255,0.04)",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          flex: "0 0 auto",
+          width: 20,
+          height: 20,
+          marginTop: 1,
+          borderRadius: 7,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: checked ? "2px solid #03bd48" : "2px solid rgba(255,255,255,0.3)",
+          background: checked ? "#03bd48" : "transparent",
+          color: "#fff",
+        }}
+      >
+        {checked && <Icon name="check" className="h-3 w-3" />}
+      </span>
+      <span style={{ minWidth: 0, display: "block" }}>
+        <span className="block text-sm font-extrabold leading-5 text-white" style={WRAP_WHOLE_WORDS}>{label}</span>
+        <span className="mt-0.5 block text-[11px] font-semibold leading-4 text-white/45" style={WRAP_WHOLE_WORDS}>{hint}</span>
+      </span>
+    </button>
+  );
+
+  return (
+    <div className="mt-4 border-t border-white/10 pt-4">
+      <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">Когда начать выполнение</div>
+      <div className="mt-2.5 grid gap-2">
+        {row(!postponed, "Выполнить сразу", "Задания уйдут исполнителям сразу после оплаты", () => onChange(0))}
+        {row(postponed, "Отсрочить выполнение", "Начнём позже — на выбранное число часов", () => onChange(postponed ? 0 : 3))}
+      </div>
+
+      {postponed && (
+        <div className="al-pop mt-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+          <div className="flex items-baseline justify-between gap-3" style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <span className="text-xs font-bold text-white/55">Отсрочка</span>
+            <span className="text-2xl font-extrabold tracking-[-0.03em] text-[#03bd48] tabular-nums">
+              {delayHours} <span className="text-sm text-white/70">{delayHours === 24 ? "ч (сутки)" : "ч"}</span>
+            </span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={24}
+            step={1}
+            value={delayHours}
+            disabled={disabled}
+            onChange={(event) => onChange(Number(event.target.value))}
+            aria-label="Отсрочка выполнения в часах"
+            style={{ width: "100%", accentColor: "#03bd48", marginTop: 8 }}
+          />
+          <div className="flex justify-between text-[10px] font-bold text-white/35" style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>1 ч</span>
+            <span>12 ч</span>
+            <span>24 ч</span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {DELAY_PRESETS.map((hours) => (
+              <button
+                key={hours}
+                type="button"
+                disabled={disabled}
+                onClick={() => onChange(hours)}
+                className="rounded-full text-xs font-extrabold tabular-nums transition"
+                style={{
+                  padding: "6px 12px",
+                  border: delayHours === hours ? "1px solid #03bd48" : "1px solid rgba(255,255,255,0.15)",
+                  background: delayHours === hours ? "#03bd48" : "transparent",
+                  color: delayHours === hours ? "#fff" : "rgba(255,255,255,0.7)",
+                }}
+              >
+                {hours} ч
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-[11px] font-semibold leading-5 text-white/50" style={WRAP_WHOLE_WORDS}>
+            Старт: {approxStartText(delayHours)}. Отсчёт идёт с момента подтверждения оплаты. Деньги спишутся сразу, а задания исполнителям появятся только в это время.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -661,13 +808,24 @@ function OrdersTab({
                     {formatDateTime(order.paidAt ?? order.createdAt)} · {order.linksCount} {pluralRu(order.linksCount, "ссылка", "ссылки", "ссылок")} × {order.quantityPerLink} · {formatRub(order.amount)}
                   </span>
                 </span>
-                <Pill tone={STATUS_TONE[order.status] ?? "gray"} className="shrink-0">
-                  {ORDER_STATUS_LABEL[status] ?? order.status}
+                <Pill tone={order.scheduledStartAt ? "gray" : STATUS_TONE[order.status] ?? "gray"} className="shrink-0">
+                  {order.scheduledStartAt ? "Отложен" : ORDER_STATUS_LABEL[status] ?? order.status}
                 </Pill>
                 <Icon name="chevron" className={`h-4 w-4 shrink-0 text-black/40 transition-transform ${open ? "rotate-180" : ""}`} />
               </button>
 
-              {order.status === "in_progress" && (
+              {order.scheduledStartAt && (
+                <div className="px-4 pb-4 sm:px-5">
+                  <div className="flex items-start gap-2.5 rounded-2xl border border-[#03bd48]/25 bg-[#03bd48]/[0.07] px-3.5 py-3" style={{ display: "flex", gap: 10 }}>
+                    <Icon name="clock" className="mt-0.5 h-4 w-4 shrink-0 text-[#028c36]" />
+                    <div className="min-w-0 text-xs font-bold leading-5 text-black/70">
+                      Выполнение начнётся {formatDateTime(order.scheduledStartAt)} <span className="text-black/45">({timeLeftText(order.scheduledStartAt)})</span>. До этого времени исполнители задания не видят.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {order.status === "in_progress" && !order.scheduledStartAt && (
                 <div className="px-4 pb-4 sm:px-5">
                   <div className="flex items-center justify-between gap-3 text-xs font-bold text-black/50">
                     <span>{percent !== null ? `Выполнено ${order.doneTotal} из ${order.totalQuantity}` : "Заявка в работе — исполнители выполняют задания"}</span>
@@ -687,7 +845,10 @@ function OrdersTab({
                   <div className="grid gap-2 sm:grid-cols-3">
                     <MiniStat label="Всего действий" value={String(order.totalQuantity)} />
                     <MiniStat label="Оплачено" value={formatRub(order.amount)} />
-                    <MiniStat label={order.completedAt ? "Выполнен" : "Запущен"} value={formatDateTime(order.completedAt ?? order.paidAt ?? order.createdAt)} />
+                    <MiniStat
+                      label={order.completedAt ? "Выполнен" : order.scheduledStartAt ? "Старт" : "Запущен"}
+                      value={formatDateTime(order.completedAt ?? order.scheduledStartAt ?? order.paidAt ?? order.createdAt)}
+                    />
                   </div>
                   <ul className="mt-3 divide-y divide-black/[0.06] overflow-hidden rounded-2xl border border-black/[0.08] bg-white">
                     {order.items.map((item) => {

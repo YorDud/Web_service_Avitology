@@ -11,6 +11,7 @@ type Context = { params: Promise<{ id: string }> };
 
 /**
  * Действия админа над заказом (body.action):
+ *  startNow     — запустить заказ с отложенным стартом прямо сейчас (не дожидаясь выбранного времени);
  *  retry        — повторить отправку ошибочных заданий на SocPublic;
  *  sync         — обновить ход выполнения у SocPublic прямо сейчас;
  *  complete     — вручную отметить заказ выполненным;
@@ -33,6 +34,18 @@ export async function POST(request: Request, context: Context) {
   try {
     const order = await prisma.serviceLevelOrder.findUnique({ where: { id }, include: { items: true } });
     if (!order) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
+
+    if (action === "startNow") {
+      if (order.status !== "in_progress") return NextResponse.json({ error: "Запустить можно только заказ «в работе»." }, { status: 400 });
+      await prisma.serviceLevelOrder.update({ where: { id }, data: { scheduledStartAt: null, dispatchLockedUntil: null } });
+      const run = () => dispatchOrder(id, { ignoreSchedule: true }).catch((error) => console.error("START NOW ERROR:", error));
+      try {
+        after(run);
+      } catch {
+        void run();
+      }
+      return NextResponse.json({ success: true, message: "Заказ запущен сразу. Обновите список через несколько секунд." });
+    }
 
     if (action === "retry") {
       if (order.status !== "in_progress") return NextResponse.json({ error: "Повторить можно только заказ «в работе»." }, { status: 400 });

@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
     const order = await createDraftOrder(user, prepared);
     const links = prepared.links.length;
-    const description = `Уровень сервиса: ${prepared.service.title} — ${links} ${pluralRu(links, "ссылка", "ссылки", "ссылок")} × ${prepared.quantityPerLink}`;
+    const description = `Уровень сервиса: ${prepared.service.title} — ${links} ${pluralRu(links, "ссылка", "ссылки", "ссылок")} × ${prepared.quantityPerLink}${prepared.startDelayMinutes > 0 ? `, старт через ${prepared.startDelayMinutes / 60} ч` : ""}`;
     const planCode = serviceLevelPlanCode(order.id);
     const mode = await getPaymentMode();
 

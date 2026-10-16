@@ -20,6 +20,9 @@ export function isServiceLevelPlanCode(code: string | null | undefined) {
   return parseServiceLevelPlanCode(code) !== null;
 }
 
+/** Максимальная отсрочка старта заказа, часов (24 ч = 1440 мин). */
+export const MAX_START_DELAY_HOURS = 24;
+
 export type OrderStatus = "awaiting_payment" | "in_progress" | "completed" | "cancelled";
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
