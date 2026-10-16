@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-guard";
 
@@ -20,8 +21,10 @@ export async function GET(request: Request) {
     const status = searchParams.get("status");
 
     const numeric = q !== "" && /^\d+$/.test(q) ? Number(q) : null;
-    const where = {
-      ...(status === "active" || status === "paused" || status === "attention" ? { status } : {}),
+    const statusFilter: "active" | "paused" | "attention" | null =
+      status === "active" || status === "paused" || status === "attention" ? status : null;
+    const where: Prisma.AvitoBidderWhereInput = {
+      ...(statusFilter ? { status: statusFilter } : {}),
       ...(q
         ? {
             OR: [
