@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import ImageUniqualizerService from "./image-uniqualizer";
+import KeywordsService from "./keywords-service";
 import AutoloadService from "./autoload/autoload-service";
 import ServiceLevelService from "./service-level/service-level";
 import { hasTierAccess } from "@/lib/service-level/constants";
@@ -174,6 +175,7 @@ type DashboardSection =
   | "financial"
   | "bid-manager"
   | "reviews-calculator"
+  | "keywords"
   | "popular-queries"
   | "image-uniqualizer"
   | "autoload"
@@ -1211,15 +1213,22 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
       available: true,
     },
     {
-      id: "image-uniqualizer",
+      id: "keywords",
       index: "04",
+      title: "Ключевые слова",
+      description: "Очистка набора словосочетаний от повторов",
+      available: true,
+    },
+    {
+      id: "image-uniqualizer",
+      index: "05",
       title: "Уникализатор картинок",
       description: "Уникальные копии фото для объявлений",
       available: true,
     },
     {
       id: "financial",
-      index: "05",
+      index: "06",
       title: "Финансовый анализ",
       description: hasAccess
         ? "Доходы, расходы и прибыль"
@@ -1228,7 +1237,7 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
     },
     {
       id: "avito",
-      index: "06",
+      index: "07",
       title: "Места в поиске Авито",
       description: hasAccess
         ? "Аналитика поисковых позиций"
@@ -1237,7 +1246,7 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
     },
     {
       id: "autoload",
-      index: "07",
+      index: "08",
       title: "Автозагрузка объявлений Авито",
       description: hasBidderAccess
         ? "Таблицы Excel/Google/Яндекс и выгрузка через API Авито"
@@ -1247,7 +1256,7 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
     },
     {
       id: "bid-manager",
-      index: "08",
+      index: "09",
       title: "Бид-менеджер Авито",
       description: hasBidderAccess ? "Автоматическое управление ставками" : "Доступно с подпиской Pro",
       available: hasBidderAccess,
@@ -1255,7 +1264,7 @@ const [bidderEventsLoadingId, setBidderEventsLoadingId] = useState<number | null
     },
     {
       id: "popular-queries",
-      index: "09",
+      index: "10",
       title: "Запросы по популярности Авито",
       description: hasAccess
         ? "Подбор популярных запросов"
@@ -5937,6 +5946,8 @@ onChange={(e) =>
             {activeSection === "service-level" && hasServiceLevelAccess && <ServiceLevelService />}
 
             {/* ========== УСЛУГА «УНИКАЛИЗАТОР КАРТИНОК»: доступна на всех тарифах ========== */}
+            {activeSection === "keywords" && <KeywordsService />}
+
             {activeSection === "image-uniqualizer" && <ImageUniqualizerService />}
 
             {/* ========== УСЛУГА «АВТОЗАГРУЗКА ОБЪЯВЛЕНИЙ АВИТО»: подписка Pro ========== */}
